@@ -13,19 +13,19 @@ Open either in a browser; no build step. Pick a screen from the index on the lef
 
 A third file will join them when the CLI gets a real design pass. Today it's out of scope — the README calls it "functional but actively being refined".
 
-## 22 screens, 5 patterns
+## 23 screens, 5 patterns
 
-The destinations behind the nav are not 22 designs. They're five patterns plus data:
+The destinations behind the nav are not 23 designs. They're five patterns plus data:
 
 | Pattern | Screens | What it is |
 |---|---|---|
-| **Browse** | 14 | Searchable list beside a detail pane. Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Orchestration, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations. |
+| **Browse** | 15 | Searchable list beside a detail pane. Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Orchestration, Workflows, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations. |
 | **Overview** | 2 | Stat tiles over an activity table. Dashboard (scoped to you), Command Center (scoped to everyone). |
 | **Settings** | 4 | Sectioned cards of labelled rows, each row one control plus the sentence explaining it. Settings, Governance, Trust Boundary, Diagnostics. |
 | **Conversation** | 1 | Chat. Genuinely its own shape — welcome state, thread, collapsed work strips, composer. |
 | **Entry** | 1 | Login. The only screen with no rail. |
 
-(Was 21/13/4 until 2026-09-01 — Orchestration existed as its own nav destination the whole time but was never counted in the running total, on top of being mis-tagged Settings. See below.)
+(Was 21/13/4 until 2026-09-01 — Orchestration existed as its own nav destination the whole time but was never counted in the running total, on top of being mis-tagged Settings. Was 22/14 until 2026-09-04 — Workflows added as a new screen, see below.)
 
 This is the point of the folder. Those pages were each built standalone — they share no layout classes today, which is exactly why they drift. Designing the pattern once and treating each screen as pattern + data is what stops it.
 
@@ -135,6 +135,24 @@ Went through all 5 patterns in the browser — Login, Dashboard (Overview), Chat
 (Orchestration's Settings tag turned out to be wrong — see "Orchestration was mis-tagged Settings" above, caught the same day by inspection rather than by this pass. The design-roughness check above still stands for what it actually looked at: Orchestration's *content* — sectioned controls, clear labels — was fine, it was the pattern classification and missing team-list/Run/Members content that were wrong.)
 
 That leaves the two long-open items below actually resolved instead of just tracked.
+
+## New screen: Workflows (2026-09-04, design-only)
+
+Roadmap Phase 129 ("Missions → Workflows") shipped its rename in real code first this round — full-stack, not the presentation-layer-only scoping the roadmap entry originally described (see `docs/roadmap.md` Phase 129's 2026-09-03 update for why that changed) — plus a new `WorkflowSchedulerService` that advances `Planning`/`Running` workflows on its own, without a human or agent explicitly asking. This entry is the design-only follow-up: a dedicated **Workflows** screen so there's somewhere to actually see that happening, mocked here first per this repo's usual process — no `src/` changes yet.
+
+**Nav placement:** under Agents, alongside Orchestration (`agentlib → orchestration → workflows`) — same substrate, same group. Pattern: Browse, same shell as every other list screen in that group.
+
+**List pane:** goal (truncated), a status badge, and a relative timestamp + owner — three sample rows covering `Running`, `Awaiting human`, and `Completed` so the badge palette is visible in one screen. New `.badge.b-fail` CSS rule added (using the existing `--fail` token, same recipe as `.b-ok`/`.b-warn`) for a future `Failed` state — not used by the three samples shown, but the real `WorkflowStatus` enum has it and the badge needed to exist before real code reaches for it.
+
+**Detail pane** (`workflowDetailHTML`): goal in full, status badge, a **Plan** section (numbered steps with intent/expected-outcome/tier, straight from `plan_json`'s shape), an **Event journal** (timestamp + event type, exactly what `/workflow events` already returns as text — rendered as a list here), and actions that adapt to status: `Run now` when idle, `Resume` when `Awaiting human`, both hidden once terminal (`Completed`/`Failed`/`Cancelled`) since there's nothing left to run; `Cancel` hidden once terminal for the same reason; `Export` always available. This mirrors Orchestration's own "richer than a generic Browse detail" shape (multiple sections instead of one key/value block) — not a new pattern, same reasoning as why Orchestration's detail pane already looks like this.
+
+**Copy note on the Run button:** now that the scheduler exists, a manual "Run" is a *force it now* / *resume from a pause* action, not the only way anything happens — the note on the screen says this explicitly so it doesn't read as a regression when someone notices workflows moving without being clicked.
+
+**Also fixed while in this file:** two mock strings still said "mission" (Chat's welcome subtitle and one suggestion tile) — stale now that the real code shipped as "workflow" this round. Dashboard's and Command Center's stat tiles (`My missions` / `Missions`) had the same staleness, same fix.
+
+Not modeled here, deliberately (same reasoning as Orchestration's "New Team"/"Add Member" forms): the "New Workflow" creation form. It's a transient interaction state, not a distinct screen.
+
+Verified in Chrome (list renders all three sample rows and badge colors correctly; detail pane renders goal/plan/journal for the `Running` sample) and via direct console evaluation of `workflowDetailHTML()` against the `Awaiting human` and `Completed` samples (button visibility confirmed correct for both) — the mock's `sel` is always `items[0]`, same static-first-item limitation Orchestration's mock already has, so the other two states aren't reachable by clicking, only by calling the render function directly. `web.html`/`desktop.html` diff-checked: the added `S.workflows` block and `workflowDetailHTML` function are byte-identical between the two files.
 
 ## Open decisions
 

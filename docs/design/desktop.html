@@ -144,6 +144,7 @@
   .badge.b-ok{background:color-mix(in srgb,var(--ok) 14%,transparent);color:var(--ok);border-color:color-mix(in srgb,var(--ok) 38%,transparent)}
   .badge.b-warn{background:color-mix(in srgb,var(--warn) 14%,transparent);color:var(--warn);border-color:color-mix(in srgb,var(--warn) 38%,transparent)}
   .badge.b-mut{background:var(--hover);color:var(--t2);border-color:var(--border)}
+  .badge.b-fail{background:color-mix(in srgb,var(--fail) 14%,transparent);color:var(--fail);border-color:color-mix(in srgb,var(--fail) 38%,transparent)}
   .detail{overflow:auto;padding:22px}
   .empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--t3);text-align:center;padding:30px}
   .empty svg{width:34px;height:34px;opacity:.45}
@@ -286,7 +287,7 @@
         <h2>The five patterns — identical to Web</h2>
         <table>
           <tr><th style="width:1%">Pattern</th><th style="width:1%">Screens</th><th>Covers</th></tr>
-          <tr><td class="n">Browse</td><td class="num">14</td><td>Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Orchestration, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations — a searchable list beside a detail pane. Same header, same toolbar, same empty state; only the item card and the detail fields differ. Orchestration's detail pane is the richest of the 14 (Run + Run Profile + Members instead of one key/value block) but the shell is identical.</td></tr>
+          <tr><td class="n">Browse</td><td class="num">15</td><td>Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Orchestration, Workflows, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations — a searchable list beside a detail pane. Same header, same toolbar, same empty state; only the item card and the detail fields differ. Orchestration's and Workflows' detail panes are the richest of the 15 (multiple sections instead of one key/value block) but the shell is identical.</td></tr>
           <tr><td class="n">Overview</td><td class="num">2</td><td>Dashboard, Command Center — a row of stat tiles over an activity table. Identical structure; Dashboard is scoped to you, Command Center to everyone.</td></tr>
           <tr><td class="n">Settings</td><td class="num">4</td><td>Settings, Governance, Trust Boundary, Diagnostics — sectioned cards of labelled rows, each row a control with a description.</td></tr>
           <tr><td class="n">Conversation</td><td class="num">1</td><td>Chat — genuinely its own shape: welcome state, message thread, collapsed work strips, composer.</td></tr>
@@ -322,7 +323,7 @@ const GROUPS = {
   dashboard:{icon:I.dash,label:'Dashboard',subs:[]},
   chat:{icon:I.chat,label:'Chat',subs:null},
   knowledge:{icon:I.know,label:'Knowledge',subs:['artifacts','templates','documents','memory','skills','tools']},
-  agents:{icon:I.agents,label:'Agents',subs:['agentlib','orchestration']},
+  agents:{icon:I.agents,label:'Agents',subs:['agentlib','orchestration','workflows']},
   projects:{icon:I.proj,label:'Projects',subs:['projects']},
   admin:{icon:I.admin,label:'Admin',subs:['command','users','workspaces','providers','governance','trust','diagnostics','platformint','systemint']}
 };
@@ -332,7 +333,7 @@ const S = {
   login:{g:null,p:'Entry',t:'Login',url:'/login',
     note:'The only screen with no rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary).'},
   dashboard:{g:'dashboard',p:'Overview',t:'Dashboard',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
-    stats:[['My missions',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
+    stats:[['My workflows',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
     note:'Scoped to you. Command Center is the same pattern scoped to everyone — one design, two data sources.'},
   chat:{g:'chat',p:'Conversation',t:'Chat',url:'/',note:'The one genuinely bespoke shape. Welcome state until the first message, then thread + collapsed work strips (Phase 126) + composer.'},
   artifacts:{g:'knowledge',p:'Browse',t:'Artifacts',url:'/artifacts',sub:'1 artifact',
@@ -362,11 +363,38 @@ const S = {
     acts:[['New team',1]],
     items:[{n:'test',b:['1 agent'],tag:['Parallel','b-mut']}],
     note:'Was mis-tagged Settings — it\'s Browse: a team list + detail, same shell as every other list screen. What made it look like Settings is that the detail pane has three sections (Run, Run Profile, Members) instead of one key/value block. Swarm Defaults is a real second view of this same screen, toggled below — not a separate destination.'},
+  workflows:{g:'agents',p:'Browse',t:'Workflows',url:'/workflows',sub:'3 workflows',
+    acts:[['New workflow',1]],
+    items:[
+      {n:'Migrate billing module to usage-based pricing',b:['started 14:02','you'],tag:['Running','b-brand'],
+       goal:'Migrate the billing module to the new usage-based pricing model, including a backfill script for existing invoices and a dry-run report the finance team can review before it goes live.',
+       steps:[
+         {intent:'Survey current billing code for pricing-model touchpoints',expected:'List of files/functions to change',tier:'High'},
+         {intent:'Implement usage-based pricing calculation + backfill script',expected:'New pricing logic and a backfill script with a dry-run flag',tier:'High'},
+         {intent:'Run the backfill in dry-run mode and produce a review report',expected:'Report the finance team can approve before it goes live',tier:'Standard'}
+       ],
+       events:[{t:'14:02:03',ty:'workflow_created'},{t:'14:02:04',ty:'plan_revised'},{t:'14:03:11',ty:'run_started'},{t:'14:04:52',ty:'run_completed — step 1 of 3'}]},
+      {n:'Rotate expired OpenRouter key across workspaces',b:['paused 09:14','you'],tag:['Awaiting human','b-warn'],
+       goal:'Find any workspace still pointing at the expired OpenRouter key, rotate it to the replacement key, and confirm each workspace\'s next chat succeeds.',
+       steps:[
+         {intent:'List workspaces whose active OpenRouter key is the expired one',expected:'Workspace IDs to update',tier:'Standard'},
+         {intent:'Rotate each workspace to the replacement key',expected:'provider_profiles rows updated',tier:'Standard'}
+       ],
+       events:[{t:'09:11:40',ty:'workflow_created'},{t:'09:11:41',ty:'plan_revised'},{t:'09:12:05',ty:'run_started'},{t:'09:14:18',ty:'paused — acceptance gate needs a human decision before rotating a shared workspace key'}]},
+      {n:'Weekly competitor pricing summary',b:['finished Jun 10','you'],tag:['Completed','b-ok'],
+       goal:'Every Monday, check competitor pricing pages and produce a one-page summary of anything that changed since last week.',
+       steps:[
+         {intent:'Fetch each tracked competitor\'s pricing page',expected:'Raw page snapshots',tier:'Standard'},
+         {intent:'Diff against last week\'s snapshot and summarize changes',expected:'One-page markdown summary',tier:'Standard'}
+       ],
+       events:[{t:'Jun 10, 08:00:02',ty:'workflow_created'},{t:'Jun 10, 08:00:03',ty:'plan_revised'},{t:'Jun 10, 08:00:41',ty:'run_started'},{t:'Jun 10, 08:02:15',ty:'run_completed'},{t:'Jun 10, 08:02:15',ty:'acceptance_approved'},{t:'Jun 10, 08:02:15',ty:'completed'}]}
+    ],
+    note:'The scheduler advances Planning/Running workflows on its own now, so "Run" here means "do it right now" or "resume from Awaiting human" — not "the only way anything happens." Awaiting human is the acceptance gate pausing for a decision it won\'t make alone, same as the running example\'s three-section detail (goal, plan, journal) makes the shell richer than a generic Browse detail — same reason Orchestration\'s detail pane is richer, not a new pattern.'},
   projects:{g:'projects',p:'Browse',t:'Projects',url:'/projects',sub:'0 projects',
     acts:[['New project',1]], empty:1,
     note:'Shown in its empty state, which is the state most new users actually meet. The Browse empty state does the explaining.'},
   command:{g:'admin',p:'Overview',t:'Command Center',url:'/command',sub:'What is Sovrant doing right now?',
-    stats:[['Missions',0],['Team runs',0],['Agent runs',0],['Sessions',2],['Claws',0]],
+    stats:[['Workflows',0],['Team runs',0],['Agent runs',0],['Sessions',2],['Claws',0]],
     note:'Same pattern as Dashboard, everyone\'s activity instead of yours. Two screens, one design.'},
   users:{g:'admin',p:'Browse',t:'Users',url:'/admin',sub:'1 user',
     acts:[['Invite',1]],
@@ -406,7 +434,7 @@ function buildIndex(){
   const el=document.getElementById('index');
   const groups=[['Entry',['login']],['Overview',['dashboard','command']],['Conversation',['chat']],
     ['Knowledge',['artifacts','templates','documents','memory','skills','tools']],
-    ['Agents',['agentlib','orchestration']],['Projects',['projects']],
+    ['Agents',['agentlib','orchestration','workflows']],['Projects',['projects']],
     ['Admin',['users','workspaces','providers','governance','trust','diagnostics','platformint','systemint']],
     ['Account',['settings']]];
   el.innerHTML = groups.map(([g,keys])=>
@@ -474,6 +502,8 @@ function browseHTML(s){
   let detail;
   if(s.t==='Orchestration'){
     detail = orchView==='defaults' ? orchDefaultsHTML() : orchTeamDetailHTML(sel);
+  } else if(s.t==='Workflows'){
+    detail = !sel ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick a workflow from the list to see its plan and journal.</div></div>` : workflowDetailHTML(sel);
   } else {
     detail = s.empty || !sel
       ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick an item from the list to see its details.</div></div>`
@@ -556,17 +586,46 @@ function orchDefaultsHTML(){
     <button class="btn pri" style="margin-top:14px">Save Defaults</button>`;
 }
 
+/* Workflows' detail pane: goal + plan steps + event journal — the same
+   "richer than a generic Browse detail" shape Orchestration already
+   established, not a new pattern. The scheduler advances Planning/Running
+   workflows on its own; "Run now" here is a manual override (force an
+   immediate tick, or resume from Awaiting human), not the only way
+   anything happens. */
+function workflowDetailHTML(sel){
+  const isAwaiting = sel.tag[0]==='Awaiting human';
+  const isTerminal = sel.tag[0]==='Completed' || sel.tag[0]==='Failed' || sel.tag[0]==='Cancelled';
+  const steps = (sel.steps||[]).map((st,i)=>`<div class="frowi"${i===sel.steps.length-1?' style="border-bottom:none"':''}>
+      <div class="fl"><div class="ft">${i+1}. ${st.intent}</div><div class="fd">${st.expected}</div></div>
+      <span class="badge b-mut" style="margin:0">${st.tier}</span></div>`).join('');
+  const events = (sel.events||[]).map(e=>`<div style="display:flex;gap:12px;padding:7px 0;font-size:12px;border-bottom:1px solid var(--border)">
+      <span style="font-family:'JetBrains Mono',monospace;color:var(--t3);flex-shrink:0;white-space:nowrap">${e.t}</span>
+      <span style="color:var(--t2)">${e.ty}</span></div>`).join('');
+  return `<div class="dhead"><div style="flex:1">
+      <span class="badge ${sel.tag[1]}" style="margin:0 0 8px">${sel.tag[0]}</span>
+      <h3 style="font-size:15px">${sel.goal}</h3>
+    </div>${!isTerminal?'<button class="btn ghost" style="color:var(--fail)">Cancel</button>':''}</div>
+    <div class="slab" style="padding:0 0 8px">Plan</div>
+    <div class="fsec" style="margin-bottom:16px">${steps}</div>
+    <div class="slab" style="padding:0 0 8px">Event journal</div>
+    <div class="sheet" style="margin-bottom:16px">${events}</div>
+    <div style="display:flex;gap:8px">
+      ${!isTerminal?`<button class="btn pri">${isAwaiting?'Resume':'Run now'}</button>`:''}
+      <button class="btn">Export</button>
+    </div>`;
+}
+
 function welcomeHTML(){
   const sugg=[[I.agents,2,'Create a custom agent with tools for web research and summarization'],
     [I.proj,2,'Create a team that researches a topic and produces a structured report'],
     [I.box,1.8,'Build a best-practice swarm that parallelizes tasks across agents'],
-    [I.refresh,2,'Set up a mission that monitors a project and sends daily updates'],
+    [I.refresh,2,'Set up a workflow that monitors a project and sends daily updates'],
     [I.chev,2,'Orchestrate a multi-agent pipeline for code review and testing'],
     [I.clip,2,'Connect an MCP server and create an agent that uses its tools']];
   return `<div class="welcome">
     <div class="wm">${sv(I.chat,1.7)}</div>
     <h3>What are you working on?</h3>
-    <p>Create agents, build teams, and orchestrate missions to automate your work.</p>
+    <p>Create agents, build teams, and orchestrate workflows to automate your work.</p>
     <div class="sugg">${sugg.map(([icon,w,t])=>`<div class="sg">${sv(icon,w)}<span>${t}</span></div>`).join('')}</div>
   </div>`;
 }
