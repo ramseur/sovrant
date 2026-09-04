@@ -203,9 +203,28 @@ public partial class WorkflowsViewModel : ViewModelBase
             item.Events.Add(new WorkflowEventItemViewModel
             {
                 Timestamp = e.Timestamp.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture),
-                EventType = e.EventType,
+                EventType = HumanizeEventType(e.EventType),
             });
     }
+
+    // The event_type values persisted in the journal (mission_created, etc.)
+    // are historical data left unrenamed on purpose -- rewriting rows for a
+    // cosmetic win wasn't worth the risk. This only humanizes the display.
+    private static string HumanizeEventType(string eventType) => eventType switch
+    {
+        WorkflowEventTypes.WorkflowCreated => "Workflow created",
+        WorkflowEventTypes.PlanRevised => "Plan revised",
+        WorkflowEventTypes.RunStarted => "Run started",
+        WorkflowEventTypes.RunCompleted => "Run completed",
+        WorkflowEventTypes.AcceptanceApproved => "Accepted",
+        WorkflowEventTypes.AcceptanceRejected => "Rejected",
+        WorkflowEventTypes.Paused => "Paused",
+        WorkflowEventTypes.Resumed => "Resumed",
+        WorkflowEventTypes.Completed => "Completed",
+        WorkflowEventTypes.Failed => "Failed",
+        WorkflowEventTypes.Cancelled => "Cancelled",
+        _ => eventType.Replace('_', ' '),
+    };
 
     private static PlanSnapshot? ParsePlan(string planJson)
     {

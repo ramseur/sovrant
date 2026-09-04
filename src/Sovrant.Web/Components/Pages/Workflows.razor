@@ -124,7 +124,7 @@
                             {
                                 <div style="display:flex;gap:12px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--surface-border);">
                                     <span class="text-muted" style="font-family:monospace;flex-shrink:0;white-space:nowrap;">@e.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
-                                    <span class="text-secondary">@e.EventType</span>
+                                    <span class="text-secondary">@HumanizeEventType(e.EventType)</span>
                                 </div>
                             }
                         </div>
@@ -312,6 +312,25 @@
         if (_showExport)
             _exportText = await Exporter.ExportMarkdownAsync(_selected.Id);
     }
+
+    // The event_type values persisted in the journal (mission_created, etc.)
+    // are historical data left unrenamed on purpose -- rewriting rows for a
+    // cosmetic win wasn't worth the risk. This only humanizes the display.
+    private static string HumanizeEventType(string eventType) => eventType switch
+    {
+        WorkflowEventTypes.WorkflowCreated => "Workflow created",
+        WorkflowEventTypes.PlanRevised => "Plan revised",
+        WorkflowEventTypes.RunStarted => "Run started",
+        WorkflowEventTypes.RunCompleted => "Run completed",
+        WorkflowEventTypes.AcceptanceApproved => "Accepted",
+        WorkflowEventTypes.AcceptanceRejected => "Rejected",
+        WorkflowEventTypes.Paused => "Paused",
+        WorkflowEventTypes.Resumed => "Resumed",
+        WorkflowEventTypes.Completed => "Completed",
+        WorkflowEventTypes.Failed => "Failed",
+        WorkflowEventTypes.Cancelled => "Cancelled",
+        _ => eventType.Replace('_', ' '),
+    };
 
     private static bool IsTerminal(WorkflowStatus status) =>
         status is WorkflowStatus.Completed or WorkflowStatus.Failed or WorkflowStatus.Cancelled;

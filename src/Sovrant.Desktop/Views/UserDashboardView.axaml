@@ -53,7 +53,7 @@
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
-                                   Text="Long-running goals you own across all workspaces. A mission decomposes into team runs and agent runs until the goal is complete." />
+                                   Text="Long-running goals you own across all workspaces. A workflow decomposes into team runs and agent runs until the goal is complete." />
                     </Grid>
                     <Grid ColumnDefinitions="130,*">
                         <TextBlock Grid.Column="0" Text="Team runs" FontWeight="SemiBold"
@@ -81,7 +81,7 @@
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
-                                   Text="Your own items you've made public — missions, runs, and sessions with the privacy toggle set to public. These are visible to workspace admins and teammates." />
+                                   Text="Your own items you've made public — workflows, runs, and sessions with the privacy toggle set to public. These are visible to workspace admins and teammates." />
                     </Grid>
                     <Grid ColumnDefinitions="130,*">
                         <TextBlock Grid.Column="0" Text="Claws" FontWeight="SemiBold"
@@ -100,7 +100,7 @@
                         CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
                         ToolTip.Tip="Long-running goals you own.">
                     <StackPanel>
-                        <TextBlock Text="MY MISSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="MY WORKFLOWS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
                         <TextBlock Text="{Binding OwnWorkflows}" FontSize="24" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                     </StackPanel>
