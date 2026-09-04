@@ -3165,7 +3165,18 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
     margin-bottom: 12px;
 }
 
-.orch-detail-header h2 { margin: 6px 0 0; }
+/* Flex children default to min-width:auto, which refuses to shrink below
+   its content's unwrapped width -- so a long title just overflows instead
+   of wrapping. min-width:0 lets it shrink so text-wrapping actually kicks in. */
+.orch-detail-header > div:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.orch-detail-header h2 {
+    margin: 6px 0 0;
+    overflow-wrap: break-word;
+}
 
 .orch-detail-section {
     margin-top: 20px;
