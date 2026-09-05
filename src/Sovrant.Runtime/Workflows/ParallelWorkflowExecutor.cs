@@ -35,6 +35,7 @@ public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
     private readonly IRuntimeTraceStore _traceStore;
     private readonly IAcceptanceGate _gate;
     private readonly IWorkflowScratchpadStore _scratchpad;
+    private readonly WorkflowSessionNotifier _sessionNotifier;
     private readonly ILogger<ParallelWorkflowExecutor> _logger;
 
     /// <summary>
@@ -50,6 +51,7 @@ public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
         IRuntimeTraceStore traceStore,
         IAcceptanceGate gate,
         IWorkflowScratchpadStore scratchpad,
+        WorkflowSessionNotifier sessionNotifier,
         ILogger<ParallelWorkflowExecutor>? logger = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -58,6 +60,7 @@ public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
         _traceStore = traceStore ?? throw new ArgumentNullException(nameof(traceStore));
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
         _scratchpad = scratchpad ?? throw new ArgumentNullException(nameof(scratchpad));
+        _sessionNotifier = sessionNotifier ?? throw new ArgumentNullException(nameof(sessionNotifier));
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<ParallelWorkflowExecutor>.Instance;
     }
 
@@ -129,7 +132,9 @@ public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
             await _store.UpdateStateAsync(
                 mission.Id, WorkflowStatus.Failed,
                 completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
-            return (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
+            var crashedMission = (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
+            await _sessionNotifier.NotifyAsync(crashedMission, ct).ConfigureAwait(false);
+            return crashedMission;
         }
 
         // Build a synthetic ExecutionResult for the gate.
@@ -190,7 +195,9 @@ public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
                 completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
         }
 
-        return (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
+        var finalMission = (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
+        await _sessionNotifier.NotifyAsync(finalMission, ct).ConfigureAwait(false);
+        return finalMission;
     }
 
     private async Task<IReadOnlyList<StepOutcome>> ExecuteParallelAsync(

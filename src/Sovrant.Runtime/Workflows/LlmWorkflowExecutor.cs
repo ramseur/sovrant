@@ -25,6 +25,7 @@ public sealed partial class LlmWorkflowExecutor : IWorkflowExecutor
     private readonly IWorkflowPlanner _planner;
     private readonly IExecutor _engineExecutor;
     private readonly IAcceptanceGate _gate;
+    private readonly WorkflowSessionNotifier _sessionNotifier;
     private readonly ILogger<LlmWorkflowExecutor> _logger;
 
     public LlmWorkflowExecutor(
@@ -32,12 +33,14 @@ public sealed partial class LlmWorkflowExecutor : IWorkflowExecutor
         IWorkflowPlanner planner,
         IExecutor engineExecutor,
         IAcceptanceGate gate,
+        WorkflowSessionNotifier sessionNotifier,
         ILogger<LlmWorkflowExecutor>? logger = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _planner = planner ?? throw new ArgumentNullException(nameof(planner));
         _engineExecutor = engineExecutor ?? throw new ArgumentNullException(nameof(engineExecutor));
         _gate = gate ?? throw new ArgumentNullException(nameof(gate));
+        _sessionNotifier = sessionNotifier ?? throw new ArgumentNullException(nameof(sessionNotifier));
         _logger = logger ?? Microsoft.Extensions.Logging.Abstractions.NullLogger<LlmWorkflowExecutor>.Instance;
     }
 
@@ -124,7 +127,9 @@ public sealed partial class LlmWorkflowExecutor : IWorkflowExecutor
                 mission.Id, WorkflowStatus.Failed,
                 completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
             LogTerminal(_logger, mission.Id, WorkflowStatus.Failed, ex.Message);
-            return (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
+            var crashedMission = (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
+            await _sessionNotifier.NotifyAsync(crashedMission, ct).ConfigureAwait(false);
+            return crashedMission;
         }
 
         await _store.AppendEventAsync(
@@ -188,6 +193,8 @@ public sealed partial class LlmWorkflowExecutor : IWorkflowExecutor
             LogTerminal(_logger, mission.Id, WorkflowStatus.Failed, decision.Reason);
         }
 
-        return (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
+        var finalMission = (await _store.GetAsync(mission.Id, ct).ConfigureAwait(false))!;
+        await _sessionNotifier.NotifyAsync(finalMission, ct).ConfigureAwait(false);
+        return finalMission;
     }
 }

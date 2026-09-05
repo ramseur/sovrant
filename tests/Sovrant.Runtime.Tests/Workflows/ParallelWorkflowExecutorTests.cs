@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Runtime.Engine;
+using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Storage;
 
@@ -11,6 +12,7 @@ public sealed class ParallelWorkflowExecutorTests : IAsyncDisposable
     private readonly SqliteStorageProvider _provider;
     private readonly SqliteWorkflowStore _store;
     private readonly SqliteWorkflowScratchpadStore _scratchpad;
+    private readonly WorkflowSessionNotifier _notifier;
 
     public ParallelWorkflowExecutorTests()
     {
@@ -19,6 +21,7 @@ public sealed class ParallelWorkflowExecutorTests : IAsyncDisposable
         _provider.InitializeAsync().GetAwaiter().GetResult();
         _store = new SqliteWorkflowStore(_provider);
         _scratchpad = new SqliteWorkflowScratchpadStore(_provider);
+        _notifier = new WorkflowSessionNotifier(new NoOpSessionStore(), NullLogger<WorkflowSessionNotifier>.Instance);
     }
 
     public async ValueTask DisposeAsync()
@@ -28,6 +31,42 @@ public sealed class ParallelWorkflowExecutorTests : IAsyncDisposable
     }
 
     // ── Fakes ────────────────────────────────────────────────────────────
+
+    private sealed class NoOpSessionStore : ISessionStore
+    {
+        public Task AppendAsync(string sessionId, SessionEntry entry, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionEntry>>([]);
+        public Task<IReadOnlyList<string>> ListAsync(string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<bool> DeleteAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult(true);
+        public Task<int> DeleteAllAsync(CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+        public Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+        public Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>([]);
+        public Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>([]);
+        public Task<IReadOnlyList<string>?> GetMcpConnectionsAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>?>(null);
+        public Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task UpdatePrivacyAsync(string sessionId, string ownerUserId, bool isPrivate, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<bool?>(null);
+        public Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string?> GetAgentNameAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+    }
 
     private sealed class FakeStepRunner : IStepRunner
     {
@@ -71,7 +110,7 @@ public sealed class ParallelWorkflowExecutorTests : IAsyncDisposable
         IWorkflowPlanner? planner = null) =>
         new(_store, planner ?? new MultiStepPlanner(), stepRunner,
             new SqliteRuntimeTraceStore(_provider),
-            new AllStepsSucceededGate(), _scratchpad,
+            new AllStepsSucceededGate(), _scratchpad, _notifier,
             NullLogger<ParallelWorkflowExecutor>.Instance);
 
     // ── Tests ────────────────────────────────────────────────────────────

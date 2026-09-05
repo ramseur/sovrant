@@ -354,6 +354,7 @@ public static class ServiceCollectionExtensions
             new SqliteWorkflowStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
         services.AddSingleton<IWorkflowPlanner, SimpleWorkflowPlanner>();
         services.AddSingleton<IAcceptanceGate, AllStepsSucceededGate>();
+        services.AddSingleton<WorkflowSessionNotifier>();
         services.AddSingleton<IWorkflowExecutor, LlmWorkflowExecutor>();
         services.AddSingleton<WorkflowExportService>();
 
