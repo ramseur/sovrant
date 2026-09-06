@@ -79,22 +79,31 @@ public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
         }
 
         // ── Plan ─────────────────────────────────────────────────────────
-        var plan = await _planner.PlanAsync(mission, ct).ConfigureAwait(false);
-        var planJson = JsonSerializer.Serialize(new
-        {
-            plan_id = plan.Id,
-            plan_version = plan.PlanVersion,
-            goal = plan.Goal,
-            step_count = plan.Steps.Count,
-        });
+        // See LlmWorkflowExecutor for why: reuse a plan that was already
+        // generated (and possibly human-edited) during a review step and
+        // has never actually run, instead of silently re-planning over it.
+        var priorEvents = await _store.GetEventsAsync(mission.Id, ct).ConfigureAwait(false);
+        var hasRunBefore = priorEvents.Any(e => e.EventType == WorkflowEventTypes.RunStarted);
+        var reviewedPlan = hasRunBefore ? null : WorkflowPlanJson.TryDeserialize(mission.PlanJson, mission.Goal);
 
-        await _store.UpdateStateAsync(
-            mission.Id, WorkflowStatus.Running, planJson: planJson, ct: ct).ConfigureAwait(false);
-        await _store.AppendEventAsync(
-            mission.Id,
-            WorkflowEventTypes.PlanRevised,
-            JsonSerializer.Serialize(new { plan_id = plan.Id, plan_version = plan.PlanVersion }),
-            mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
+        RuntimePlan plan;
+        if (reviewedPlan is not null)
+        {
+            plan = reviewedPlan;
+            await _store.UpdateStateAsync(
+                mission.Id, WorkflowStatus.Running, ct: ct).ConfigureAwait(false);
+        }
+        else
+        {
+            plan = await _planner.PlanAsync(mission, ct).ConfigureAwait(false);
+            await _store.UpdateStateAsync(
+                mission.Id, WorkflowStatus.Running, planJson: WorkflowPlanJson.Serialize(plan), ct: ct).ConfigureAwait(false);
+            await _store.AppendEventAsync(
+                mission.Id,
+                WorkflowEventTypes.PlanRevised,
+                JsonSerializer.Serialize(new { plan_id = plan.Id, plan_version = plan.PlanVersion }),
+                mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
+        }
 
         // ── Execute — fan out if multiple steps ──────────────────────────
         var runId = $"run-{Guid.NewGuid():N}";

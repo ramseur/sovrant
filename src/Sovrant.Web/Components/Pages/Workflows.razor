@@ -1,5 +1,5 @@
 @page "/workflows"
-@using System.Text.Json
+@using Sovrant.Runtime.Engine
 @using Sovrant.Runtime.Workflows
 @using Sovrant.Web.Services
 
@@ -64,10 +64,14 @@
                                   @bind="_createGoal" @bind:event="oninput"></textarea>
                     </div>
                 </div>
-                <div style="display:flex;gap:8px;margin-top:12px;">
+                <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
                     <button class="btn-primary" style="max-width:180px;"
-                            disabled="@(string.IsNullOrWhiteSpace(_createGoal))"
+                            disabled="@(string.IsNullOrWhiteSpace(_createGoal) || _isGeneratingPlan)"
                             @onclick="ConfirmCreate">Create Workflow</button>
+                    <button class="btn-outline" style="max-width:200px;"
+                            disabled="@(string.IsNullOrWhiteSpace(_createGoal) || _isGeneratingPlan)"
+                            title="Ask the model to break this goal into steps you can review and edit before anything runs"
+                            @onclick="GeneratePlanAsync">@(_isGeneratingPlan ? "Generating…" : "Generate Plan first")</button>
                     <button class="btn-outline btn-sm" @onclick="CancelCreate">Cancel</button>
                 </div>
             </div>
@@ -89,7 +93,42 @@
                 <!-- ── Plan ──────────────────────────────────────────── -->
                 <div class="orch-detail-section">
                     <h3>Plan</h3>
-                    @if (_selectedPlan is null || _selectedPlan.Steps.Count == 0)
+                    @if (IsPlanReview)
+                    {
+                        <p class="text-muted text-sm" style="margin-bottom:8px;">
+                            Awaiting your review. Edit the steps below, then Save, or Resume to run as-is.
+                        </p>
+                        @for (var i = 0; i < _editableSteps.Count; i++)
+                        {
+                            var idx = i;
+                            var step = _editableSteps[idx];
+                            <div class="gov-card" style="margin-bottom:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;">
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <span class="text-muted text-sm" style="flex-shrink:0;">@(idx + 1).</span>
+                                    <input class="gov-field-input" style="flex:1;" placeholder="Intent"
+                                           value="@step.Intent" @oninput="e => step.Intent = (string)e.Value!" />
+                                    <select class="gov-field-input" style="max-width:110px;"
+                                            value="@step.Tier" @onchange="e => step.Tier = (string)e.Value!">
+                                        <option value="Standard">Standard</option>
+                                        <option value="High">High</option>
+                                        <option value="Fast">Fast</option>
+                                    </select>
+                                    <button class="btn-sm btn-outline" title="Remove step"
+                                            disabled="@(_editableSteps.Count <= 1)"
+                                            @onclick="() => RemoveStep(idx)">✕</button>
+                                </div>
+                                <input class="gov-field-input" placeholder="Expected outcome"
+                                       value="@step.Expected" @oninput="e => step.Expected = (string)e.Value!" />
+                            </div>
+                        }
+                        <div style="display:flex;gap:8px;margin-top:4px;">
+                            <button class="btn-outline btn-sm" @onclick="AddStep">+ Add step</button>
+                            <button class="btn-primary btn-sm" @onclick="SavePlanAsync" disabled="@_isSavingPlan">
+                                @(_isSavingPlan ? "Saving…" : "Save changes")
+                            </button>
+                        </div>
+                    }
+                    else if (_selectedPlan is null || _selectedPlan.Steps.Count == 0)
                     {
                         <p class="text-muted text-sm">No plan yet.</p>
                     }
@@ -102,9 +141,9 @@
                                     <div>
                                         <span class="ma-member-name">@(step.Index + 1). @step.Intent</span>
                                     </div>
-                                    <div class="ma-member-meta"><span>@step.Expected</span></div>
+                                    <div class="ma-member-meta"><span>@step.ExpectedOutcome</span></div>
                                 </div>
-                                <span class="ma-role-badge">@step.Tier</span>
+                                <span class="ma-role-badge">@step.ModelTier</span>
                             </div>
                         }
                     }
@@ -164,6 +203,7 @@
 @code {
     [Inject] private IWorkflowStore WorkflowStore { get; set; } = default!;
     [Inject] private IWorkflowExecutor Executor { get; set; } = default!;
+    [Inject] private WorkflowPlanningService Planner { get; set; } = default!;
     [Inject] private WorkflowExportService Exporter { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
@@ -174,20 +214,27 @@
     private List<Workflow> _all = [];
     private List<Workflow> _filtered = [];
     private Workflow? _selected;
-    private PlanSnapshot? _selectedPlan;
+    private RuntimePlan? _selectedPlan;
     private List<WorkflowEvent> _selectedEvents = [];
+    private readonly List<EditableStep> _editableSteps = [];
 
     private bool _isCreating;
     private string _createGoal = string.Empty;
+    private bool _isGeneratingPlan;
+    private bool _isSavingPlan;
 
     private bool _isRunning;
     private bool _showExport;
     private string _exportText = string.Empty;
 
-    private static readonly JsonSerializerOptions s_jsonOptions = new()
-    {
-        PropertyNameCaseInsensitive = true,
-    };
+    /// <summary>
+    /// True when the selected workflow has a plan waiting for human review
+    /// before it has ever run — as opposed to AwaitingHuman from a post-run
+    /// acceptance-gate pause, which shows the plan read-only like normal.
+    /// </summary>
+    private bool IsPlanReview =>
+        _selected?.Status == WorkflowStatus.AwaitingHuman
+        && !_selectedEvents.Any(e => e.EventType == WorkflowEventTypes.RunStarted);
 
     protected override async Task OnInitializedAsync() => await LoadAllAsync();
 
@@ -221,22 +268,16 @@
     {
         _selectedPlan = null;
         _selectedEvents = [];
+        _editableSteps.Clear();
         if (_selected is null) return;
 
-        _selectedPlan = ParsePlan(_selected.PlanJson);
+        _selectedPlan = WorkflowPlanJson.TryDeserialize(_selected.PlanJson, _selected.Goal);
         _selectedEvents = (await WorkflowStore.GetEventsAsync(_selected.Id)).ToList();
-    }
 
-    private static PlanSnapshot? ParsePlan(string planJson)
-    {
-        if (string.IsNullOrWhiteSpace(planJson) || planJson == "{}") return null;
-        try
+        if (IsPlanReview && _selectedPlan is not null)
         {
-            return JsonSerializer.Deserialize<PlanSnapshot>(planJson, s_jsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
+            foreach (var step in _selectedPlan.Steps)
+                _editableSteps.Add(new EditableStep { Intent = step.Intent, Expected = step.ExpectedOutcome, Tier = step.ModelTier.ToString() });
         }
     }
 
@@ -270,6 +311,85 @@
         _selected = _all.FirstOrDefault(w => w.Id == workflow.Id);
         await LoadSelectedDetailAsync();
     }
+
+    private async Task GeneratePlanAsync()
+    {
+        var goal = _createGoal.Trim();
+        if (string.IsNullOrEmpty(goal) || _isGeneratingPlan) return;
+
+        _isGeneratingPlan = true;
+        StateHasChanged();
+        try
+        {
+            var workflow = await Planner.GenerateAsync(
+                goal,
+                workspaceId: ActiveContext.WorkspaceId,
+                projectId: string.IsNullOrEmpty(ActiveContext.ProjectId) ? null : ActiveContext.ProjectId,
+                ownerUserId: Session.UserId);
+
+            _isCreating = false;
+            _status = "Plan generated — review the steps below, then Save or Resume to run.";
+            await LoadAllAsync();
+            _selected = _all.FirstOrDefault(w => w.Id == workflow.Id);
+            await LoadSelectedDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            _status = $"Plan generation failed: {ex.Message}";
+        }
+        finally
+        {
+            _isGeneratingPlan = false;
+        }
+    }
+
+    // ── Plan review ──────────────────────────────────────────────────────
+
+    private void AddStep() => _editableSteps.Add(new EditableStep());
+
+    private void RemoveStep(int index)
+    {
+        if (_editableSteps.Count <= 1) return;
+        _editableSteps.RemoveAt(index);
+    }
+
+    private async Task SavePlanAsync()
+    {
+        if (_selected is null || _isSavingPlan) return;
+        var steps = _editableSteps
+            .Where(s => !string.IsNullOrWhiteSpace(s.Intent))
+            .Select((s, i) => new RuntimeStep(i, s.Intent.Trim(), string.IsNullOrWhiteSpace(s.Expected) ? "step completed successfully" : s.Expected.Trim(), ParseTier(s.Tier)))
+            .ToList();
+        if (steps.Count == 0)
+        {
+            _status = "Add at least one step with an intent before saving.";
+            return;
+        }
+
+        _isSavingPlan = true;
+        StateHasChanged();
+        try
+        {
+            await Planner.SavePlanAsync(_selected.Id, steps);
+            _status = "Plan saved.";
+            await LoadAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _status = $"Save failed: {ex.Message}";
+        }
+        finally
+        {
+            _isSavingPlan = false;
+        }
+    }
+
+    private static RuntimeModelTier ParseTier(string tier) => tier switch
+    {
+        "High" => RuntimeModelTier.High,
+        "Fast" => RuntimeModelTier.Fast,
+        _ => RuntimeModelTier.Standard,
+    };
 
     // ── Actions ───────────────────────────────────────────────────────────
 
@@ -346,16 +466,10 @@
     private string EmptyMessage() =>
         string.IsNullOrWhiteSpace(_search) ? "No workflows yet. Click + New to create one." : "No matches.";
 
-    private sealed class PlanSnapshot
+    private sealed class EditableStep
     {
-        public List<PlanStep> Steps { get; set; } = [];
-    }
-
-    private sealed class PlanStep
-    {
-        public int Index { get; set; }
         public string Intent { get; set; } = string.Empty;
         public string Expected { get; set; } = string.Empty;
-        public string Tier { get; set; } = string.Empty;
+        public string Tier { get; set; } = "Standard";
     }
 }

@@ -72,16 +72,31 @@ public sealed class LlmWorkflowExecutorTests : IAsyncDisposable
             => Task.FromResult<string?>(null);
     }
 
+    private sealed class CountingPlanner : IWorkflowPlanner
+    {
+        public int Calls { get; private set; }
+        public string Intent { get; init; } = "planner-generated step";
+
+        public Task<RuntimePlan> PlanAsync(Workflow mission, CancellationToken ct = default)
+        {
+            Calls++;
+            var step = new RuntimeStep(0, Intent, "goal satisfied", RuntimeModelTier.Standard);
+            return Task.FromResult(new RuntimePlan($"plan-{Guid.NewGuid():N}", 1, mission.Goal, [step], DateTimeOffset.UtcNow));
+        }
+    }
+
     private sealed class FakeEngineExecutor : IExecutor
     {
         public ExecutionResult NextResult { get; set; } = default!;
         public Exception? Throw { get; set; }
         public int Calls { get; private set; }
+        public RuntimePlan? LastPlan { get; private set; }
 
         public Task<ExecutionResult> ExecuteAsync(
             RuntimePlan plan, EngineRunContext runContext, Replanner replanner, CancellationToken ct = default)
         {
             Calls++;
+            LastPlan = plan;
             if (Throw is not null) throw Throw;
             return Task.FromResult(NextResult);
         }
@@ -224,5 +239,58 @@ public sealed class LlmWorkflowExecutorTests : IAsyncDisposable
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             executor.RunAsync("workflow-does-not-exist"));
+    }
+
+    [Fact]
+    public async Task RunAsync_ReviewedPlanAwaitingHuman_ReusesStoredPlanInsteadOfRePlanning()
+    {
+        var workflow = await _store.CreateAsync("reviewed goal");
+        var reviewedPlan = new RuntimePlan(
+            "plan-reviewed", 1, workflow.Goal,
+            [new RuntimeStep(0, "human-edited step", "goal satisfied", RuntimeModelTier.High)],
+            DateTimeOffset.UtcNow);
+        await _store.UpdateStateAsync(
+            workflow.Id, WorkflowStatus.AwaitingHuman, planJson: WorkflowPlanJson.Serialize(reviewedPlan));
+
+        var planner = new CountingPlanner { Intent = "planner would have overwritten this" };
+        var engine = new FakeEngineExecutor { NextResult = OneSuccessfulStep() };
+        var executor = new LlmWorkflowExecutor(
+            _store, planner, engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        var updated = await executor.RunAsync(workflow.Id);
+
+        Assert.Equal(0, planner.Calls); // never asked to (re)plan
+        Assert.Equal("human-edited step", engine.LastPlan?.Steps.Single().Intent);
+        Assert.Equal(WorkflowStatus.Completed, updated.Status);
+    }
+
+    [Fact]
+    public async Task RunAsync_AfterAcceptancePause_StillRePlansOnResume()
+    {
+        // A pause from a rejected acceptance decision is a different kind of
+        // AwaitingHuman than an unreviewed plan -- a RunStarted event already
+        // exists, so a resume must still re-plan, exactly as before this
+        // feature existed. Simulates that history directly rather than
+        // driving a full first RunAsync cycle to failure.
+        var workflow = await _store.CreateAsync("retry after rejection");
+        var priorPlan = new RuntimePlan(
+            "plan-prior", 1, workflow.Goal,
+            [new RuntimeStep(0, "the plan that already ran", "goal satisfied", RuntimeModelTier.Standard)],
+            DateTimeOffset.UtcNow);
+        await _store.UpdateStateAsync(
+            workflow.Id, WorkflowStatus.AwaitingHuman, planJson: WorkflowPlanJson.Serialize(priorPlan));
+        await _store.AppendEventAsync(workflow.Id, WorkflowEventTypes.RunStarted, "{}");
+
+        var planner = new CountingPlanner { Intent = "fresh re-plan" };
+        var engine = new FakeEngineExecutor { NextResult = OneSuccessfulStep() };
+        var executor = new LlmWorkflowExecutor(
+            _store, planner, engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        await executor.RunAsync(workflow.Id);
+
+        Assert.Equal(1, planner.Calls);
+        Assert.Equal("fresh re-plan", engine.LastPlan?.Steps.Single().Intent);
     }
 }

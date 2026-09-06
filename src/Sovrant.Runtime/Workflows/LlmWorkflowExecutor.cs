@@ -64,28 +64,35 @@ public sealed partial class LlmWorkflowExecutor : IWorkflowExecutor
         LogRunStarted(_logger, mission.Id, mission.Status);
 
         // ── Plan ─────────────────────────────────────────────────────────
-        var plan = await _planner.PlanAsync(mission, ct).ConfigureAwait(false);
-        var planJson = JsonSerializer.Serialize(new
-        {
-            plan_id = plan.Id,
-            plan_version = plan.PlanVersion,
-            goal = plan.Goal,
-            steps = plan.Steps.Select(s => new
-            {
-                index = s.Index,
-                intent = s.Intent,
-                expected = s.ExpectedOutcome,
-                tier = s.ModelTier.ToString(),
-            }),
-        });
+        // A workflow that went through the "Generate Plan" review step
+        // already has a (possibly human-edited) plan sitting in PlanJson
+        // and has never actually run yet — reuse it verbatim instead of
+        // silently discarding the user's edits with a fresh planner call.
+        // Once a run has actually started, PlanJson holds the *executed*
+        // plan, not a pending review, so a later resume (e.g. after an
+        // acceptance-gate pause) still re-plans exactly as before.
+        var priorEvents = await _store.GetEventsAsync(mission.Id, ct).ConfigureAwait(false);
+        var hasRunBefore = priorEvents.Any(e => e.EventType == WorkflowEventTypes.RunStarted);
+        var reviewedPlan = hasRunBefore ? null : WorkflowPlanJson.TryDeserialize(mission.PlanJson, mission.Goal);
 
-        await _store.UpdateStateAsync(
-            mission.Id, WorkflowStatus.Running, planJson: planJson, ct: ct).ConfigureAwait(false);
-        await _store.AppendEventAsync(
-            mission.Id,
-            WorkflowEventTypes.PlanRevised,
-            JsonSerializer.Serialize(new { plan_id = plan.Id, plan_version = plan.PlanVersion }),
-            mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
+        RuntimePlan plan;
+        if (reviewedPlan is not null)
+        {
+            plan = reviewedPlan;
+            await _store.UpdateStateAsync(
+                mission.Id, WorkflowStatus.Running, ct: ct).ConfigureAwait(false);
+        }
+        else
+        {
+            plan = await _planner.PlanAsync(mission, ct).ConfigureAwait(false);
+            await _store.UpdateStateAsync(
+                mission.Id, WorkflowStatus.Running, planJson: WorkflowPlanJson.Serialize(plan), ct: ct).ConfigureAwait(false);
+            await _store.AppendEventAsync(
+                mission.Id,
+                WorkflowEventTypes.PlanRevised,
+                JsonSerializer.Serialize(new { plan_id = plan.Id, plan_version = plan.PlanVersion }),
+                mission.WorkspaceId, mission.ProjectId, ct).ConfigureAwait(false);
+        }
 
         // ── Execute ──────────────────────────────────────────────────────
         var runId = $"run-{Guid.NewGuid():N}";

@@ -352,11 +352,12 @@ public static class ServiceCollectionExtensions
         // an LLM-backed planner without touching routes or storage.
         services.AddSingleton<IWorkflowStore>(sp =>
             new SqliteWorkflowStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
-        services.AddSingleton<IWorkflowPlanner, SimpleWorkflowPlanner>();
+        services.AddSingleton<IWorkflowPlanner, LlmWorkflowPlanner>();
         services.AddSingleton<IAcceptanceGate, AllStepsSucceededGate>();
         services.AddSingleton<WorkflowSessionNotifier>();
         services.AddSingleton<IWorkflowExecutor, LlmWorkflowExecutor>();
         services.AddSingleton<WorkflowExportService>();
+        services.AddSingleton<WorkflowPlanningService>();
 
         // Autonomous-driver layer (Phase 67) — named strategies for advancing
         // a mission forward. The LLM driver wraps IWorkflowExecutor; additional

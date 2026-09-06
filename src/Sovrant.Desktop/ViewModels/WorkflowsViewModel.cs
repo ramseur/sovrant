@@ -1,21 +1,21 @@
 using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Runtime.Engine;
 using Sovrant.Runtime.Workflows;
 
 namespace Sovrant.Desktop.ViewModels;
 
 public partial class WorkflowsViewModel : ViewModelBase
 {
+    public IReadOnlyList<string> TierOptions { get; } = ["Standard", "High", "Fast"];
+
     private readonly IWorkflowStore _store;
     private readonly IWorkflowExecutor _executor;
+    private readonly WorkflowPlanningService _planner;
     private readonly WorkflowExportService _exporter;
     private readonly ActiveContextViewModel _activeContext;
-
-    private static readonly JsonSerializerOptions s_jsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     [ObservableProperty] private int _workflowCount;
     [ObservableProperty] private string _statusMessage = string.Empty;
@@ -23,6 +23,8 @@ public partial class WorkflowsViewModel : ViewModelBase
 
     [ObservableProperty] private bool _isCreating;
     [ObservableProperty] private string _createGoal = string.Empty;
+    [ObservableProperty] private bool _isGeneratingPlan;
+    [ObservableProperty] private bool _isSavingPlan;
 
     [ObservableProperty] private bool _isRunning;
     [ObservableProperty] private bool _showExport;
@@ -33,16 +35,26 @@ public partial class WorkflowsViewModel : ViewModelBase
     public string RunButtonLabel =>
         IsRunning ? "Running…" : SelectedWorkflow?.Status == WorkflowStatus.AwaitingHuman ? "Resume" : "Run now";
 
+    /// <summary>
+    /// True when the selected workflow has a plan waiting for human review
+    /// before it has ever run — as opposed to AwaitingHuman from a post-run
+    /// acceptance-gate pause, which shows the plan read-only like normal.
+    /// </summary>
+    public bool IsPlanReview =>
+        SelectedWorkflow is { Status: WorkflowStatus.AwaitingHuman, HasRunStarted: false };
+
     public ObservableCollection<WorkflowItemViewModel> Workflows { get; } = [];
 
     public WorkflowsViewModel(
         IWorkflowStore store,
         IWorkflowExecutor executor,
+        WorkflowPlanningService planner,
         WorkflowExportService exporter,
         ActiveContextViewModel activeContext)
     {
         _store = store;
         _executor = executor;
+        _planner = planner;
         _exporter = exporter;
         _activeContext = activeContext;
         LoadAll();
@@ -95,6 +107,96 @@ public partial class WorkflowsViewModel : ViewModelBase
         if (SelectedWorkflow is not null)
             await LoadDetailAsync(SelectedWorkflow).ConfigureAwait(true);
     }
+
+    [RelayCommand]
+    private async Task GeneratePlanAsync()
+    {
+        var goal = CreateGoal.Trim();
+        if (string.IsNullOrEmpty(goal) || IsGeneratingPlan) return;
+
+        IsGeneratingPlan = true;
+        try
+        {
+            var workflow = await _planner.GenerateAsync(
+                goal,
+                workspaceId: _activeContext.ActiveWorkspaceId,
+                projectId: string.IsNullOrEmpty(_activeContext.ActiveProjectId) ? null : _activeContext.ActiveProjectId,
+                ownerUserId: App.SovrantUserId).ConfigureAwait(true);
+
+            IsCreating = false;
+            StatusMessage = "Plan generated — review the steps below, then Save or Resume to run.";
+            LoadAll();
+            SelectedWorkflow = Workflows.FirstOrDefault(w => w.Id == workflow.Id);
+            if (SelectedWorkflow is not null)
+                await LoadDetailAsync(SelectedWorkflow).ConfigureAwait(true);
+        }
+        catch (Exception ex)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => StatusMessage = $"Plan generation failed: {ex.Message}");
+        }
+        finally
+        {
+            IsGeneratingPlan = false;
+        }
+    }
+
+    // ── Plan review ──────────────────────────────────────────────────────
+
+    [RelayCommand]
+    private void AddStep()
+    {
+        if (SelectedWorkflow is null) return;
+        SelectedWorkflow.Steps.Add(new PlanStepViewModel { Index = SelectedWorkflow.Steps.Count, Tier = "Standard" });
+    }
+
+    [RelayCommand]
+    private void RemoveStep(PlanStepViewModel step)
+    {
+        if (SelectedWorkflow is null || SelectedWorkflow.Steps.Count <= 1) return;
+        SelectedWorkflow.Steps.Remove(step);
+    }
+
+    [RelayCommand]
+    private async Task SavePlanAsync()
+    {
+        if (SelectedWorkflow is null || IsSavingPlan) return;
+
+        var steps = SelectedWorkflow.Steps
+            .Where(s => !string.IsNullOrWhiteSpace(s.Intent))
+            .Select((s, i) => new RuntimeStep(
+                i, s.Intent.Trim(),
+                string.IsNullOrWhiteSpace(s.Expected) ? "step completed successfully" : s.Expected.Trim(),
+                ParseTier(s.Tier)))
+            .ToList();
+        if (steps.Count == 0)
+        {
+            StatusMessage = "Add at least one step with an intent before saving.";
+            return;
+        }
+
+        IsSavingPlan = true;
+        try
+        {
+            await _planner.SavePlanAsync(SelectedWorkflow.Id, steps).ConfigureAwait(true);
+            StatusMessage = "Plan saved.";
+            LoadAll();
+        }
+        catch (Exception ex)
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => StatusMessage = $"Save failed: {ex.Message}");
+        }
+        finally
+        {
+            IsSavingPlan = false;
+        }
+    }
+
+    private static RuntimeModelTier ParseTier(string tier) => tier switch
+    {
+        "High" => RuntimeModelTier.High,
+        "Fast" => RuntimeModelTier.Fast,
+        _ => RuntimeModelTier.Standard,
+    };
 
     // ── Actions ──────────────────────────────────────────────────────────
 
@@ -149,6 +251,7 @@ public partial class WorkflowsViewModel : ViewModelBase
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(HasNoSelection));
         OnPropertyChanged(nameof(RunButtonLabel));
+        OnPropertyChanged(nameof(IsPlanReview));
         RunNowCommand.NotifyCanExecuteChanged();
         CancelWorkflowCommand.NotifyCanExecuteChanged();
         _ = value is not null ? LoadDetailAsync(value) : Task.CompletedTask;
@@ -193,18 +296,22 @@ public partial class WorkflowsViewModel : ViewModelBase
         item.Steps.Clear();
         item.Events.Clear();
 
-        var plan = ParsePlan(item.PlanJson);
+        var plan = WorkflowPlanJson.TryDeserialize(item.PlanJson, item.Goal);
         if (plan is not null)
             foreach (var s in plan.Steps)
-                item.Steps.Add(new PlanStepViewModel { Index = s.Index, Intent = s.Intent, Expected = s.Expected, Tier = s.Tier });
+                item.Steps.Add(new PlanStepViewModel { Index = s.Index, Intent = s.Intent, Expected = s.ExpectedOutcome, Tier = s.ModelTier.ToString() });
 
         var events = await _store.GetEventsAsync(item.Id).ConfigureAwait(true);
+        item.HasRunStarted = events.Any(e => e.EventType == WorkflowEventTypes.RunStarted);
         foreach (var e in events)
             item.Events.Add(new WorkflowEventItemViewModel
             {
                 Timestamp = e.Timestamp.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture),
                 EventType = HumanizeEventType(e.EventType),
             });
+
+        if (ReferenceEquals(SelectedWorkflow, item))
+            OnPropertyChanged(nameof(IsPlanReview));
     }
 
     // The event_type values persisted in the journal (mission_created, etc.)
@@ -226,38 +333,8 @@ public partial class WorkflowsViewModel : ViewModelBase
         _ => eventType.Replace('_', ' '),
     };
 
-    private static PlanSnapshot? ParsePlan(string planJson)
-    {
-        if (string.IsNullOrWhiteSpace(planJson) || planJson == "{}") return null;
-        try
-        {
-            return JsonSerializer.Deserialize<PlanSnapshot>(planJson, s_jsonOptions);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
     private static bool IsTerminal(WorkflowStatus status) =>
         status is WorkflowStatus.Completed or WorkflowStatus.Failed or WorkflowStatus.Cancelled;
-
-    [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes",
-        Justification = "Instantiated via JsonSerializer.Deserialize<T>, which the analyzer can't trace.")]
-    private sealed class PlanSnapshot
-    {
-        public List<PlanStepSnapshot> Steps { get; set; } = [];
-    }
-
-    [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes",
-        Justification = "Instantiated via JsonSerializer.Deserialize<T>, which the analyzer can't trace.")]
-    private sealed class PlanStepSnapshot
-    {
-        public int Index { get; set; }
-        public string Intent { get; set; } = string.Empty;
-        public string Expected { get; set; } = string.Empty;
-        public string Tier { get; set; } = string.Empty;
-    }
 }
 
 public partial class WorkflowItemViewModel : ViewModelBase
@@ -267,6 +344,9 @@ public partial class WorkflowItemViewModel : ViewModelBase
     [ObservableProperty] private WorkflowStatus _status;
     [ObservableProperty] private string _subtitle = string.Empty;
     [ObservableProperty] private string _planJson = "{}";
+
+    /// <summary>Whether a RunStarted event has ever been journaled for this workflow — distinguishes a pre-run plan review from a post-run acceptance pause, both of which report AwaitingHuman.</summary>
+    [ObservableProperty] private bool _hasRunStarted;
 
     public string StatusName => Status.ToString();
     public bool IsTerminal => Status is WorkflowStatus.Completed or WorkflowStatus.Failed or WorkflowStatus.Cancelled;

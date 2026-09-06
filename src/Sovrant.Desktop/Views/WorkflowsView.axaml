@@ -113,13 +113,25 @@
                             </StackPanel>
                         </Border>
 
-                        <Button Content="Create Workflow"
-                                Command="{Binding ConfirmCreateCommand}"
-                                IsEnabled="{Binding CreateGoal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
-                                HorizontalAlignment="Left"
-                                Padding="16,8" CornerRadius="8"
-                                Background="{DynamicResource BrandPrimary}"
-                                Foreground="White" FontWeight="SemiBold" />
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="Create Workflow"
+                                    Command="{Binding ConfirmCreateCommand}"
+                                    IsEnabled="{Binding CreateGoal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                    Padding="16,8" CornerRadius="8"
+                                    Background="{DynamicResource BrandPrimary}"
+                                    Foreground="White" FontWeight="SemiBold" />
+                            <Button Command="{Binding GeneratePlanCommand}"
+                                    IsEnabled="{Binding CreateGoal, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                    ToolTip.Tip="Ask the model to break this goal into steps you can review and edit before anything runs"
+                                    Padding="16,8" CornerRadius="8"
+                                    Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                <StackPanel>
+                                    <TextBlock Text="Generate Plan first" IsVisible="{Binding !IsGeneratingPlan}" />
+                                    <TextBlock Text="Generating…" IsVisible="{Binding IsGeneratingPlan}" />
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
                     </StackPanel>
                 </Border>
 
@@ -165,40 +177,94 @@
                             <TextBlock Text="Plan" FontSize="14" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextPrimary}" />
 
-                            <TextBlock Text="No plan yet." FontSize="12"
-                                       Foreground="{DynamicResource TextMuted}"
-                                       IsVisible="{Binding !Steps.Count}" />
+                            <!-- Read-only view: no plan review pending -->
+                            <StackPanel IsVisible="{Binding !$parent[UserControl].((vm:WorkflowsViewModel)DataContext).IsPlanReview}">
+                                <TextBlock Text="No plan yet." FontSize="12"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           IsVisible="{Binding !Steps.Count}" />
 
-                            <ItemsControl ItemsSource="{Binding Steps}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vm:PlanStepViewModel">
-                                        <Border Margin="0,3" Padding="10,8" CornerRadius="6"
-                                                Background="{DynamicResource SurfaceBackground}"
-                                                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
-                                            <DockPanel>
-                                                <Border DockPanel.Dock="Right" Padding="6,2" CornerRadius="4"
-                                                        Background="{DynamicResource SurfaceHover}"
-                                                        VerticalAlignment="Top">
-                                                    <TextBlock Text="{Binding Tier}"
-                                                               FontSize="10" Foreground="{DynamicResource TextSecondary}" />
-                                                </Border>
-                                                <StackPanel Spacing="3">
-                                                    <TextBlock FontSize="13" FontWeight="SemiBold"
-                                                               Foreground="{DynamicResource TextPrimary}"
-                                                               TextWrapping="Wrap">
-                                                        <Run Text="{Binding Index}" />
-                                                        <Run Text=". " />
-                                                        <Run Text="{Binding Intent}" />
-                                                    </TextBlock>
-                                                    <TextBlock Text="{Binding Expected}"
-                                                               FontSize="11" TextWrapping="Wrap"
-                                                               Foreground="{DynamicResource TextSecondary}" />
+                                <ItemsControl ItemsSource="{Binding Steps}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:PlanStepViewModel">
+                                            <Border Margin="0,3" Padding="10,8" CornerRadius="6"
+                                                    Background="{DynamicResource SurfaceBackground}"
+                                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                                <DockPanel>
+                                                    <Border DockPanel.Dock="Right" Padding="6,2" CornerRadius="4"
+                                                            Background="{DynamicResource SurfaceHover}"
+                                                            VerticalAlignment="Top">
+                                                        <TextBlock Text="{Binding Tier}"
+                                                                   FontSize="10" Foreground="{DynamicResource TextSecondary}" />
+                                                    </Border>
+                                                    <StackPanel Spacing="3">
+                                                        <TextBlock FontSize="13" FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource TextPrimary}"
+                                                                   TextWrapping="Wrap">
+                                                            <Run Text="{Binding Index}" />
+                                                            <Run Text=". " />
+                                                            <Run Text="{Binding Intent}" />
+                                                        </TextBlock>
+                                                        <TextBlock Text="{Binding Expected}"
+                                                                   FontSize="11" TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource TextSecondary}" />
+                                                    </StackPanel>
+                                                </DockPanel>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+
+                            <!-- Editable view: plan generated, awaiting review before first run -->
+                            <StackPanel Spacing="8" IsVisible="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).IsPlanReview}">
+                                <TextBlock Text="Awaiting your review. Edit the steps below, then Save, or Resume to run as-is."
+                                           FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextMuted}" />
+
+                                <ItemsControl ItemsSource="{Binding Steps}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate DataType="vm:PlanStepViewModel">
+                                            <Border Margin="0,3" Padding="10,8" CornerRadius="6"
+                                                    Background="{DynamicResource SurfaceBackground}"
+                                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                                <StackPanel Spacing="6">
+                                                    <DockPanel>
+                                                        <Button DockPanel.Dock="Right" Content="✕" ToolTip.Tip="Remove step"
+                                                                Command="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).RemoveStepCommand}"
+                                                                CommandParameter="{Binding}"
+                                                                Padding="6,2" FontSize="11"
+                                                                Background="Transparent" Foreground="{DynamicResource TextSecondary}" />
+                                                        <ComboBox DockPanel.Dock="Right" Width="100" Margin="0,0,6,0"
+                                                                  ItemsSource="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).TierOptions, Mode=OneTime}"
+                                                                  SelectedItem="{Binding Tier, Mode=TwoWay}" />
+                                                        <TextBox Text="{Binding Intent, Mode=TwoWay}"
+                                                                 Watermark="Intent" FontSize="12" />
+                                                    </DockPanel>
+                                                    <TextBox Text="{Binding Expected, Mode=TwoWay}"
+                                                             Watermark="Expected outcome" FontSize="11" />
                                                 </StackPanel>
-                                            </DockPanel>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                                <StackPanel Orientation="Horizontal" Spacing="8"
+                                            DataContext="{Binding $parent[UserControl].DataContext}">
+                                    <Button Content="+ Add step"
+                                            Command="{Binding AddStepCommand}"
+                                            Padding="10,5" CornerRadius="6" FontSize="11"
+                                            Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+                                            BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
+                                    <Button Command="{Binding SavePlanCommand}"
+                                            Padding="10,5" CornerRadius="6" FontSize="11"
+                                            Background="{DynamicResource BrandPrimary}" Foreground="White">
+                                        <StackPanel>
+                                            <TextBlock Text="Saving…" IsVisible="{Binding IsSavingPlan}" />
+                                            <TextBlock Text="Save changes" IsVisible="{Binding !IsSavingPlan}" />
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </StackPanel>
 
                             <!-- ── Event journal ─────────────────────────── -->
                             <TextBlock Text="Event Journal" FontSize="14" FontWeight="SemiBold"
