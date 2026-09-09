@@ -11926,13 +11926,27 @@ Today the only way to get a workflow is the dedicated Workflows page — a chat 
 - A "Turn into workflow" action in Chat (Web + Desktop), scoped to the current session — creates a `Workflow` with `SessionId` set to the chat's session ID (the linkage `WorkflowSessionNotifier` already depends on) and a goal derived from the conversation so far (likely the last user message, or an LLM-summarized goal if the thread is long).
 - The chat itself keeps behaving like a normal chat session, not a special mode: the user can keep typing. The open design question is what "keep typing" *means* while the linked workflow is actively running in the background — does a new user message get treated as a note that's visible when the workflow next checks in, does it interrupt/redirect the workflow, or does it just start an ordinary chat turn in parallel with the background execution? Needs a real answer before implementation, not an assumption.
 - The workflow's own status (Planning → Running → Completed/Failed/AwaitingHuman) surfaces as ordinary assistant messages in that same chat, reusing `WorkflowSessionNotifier` for terminal/`AwaitingHuman` transitions — extending it (or adding a sibling notifier) to also post at Running/Planning transitions if the "informs user it's working" requirement needs more granularity than just the terminal states.
-- Plan and journal detail (steps, per-step output, artifacts — see item 4's 2026-09-09 work above) live on a separate tab/pane rather than inline in the chat transcript, so the chat stays readable as a conversation while the mechanical detail is one click away.
+- Plan and journal detail (steps, per-step output, artifacts — see item 4's 2026-09-09 work above) live on a separate tab/pane rather than inline in the chat transcript, so the chat stays readable as a conversation while the mechanical detail is one click away. Confirmed direction (2026-09-09): Plan and Event Journal should each be their own tab, not stacked in one scrolling pane as the current Workflows detail page does it. The 2026-09-09 event-journal work rendered step output chat-style but read-only/"controlled" (no input) — acknowledged as the right call for now; the longer-term idea is a real chat input on the journal tab that's blockable/disabled while the linked workflow is actively running, rather than absent entirely.
+- **Simplification idea (2026-09-09):** instead of a bespoke chat-*style* renderer on the Journal tab, make it a click-through to the workflow's actual linked chat session (the same one `WorkflowSessionNotifier` already posts status messages into) — reuse the real Chat page instead of reproducing a second chat UI. The practical gap: workflows created today from the standalone Workflows page have no `SessionId` at all (only ones created via the `Workflow` tool mid-conversation, or via this item's future "turn into workflow" action, get one) — so there'd be nothing to click into for the common case unless every workflow gets an auto-created session as a home thread. Open question to resolve alongside the rest of this item's design pass.
 
 **Open questions to resolve in a dedicated design pass:**
 - How user input during an active run is handled (queued / redirect / parallel turn) — the crux of "manages input well from users as workflows are running"
 - Whether this needs a new status-message granularity (Running/Planning, not just terminal) or the existing terminal-only `WorkflowSessionNotifier` behavior is enough
 - Whether "turn into workflow" is available mid-conversation at any point, or only from a fresh/near-empty session
 - Relationship to item 3's still-unbuilt launch form (team picker, run-mode) — does chat-originated creation skip those, or need its own simplified version
+
+### Item 8 (new, 2026-09-09) — The acceptance gate can't tell confusion from success
+
+**Status:** Planned, not designed in detail
+
+Live-caught via item 4's output-surfacing work the same day: a workflow finished as **Completed** where all four steps were the model saying some version of "I don't have enough context to execute this step." `AllStepsSucceededGate` only checks `StepOutcome.Status` (Succeeded/Failed/Contradicted) — a plain text response with no tool error is always `Succeeded`, so nothing distinguishes real work from the model asking a question into the void. Two compounding causes:
+
+1. **The step prompt never tells the model it's inside an autonomous workflow.** There's no human reading the response in real time, so a clarifying question is a dead end — the model has no signal that it should either push forward with its best judgment given the ambiguity, or flag the gap through a channel the system can actually act on.
+2. **There's no such channel below the whole-run level.** `AwaitingHuman` today is only reachable after a full run completes and the acceptance gate evaluates the aggregate result (`IAcceptanceGate.EvaluateAsync`) — a single step has no way to request human input mid-run.
+
+**What might ship** (needs its own design pass):
+- Prompt changes so the step runner tells the model it's executing autonomously inside a workflow, with guidance on what to do when genuinely blocked (best-effort judgment call vs. flagging for review) instead of leaving that undefined.
+- A real signal path for "this step needs human input" — either a step-level analog of `RequiresHuman` that pauses the run immediately rather than waiting for the whole plan to finish, or (cheaper first pass) an acceptance-gate check that inspects step summaries for uncertainty/clarification-seeking language before trusting `StepStatus` alone.
 
 ---
 
