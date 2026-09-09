@@ -268,6 +268,7 @@ public partial class WorkflowsViewModel : ViewModelBase
         RunNowCommand.NotifyCanExecuteChanged();
         CancelWorkflowCommand.NotifyCanExecuteChanged();
         _ = value is not null ? LoadDetailAsync(value) : Task.CompletedTask;
+        UpdatePolling();
     }
 
     partial void OnIsCreatingChanged(bool value)
@@ -279,6 +280,31 @@ public partial class WorkflowsViewModel : ViewModelBase
     partial void OnIsRunningChanged(bool value) => OnPropertyChanged(nameof(RunButtonLabel));
 
     // ── Loading ──────────────────────────────────────────────────────────
+
+    private DispatcherTimer? _pollTimer;
+
+    /// <summary>
+    /// Live-refreshes while the selected workflow is actively moving
+    /// (Planning/Running) — otherwise watching a multi-minute run means
+    /// manually clicking Refresh repeatedly to see progress. Stops itself
+    /// once the workflow lands on a status that won't change without a
+    /// human action (AwaitingHuman, or terminal).
+    /// </summary>
+    private void UpdatePolling()
+    {
+        var shouldPoll = SelectedWorkflow is { Status: WorkflowStatus.Planning or WorkflowStatus.Running };
+        if (shouldPoll && _pollTimer is null)
+        {
+            _pollTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+            _pollTimer.Tick += (_, _) => LoadAll();
+            _pollTimer.Start();
+        }
+        else if (!shouldPoll && _pollTimer is not null)
+        {
+            _pollTimer.Stop();
+            _pollTimer = null;
+        }
+    }
 
     private void LoadAll()
     {

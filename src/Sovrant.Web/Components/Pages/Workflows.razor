@@ -5,6 +5,7 @@
 @using Sovrant.Runtime.Storage
 @using Sovrant.Runtime.Workflows
 @using Sovrant.Web.Services
+@implements IDisposable
 
 <div class="master-detail">
     <div class="master-panel">
@@ -267,6 +268,8 @@
         _selected?.Status == WorkflowStatus.AwaitingHuman
         && !_selectedEvents.Any(e => e.EventType == WorkflowEventTypes.RunStarted);
 
+    private System.Threading.Timer? _pollTimer;
+
     protected override async Task OnInitializedAsync() => await LoadAllAsync();
 
     private async Task LoadAllAsync()
@@ -278,7 +281,32 @@
             _selected = _all.FirstOrDefault(w => w.Id == _selected.Id);
         ApplyFilter();
         await LoadSelectedDetailAsync();
+        UpdatePolling();
     }
+
+    /// <summary>
+    /// Live-refreshes the detail view while the selected workflow is
+    /// actively moving (Planning/Running) — otherwise watching a multi-minute
+    /// run means manually reloading the page repeatedly to see progress.
+    /// Stops itself once the workflow lands on a status that won't change
+    /// without a human action (AwaitingHuman, or terminal).
+    /// </summary>
+    private void UpdatePolling()
+    {
+        var shouldPoll = _selected is { Status: WorkflowStatus.Planning or WorkflowStatus.Running };
+        if (shouldPoll && _pollTimer is null)
+        {
+            _pollTimer = new System.Threading.Timer(_ => InvokeAsync(LoadAllAsync), null,
+                TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(4));
+        }
+        else if (!shouldPoll && _pollTimer is not null)
+        {
+            _pollTimer.Dispose();
+            _pollTimer = null;
+        }
+    }
+
+    public void Dispose() => _pollTimer?.Dispose();
 
     private void ApplyFilter()
     {
@@ -293,6 +321,7 @@
         _showExport = false;
         _selected = item;
         await LoadSelectedDetailAsync();
+        UpdatePolling();
     }
 
     private async Task LoadSelectedDetailAsync()
@@ -400,6 +429,7 @@
         _showExport = false;
         _createGoal = string.Empty;
         _status = string.Empty;
+        UpdatePolling();
     }
 
     private void CancelCreate() => _isCreating = false;
