@@ -179,9 +179,32 @@
                                 </StackPanel>
                             </DockPanel>
 
-                            <!-- ── Plan ──────────────────────────────────── -->
-                            <TextBlock Text="Plan" FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimary}" />
+                            <!-- ── Tabs ─────────────────────────────────── -->
+                            <StackPanel Orientation="Horizontal" Spacing="4"
+                                        DataContext="{Binding $parent[UserControl].DataContext}">
+                                <Button Command="{Binding SelectTabCommand}" CommandParameter="plan"
+                                        Padding="12,6" Background="Transparent" BorderThickness="0">
+                                    <Panel>
+                                        <TextBlock Text="Plan" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" IsVisible="{Binding IsPlanTabActive}" />
+                                        <TextBlock Text="Plan" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextSecondary}" IsVisible="{Binding !IsPlanTabActive}" />
+                                    </Panel>
+                                </Button>
+                                <Button Command="{Binding SelectTabCommand}" CommandParameter="journal"
+                                        Padding="12,6" Background="Transparent" BorderThickness="0">
+                                    <Panel>
+                                        <TextBlock Text="Journal" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" IsVisible="{Binding IsJournalTabActive}" />
+                                        <TextBlock Text="Journal" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextSecondary}" IsVisible="{Binding !IsJournalTabActive}" />
+                                    </Panel>
+                                </Button>
+                            </StackPanel>
+
+                            <!-- ── Plan tab ─────────────────────────────── -->
+                            <StackPanel Spacing="16"
+                                        IsVisible="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).IsPlanTabActive}">
 
                             <!-- Read-only view: no plan review pending -->
                             <StackPanel IsVisible="{Binding !$parent[UserControl].((vm:WorkflowsViewModel)DataContext).IsPlanReview}">
@@ -271,25 +294,34 @@
                                     </Button>
                                 </StackPanel>
                             </StackPanel>
+                            </StackPanel>
 
-                            <!-- ── Event journal ─────────────────────────── -->
-                            <TextBlock Text="Event Journal" FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimary}" />
+                            <!-- ── Journal tab ──────────────────────────── -->
+                            <StackPanel Spacing="12"
+                                        IsVisible="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).IsJournalTabActive}">
+                                <Button Content="💬 Open chat session →"
+                                        IsVisible="{Binding SessionId, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                        Command="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).OpenChatSessionCommand}"
+                                        Padding="10,5" CornerRadius="6" FontSize="12"
+                                        Background="Transparent" Foreground="{DynamicResource TextPrimary}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
+                                <TextBlock Text="The real back-and-forth for every step happens there. This log is just the structural timeline."
+                                           FontSize="11" TextWrapping="Wrap"
+                                           IsVisible="{Binding SessionId, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+                                           Foreground="{DynamicResource TextMuted}" />
 
-                            <TextBlock Text="No events yet." FontSize="12"
-                                       Foreground="{DynamicResource TextMuted}"
-                                       IsVisible="{Binding !Events.Count}" />
+                                <TextBlock Text="No events yet." FontSize="12"
+                                           Foreground="{DynamicResource TextMuted}"
+                                           IsVisible="{Binding !Events.Count}" />
 
-                            <Border IsVisible="{Binding Events.Count}"
-                                    Padding="10,4" CornerRadius="8"
-                                    Background="{DynamicResource SurfaceBackground}"
-                                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
-                                <ItemsControl ItemsSource="{Binding Events}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate DataType="vm:WorkflowEventItemViewModel">
-                                            <Panel>
-                                                <!-- Lifecycle event: terse one-liner -->
-                                                <DockPanel Margin="0,5" IsVisible="{Binding !IsStepOutput}">
+                                <Border IsVisible="{Binding Events.Count}"
+                                        Padding="10,4" CornerRadius="8"
+                                        Background="{DynamicResource SurfaceBackground}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                    <ItemsControl ItemsSource="{Binding Events}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:WorkflowEventItemViewModel">
+                                                <DockPanel Margin="0,5">
                                                     <TextBlock Text="{Binding Timestamp}" DockPanel.Dock="Left"
                                                                FontFamily="Consolas,Menlo,monospace" FontSize="11"
                                                                Foreground="{DynamicResource TextMuted}"
@@ -297,32 +329,11 @@
                                                     <TextBlock Text="{Binding EventType}" FontSize="12"
                                                                Foreground="{DynamicResource TextSecondary}" />
                                                 </DockPanel>
-                                                <!-- Step output: chat-style card with the model's real text -->
-                                                <Border IsVisible="{Binding IsStepOutput}"
-                                                        Margin="0,5" Padding="10,8" CornerRadius="8"
-                                                        Background="{DynamicResource SurfaceBackground}">
-                                                    <StackPanel Spacing="4">
-                                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                                            <TextBlock Text="{Binding Timestamp}"
-                                                                       FontFamily="Consolas,Menlo,monospace" FontSize="11"
-                                                                       Foreground="{DynamicResource TextMuted}" />
-                                                            <TextBlock Text="Step failed" IsVisible="{Binding IsError}"
-                                                                       FontSize="11" FontWeight="SemiBold"
-                                                                       Foreground="{DynamicResource StatusFail}" />
-                                                            <TextBlock Text="Step output" IsVisible="{Binding !IsError}"
-                                                                       FontSize="11" FontWeight="SemiBold"
-                                                                       Foreground="{DynamicResource TextSecondary}" />
-                                                        </StackPanel>
-                                                        <TextBlock Text="{Binding EventType}" FontSize="12"
-                                                                   TextWrapping="Wrap"
-                                                                   Foreground="{DynamicResource TextPrimary}" />
-                                                    </StackPanel>
-                                                </Border>
-                                            </Panel>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </Border>
+                            </StackPanel>
 
                             <!-- ── Actions ────────────────────────────────── -->
                             <StackPanel Orientation="Horizontal" Spacing="12"

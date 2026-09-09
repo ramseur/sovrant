@@ -1,8 +1,6 @@
 @page "/workflows"
-@using System.Text.Json
 @using Sovrant.Runtime.Artifacts
 @using Sovrant.Runtime.Engine
-@using Sovrant.Runtime.Storage
 @using Sovrant.Runtime.Workflows
 @using Sovrant.Web.Services
 @implements IDisposable
@@ -98,9 +96,15 @@
                     }
                 </div>
 
-                <!-- ── Plan ──────────────────────────────────────────── -->
+                <!-- ── Tabs ──────────────────────────────────────────── -->
+                <div class="wf-tabs">
+                    <button class="wf-tab @(_activeTab == "plan" ? "active" : "")" @onclick='() => _activeTab = "plan"'>Plan</button>
+                    <button class="wf-tab @(_activeTab == "journal" ? "active" : "")" @onclick='() => _activeTab = "journal"'>Journal</button>
+                </div>
+
+                @if (_activeTab == "plan")
+                {
                 <div class="orch-detail-section">
-                    <h3>Plan</h3>
                     @if (IsPlanReview)
                     {
                         <p class="text-muted text-sm" style="margin-bottom:8px;">
@@ -156,43 +160,38 @@
                         }
                     }
                 </div>
-
-                <!-- ── Event journal (chat-style) ───────────────────────── -->
+                }
+                else
+                {
+                <!-- ── Event journal ─────────────────────────────────── -->
                 <div class="orch-detail-section">
-                    <h3>Event Journal</h3>
-                    @if (_journalItems.Count == 0)
+                    @if (!string.IsNullOrEmpty(_selected.SessionId))
+                    {
+                        <a href="@($"/?session={Uri.EscapeDataString(_selected.SessionId)}")" class="btn-outline btn-sm" style="display:inline-flex;margin-bottom:12px;">
+                            💬 Open chat session →
+                        </a>
+                        <p class="text-muted text-sm" style="margin:-8px 0 12px;">
+                            The real back-and-forth for every step happens there. This log is just the structural timeline.
+                        </p>
+                    }
+                    @if (_selectedEvents.Count == 0)
                     {
                         <p class="text-muted text-sm">No events yet.</p>
                     }
                     else
                     {
-                        <div class="wf-journal">
-                            @foreach (var item in _journalItems)
+                        <div class="gov-card" style="padding:8px 16px;">
+                            @foreach (var e in _selectedEvents)
                             {
-                                @if (item.Kind == JournalItemKind.SystemEvent)
-                                {
-                                    <div class="wf-journal-system">
-                                        <span class="wf-journal-time">@item.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
-                                        <span>@item.Text</span>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="msg-card @(item.IsError ? "wf-journal-error" : "")" style="margin-bottom:10px;">
-                                        <div class="msg-row">
-                                            <div class="msg-avatar sovrant-avatar">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-                                            </div>
-                                            <span class="msg-sender">@(item.IsError ? "Step failed" : "Step output")</span>
-                                            <span class="wf-journal-time">@item.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
-                                        </div>
-                                        <div class="msg-indent message-text">@item.Text</div>
-                                    </div>
-                                }
+                                <div style="display:flex;gap:12px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--surface-border);">
+                                    <span class="text-muted" style="font-family:monospace;flex-shrink:0;white-space:nowrap;">@e.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    <span class="text-secondary">@HumanizeEventType(e.EventType)</span>
+                                </div>
                             }
                         </div>
                     }
                 </div>
+                }
 
                 <!-- ── Actions ───────────────────────────────────────── -->
                 <div class="orch-detail-section" style="display:flex;gap:12px;align-items:center;">
@@ -233,20 +232,19 @@
     [Inject] private IWorkflowExecutor Executor { get; set; } = default!;
     [Inject] private WorkflowPlanningService Planner { get; set; } = default!;
     [Inject] private WorkflowExportService Exporter { get; set; } = default!;
-    [Inject] private IRuntimeTraceStore TraceStore { get; set; } = default!;
     [Inject] private IArtifactStore ArtifactStore { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
 
     private string _search = string.Empty;
     private string _status = string.Empty;
+    private string _activeTab = "plan";
 
     private List<Workflow> _all = [];
     private List<Workflow> _filtered = [];
     private Workflow? _selected;
     private RuntimePlan? _selectedPlan;
     private List<WorkflowEvent> _selectedEvents = [];
-    private List<JournalItem> _journalItems = [];
     private int _artifactCount;
     private readonly List<EditableStep> _editableSteps = [];
 
@@ -328,81 +326,18 @@
     {
         _selectedPlan = null;
         _selectedEvents = [];
-        _journalItems = [];
         _artifactCount = 0;
         _editableSteps.Clear();
         if (_selected is null) return;
 
         _selectedPlan = WorkflowPlanJson.TryDeserialize(_selected.PlanJson, _selected.Goal);
         _selectedEvents = (await WorkflowStore.GetEventsAsync(_selected.Id)).ToList();
-        _journalItems = await BuildJournalAsync(_selectedEvents);
         _artifactCount = await CountArtifactsAsync(_selected);
 
         if (IsPlanReview && _selectedPlan is not null)
         {
             foreach (var step in _selectedPlan.Steps)
                 _editableSteps.Add(new EditableStep { Intent = step.Intent, Expected = step.ExpectedOutcome, Tier = step.ModelTier.ToString() });
-        }
-    }
-
-    // ── Journal + output ─────────────────────────────────────────────────
-
-    /// <summary>
-    /// Merges the workflow's own lifecycle events with the real per-step
-    /// output text pulled from runtime_traces — persisted by the engine
-    /// layer for every step but never previously surfaced anywhere on this
-    /// page. Joined via the runtime_run_id recorded in each RunStarted
-    /// event's payload.
-    /// </summary>
-    private async Task<List<JournalItem>> BuildJournalAsync(List<WorkflowEvent> events)
-    {
-        var items = new List<JournalItem>();
-        foreach (var e in events)
-        {
-            items.Add(new JournalItem(JournalItemKind.SystemEvent, e.Timestamp, HumanizeEventType(e.EventType), IsError: false));
-
-            if (e.EventType != WorkflowEventTypes.RunStarted) continue;
-            var runId = TryGetRuntimeRunId(e.PayloadJson);
-            if (runId is null) continue;
-
-            var traces = await TraceStore.LoadAsync(runId);
-            foreach (var t in traces.Where(t => t.EntryType is "step_completed" or "step_failed"))
-            {
-                var (summary, error) = ParseStepPayload(t.Payload);
-                var isFailed = t.EntryType == "step_failed";
-                var text = isFailed ? (error ?? summary ?? "(no error detail)") : (summary ?? "(no output)");
-                items.Add(new JournalItem(JournalItemKind.StepOutput, t.Timestamp, text, IsError: isFailed));
-            }
-        }
-        return items.OrderBy(i => i.Timestamp).ToList();
-    }
-
-    private static string? TryGetRuntimeRunId(string payloadJson)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(payloadJson);
-            return doc.RootElement.TryGetProperty("runtime_run_id", out var v) ? v.GetString() : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static (string? Summary, string? Error) ParseStepPayload(string payloadJson)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(payloadJson);
-            var summary = doc.RootElement.TryGetProperty("summary", out var s) ? s.GetString() : null;
-            var error = doc.RootElement.TryGetProperty("error", out var er) && er.ValueKind != JsonValueKind.Null
-                ? er.GetString() : null;
-            return (summary, error);
-        }
-        catch (JsonException)
-        {
-            return (null, null);
         }
     }
 
@@ -612,8 +547,4 @@
         public string Expected { get; set; } = string.Empty;
         public string Tier { get; set; } = "Standard";
     }
-
-    private enum JournalItemKind { SystemEvent, StepOutput }
-
-    private sealed record JournalItem(JournalItemKind Kind, DateTimeOffset Timestamp, string Text, bool IsError);
 }

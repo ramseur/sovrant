@@ -1,11 +1,9 @@
 using System.Collections.ObjectModel;
-using System.Text.Json;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Artifacts;
 using Sovrant.Runtime.Engine;
-using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Workflows;
 
 namespace Sovrant.Desktop.ViewModels;
@@ -18,13 +16,16 @@ public partial class WorkflowsViewModel : ViewModelBase
     private readonly IWorkflowExecutor _executor;
     private readonly WorkflowPlanningService _planner;
     private readonly WorkflowExportService _exporter;
-    private readonly IRuntimeTraceStore _traceStore;
     private readonly IArtifactStore _artifactStore;
     private readonly ActiveContextViewModel _activeContext;
+
+    /// <summary>Raised when the user asks to open the workflow's linked chat session — MainViewModel wires this to the same resume-session flow used elsewhere.</summary>
+    public event EventHandler<string>? OpenSessionRequested;
 
     [ObservableProperty] private int _workflowCount;
     [ObservableProperty] private string _statusMessage = string.Empty;
     [ObservableProperty] private WorkflowItemViewModel? _selectedWorkflow;
+    [ObservableProperty] private string _activeTab = "plan";
 
     [ObservableProperty] private bool _isCreating;
     [ObservableProperty] private string _createGoal = string.Empty;
@@ -48,6 +49,25 @@ public partial class WorkflowsViewModel : ViewModelBase
     public bool IsPlanReview =>
         SelectedWorkflow is { Status: WorkflowStatus.AwaitingHuman, HasRunStarted: false };
 
+    public bool IsPlanTabActive => ActiveTab == "plan";
+    public bool IsJournalTabActive => ActiveTab == "journal";
+
+    partial void OnActiveTabChanged(string value)
+    {
+        OnPropertyChanged(nameof(IsPlanTabActive));
+        OnPropertyChanged(nameof(IsJournalTabActive));
+    }
+
+    [RelayCommand]
+    private void SelectTab(string tab) => ActiveTab = tab;
+
+    [RelayCommand]
+    private void OpenChatSession()
+    {
+        if (SelectedWorkflow?.SessionId is { } sessionId)
+            OpenSessionRequested?.Invoke(this, sessionId);
+    }
+
     public ObservableCollection<WorkflowItemViewModel> Workflows { get; } = [];
 
     public WorkflowsViewModel(
@@ -55,7 +75,6 @@ public partial class WorkflowsViewModel : ViewModelBase
         IWorkflowExecutor executor,
         WorkflowPlanningService planner,
         WorkflowExportService exporter,
-        IRuntimeTraceStore traceStore,
         IArtifactStore artifactStore,
         ActiveContextViewModel activeContext)
     {
@@ -63,7 +82,6 @@ public partial class WorkflowsViewModel : ViewModelBase
         _executor = executor;
         _planner = planner;
         _exporter = exporter;
-        _traceStore = traceStore;
         _artifactStore = artifactStore;
         _activeContext = activeContext;
         LoadAll();
@@ -346,36 +364,14 @@ public partial class WorkflowsViewModel : ViewModelBase
 
         var events = await _store.GetEventsAsync(item.Id).ConfigureAwait(true);
         item.HasRunStarted = events.Any(e => e.EventType == WorkflowEventTypes.RunStarted);
-
-        var journal = new List<(DateTimeOffset Timestamp, WorkflowEventItemViewModel Vm)>();
         foreach (var e in events)
         {
-            journal.Add((e.Timestamp, new WorkflowEventItemViewModel
+            item.Events.Add(new WorkflowEventItemViewModel
             {
                 Timestamp = e.Timestamp.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture),
                 EventType = HumanizeEventType(e.EventType),
-            }));
-
-            if (e.EventType != WorkflowEventTypes.RunStarted) continue;
-            var runId = TryGetRuntimeRunId(e.PayloadJson);
-            if (runId is null) continue;
-
-            var traces = await _traceStore.LoadAsync(runId).ConfigureAwait(true);
-            foreach (var t in traces.Where(t => t.EntryType is "step_completed" or "step_failed"))
-            {
-                var (summary, error) = ParseStepPayload(t.Payload);
-                var isFailed = t.EntryType == "step_failed";
-                journal.Add((t.Timestamp, new WorkflowEventItemViewModel
-                {
-                    Timestamp = t.Timestamp.ToLocalTime().ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture),
-                    EventType = isFailed ? (error ?? summary ?? "(no error detail)") : (summary ?? "(no output)"),
-                    IsStepOutput = true,
-                    IsError = isFailed,
-                }));
-            }
+            });
         }
-        foreach (var (_, vm) in journal.OrderBy(j => j.Timestamp))
-            item.Events.Add(vm);
 
         var scope = new ArtifactScope
         {
@@ -390,35 +386,6 @@ public partial class WorkflowsViewModel : ViewModelBase
 
         if (ReferenceEquals(SelectedWorkflow, item))
             OnPropertyChanged(nameof(IsPlanReview));
-    }
-
-    private static string? TryGetRuntimeRunId(string payloadJson)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(payloadJson);
-            return doc.RootElement.TryGetProperty("runtime_run_id", out var v) ? v.GetString() : null;
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
-    private static (string? Summary, string? Error) ParseStepPayload(string payloadJson)
-    {
-        try
-        {
-            using var doc = JsonDocument.Parse(payloadJson);
-            var summary = doc.RootElement.TryGetProperty("summary", out var s) ? s.GetString() : null;
-            var error = doc.RootElement.TryGetProperty("error", out var er) && er.ValueKind != JsonValueKind.Null
-                ? er.GetString() : null;
-            return (summary, error);
-        }
-        catch (JsonException)
-        {
-            return (null, null);
-        }
     }
 
     // The event_type values persisted in the journal (mission_created, etc.)
@@ -478,8 +445,4 @@ public partial class WorkflowEventItemViewModel : ViewModelBase
 {
     [ObservableProperty] private string _timestamp = string.Empty;
     [ObservableProperty] private string _eventType = string.Empty;
-
-    /// <summary>True when this row is a step's real output (from runtime_traces) rather than a workflow lifecycle event.</summary>
-    [ObservableProperty] private bool _isStepOutput;
-    [ObservableProperty] private bool _isError;
 }

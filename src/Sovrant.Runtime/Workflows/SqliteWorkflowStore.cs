@@ -25,6 +25,16 @@ internal sealed class SqliteWorkflowStore(ISqliteConnectionFactory connectionFac
         var now = DateTimeOffset.UtcNow;
         var nowText = now.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture);
 
+        // Every workflow gets a real chat session, defaulting to the
+        // workflow's own id when the caller doesn't supply one. This isn't
+        // new behavior so much as making an existing implicit fallback
+        // explicit: EngineRunContext.SessionId already resolves to
+        // `mission.SessionId ?? mission.Id`, so a step's actual turns were
+        // always being persisted under this id -- it just wasn't recorded
+        // on the row, so nothing (WorkflowSessionNotifier, the Workflows UI)
+        // could point back to it.
+        sessionId ??= id;
+
         using var connection = connectionFactory.CreateConnection();
         using (var cmd = connection.CreateCommand())
         {
@@ -39,7 +49,7 @@ internal sealed class SqliteWorkflowStore(ISqliteConnectionFactory connectionFac
             cmd.Parameters.AddWithValue("$id", id);
             cmd.Parameters.AddWithValue("$goal", goal);
             cmd.Parameters.AddWithValue("$now", nowText);
-            cmd.Parameters.AddWithValue("$sessionId", (object?)sessionId ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$sessionId", sessionId);
             cmd.Parameters.AddWithValue("$workspaceId", (object?)workspaceId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$projectId", (object?)projectId ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$ownerUserId", (object?)ownerUserId ?? DBNull.Value);

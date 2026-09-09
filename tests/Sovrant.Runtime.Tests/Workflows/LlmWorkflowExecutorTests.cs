@@ -153,7 +153,10 @@ public sealed class LlmWorkflowExecutorTests : IAsyncDisposable
         Assert.Contains(WorkflowEventTypes.RunCompleted, types);
         Assert.Contains(WorkflowEventTypes.AcceptanceApproved, types);
         Assert.Contains(WorkflowEventTypes.Completed, types);
-        Assert.Empty(_sessionStore.Appended); // no SessionId on this workflow -- nothing to post to
+        // Every workflow now gets a real session by default (its own id) --
+        // the notifier posts there even when the caller never supplied one.
+        var posted = Assert.Single(_sessionStore.Appended);
+        Assert.Equal(workflow.Id, posted.SessionId);
     }
 
     [Fact]

@@ -262,7 +262,7 @@ public partial class MainViewModel : ViewModelBase
             "Agents" => GetOrCreateAgentsViewModel(),
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
-            "Workflows" => _services.GetRequiredService<WorkflowsViewModel>(),
+            "Workflows" => CreateWorkflowsViewModel(),
             "CommandCenter" => ResetCockpitToGrid(),
             "Admin" => ResolveAdmin("users"),
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
@@ -291,6 +291,18 @@ public partial class MainViewModel : ViewModelBase
     {
         var vm = _services.GetRequiredService<AdminViewModel>();
         vm.Section = section;
+        return vm;
+    }
+
+    /// <summary>
+    /// Workflows is registered transient, so unlike the singleton widgets
+    /// wired up once in the constructor, its OpenSessionRequested event has
+    /// to be subscribed fresh on every navigation to the page.
+    /// </summary>
+    private WorkflowsViewModel CreateWorkflowsViewModel()
+    {
+        var vm = _services.GetRequiredService<WorkflowsViewModel>();
+        vm.OpenSessionRequested += OnSessionResumeRequested;
         return vm;
     }
 
