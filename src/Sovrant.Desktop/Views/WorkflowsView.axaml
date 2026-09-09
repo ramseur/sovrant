@@ -170,6 +170,12 @@
                                     <TextBlock Text="{Binding Goal}"
                                                FontSize="16" FontWeight="Bold" TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextPrimary}" />
+                                    <TextBlock IsVisible="{Binding ArtifactCount}"
+                                               FontSize="11" Foreground="{DynamicResource TextMuted}">
+                                        <Run Text="📎" />
+                                        <Run Text="{Binding ArtifactCount}" />
+                                        <Run Text="artifact(s)" />
+                                    </TextBlock>
                                 </StackPanel>
                             </DockPanel>
 
@@ -281,14 +287,38 @@
                                 <ItemsControl ItemsSource="{Binding Events}">
                                     <ItemsControl.ItemTemplate>
                                         <DataTemplate DataType="vm:WorkflowEventItemViewModel">
-                                            <DockPanel Margin="0,5">
-                                                <TextBlock Text="{Binding Timestamp}" DockPanel.Dock="Left"
-                                                           FontFamily="Consolas,Menlo,monospace" FontSize="11"
-                                                           Foreground="{DynamicResource TextMuted}"
-                                                           Margin="0,0,12,0" />
-                                                <TextBlock Text="{Binding EventType}" FontSize="12"
-                                                           Foreground="{DynamicResource TextSecondary}" />
-                                            </DockPanel>
+                                            <Panel>
+                                                <!-- Lifecycle event: terse one-liner -->
+                                                <DockPanel Margin="0,5" IsVisible="{Binding !IsStepOutput}">
+                                                    <TextBlock Text="{Binding Timestamp}" DockPanel.Dock="Left"
+                                                               FontFamily="Consolas,Menlo,monospace" FontSize="11"
+                                                               Foreground="{DynamicResource TextMuted}"
+                                                               Margin="0,0,12,0" />
+                                                    <TextBlock Text="{Binding EventType}" FontSize="12"
+                                                               Foreground="{DynamicResource TextSecondary}" />
+                                                </DockPanel>
+                                                <!-- Step output: chat-style card with the model's real text -->
+                                                <Border IsVisible="{Binding IsStepOutput}"
+                                                        Margin="0,5" Padding="10,8" CornerRadius="8"
+                                                        Background="{DynamicResource SurfaceBackground}">
+                                                    <StackPanel Spacing="4">
+                                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                                            <TextBlock Text="{Binding Timestamp}"
+                                                                       FontFamily="Consolas,Menlo,monospace" FontSize="11"
+                                                                       Foreground="{DynamicResource TextMuted}" />
+                                                            <TextBlock Text="Step failed" IsVisible="{Binding IsError}"
+                                                                       FontSize="11" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource StatusFail}" />
+                                                            <TextBlock Text="Step output" IsVisible="{Binding !IsError}"
+                                                                       FontSize="11" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource TextSecondary}" />
+                                                        </StackPanel>
+                                                        <TextBlock Text="{Binding EventType}" FontSize="12"
+                                                                   TextWrapping="Wrap"
+                                                                   Foreground="{DynamicResource TextPrimary}" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Panel>
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
