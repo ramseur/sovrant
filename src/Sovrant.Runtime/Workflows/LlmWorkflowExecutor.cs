@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Engine;
@@ -27,6 +28,19 @@ public sealed partial class LlmWorkflowExecutor : IWorkflowExecutor
     private readonly IAcceptanceGate _gate;
     private readonly WorkflowSessionNotifier _sessionNotifier;
     private readonly ILogger<LlmWorkflowExecutor> _logger;
+
+    /// <summary>
+    /// Workflow IDs currently being advanced by this process. Guards against
+    /// two RunAsync calls racing on the same workflow -- e.g. a stale UI
+    /// button click after a page reload, or a manual "Run now" landing at
+    /// the same moment as the background scheduler. Deliberately in-memory,
+    /// not a durable DB-level lock: a workflow left in Running by a crashed
+    /// process must still be resumable by a fresh process (this dictionary
+    /// starts empty on restart), matching WorkflowSchedulerService's own
+    /// in-flight set and its same accepted limitation of not protecting
+    /// against two separate *processes* advancing the same workflow at once.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, byte> _inFlight = new(StringComparer.Ordinal);
 
     public LlmWorkflowExecutor(
         IWorkflowStore store,
@@ -61,6 +75,25 @@ public sealed partial class LlmWorkflowExecutor : IWorkflowExecutor
             return mission;
         }
 
+        // A second call for the same workflow while one is already in
+        // flight is a no-op, not a rerun -- see _inFlight's doc comment.
+        if (!_inFlight.TryAdd(mission.Id, 0))
+        {
+            return mission;
+        }
+
+        try
+        {
+            return await RunClaimedAsync(mission, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _inFlight.TryRemove(mission.Id, out _);
+        }
+    }
+
+    private async Task<Workflow> RunClaimedAsync(Workflow mission, CancellationToken ct)
+    {
         LogRunStarted(_logger, mission.Id, mission.Status);
 
         // ── Plan ─────────────────────────────────────────────────────────

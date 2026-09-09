@@ -203,7 +203,7 @@ public partial class WorkflowsViewModel : ViewModelBase
     [RelayCommand(CanExecute = nameof(CanRunNow))]
     private async Task RunNowAsync()
     {
-        if (SelectedWorkflow is null || IsRunning) return;
+        if (SelectedWorkflow is null || IsRunning || SelectedWorkflow.Status == WorkflowStatus.Running) return;
 
         IsRunning = true;
         try
@@ -222,7 +222,11 @@ public partial class WorkflowsViewModel : ViewModelBase
         }
     }
 
-    private bool CanRunNow() => SelectedWorkflow is not null && !IsTerminal(SelectedWorkflow.Status) && !IsRunning;
+    private bool CanRunNow() =>
+        SelectedWorkflow is not null
+        && !IsTerminal(SelectedWorkflow.Status)
+        && SelectedWorkflow.Status != WorkflowStatus.Running
+        && !IsRunning;
 
     [RelayCommand(CanExecute = nameof(CanCancel))]
     private async Task CancelWorkflowAsync()

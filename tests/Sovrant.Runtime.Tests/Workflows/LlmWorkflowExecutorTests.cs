@@ -91,14 +91,16 @@ public sealed class LlmWorkflowExecutorTests : IAsyncDisposable
         public Exception? Throw { get; set; }
         public int Calls { get; private set; }
         public RuntimePlan? LastPlan { get; private set; }
+        public TimeSpan Delay { get; set; } = TimeSpan.Zero;
 
-        public Task<ExecutionResult> ExecuteAsync(
+        public async Task<ExecutionResult> ExecuteAsync(
             RuntimePlan plan, EngineRunContext runContext, Replanner replanner, CancellationToken ct = default)
         {
             Calls++;
             LastPlan = plan;
+            if (Delay > TimeSpan.Zero) await Task.Delay(Delay, ct).ConfigureAwait(false);
             if (Throw is not null) throw Throw;
-            return Task.FromResult(NextResult);
+            return NextResult;
         }
     }
 
@@ -209,6 +211,29 @@ public sealed class LlmWorkflowExecutorTests : IAsyncDisposable
         Assert.Contains(events, e =>
             e.EventType == WorkflowEventTypes.Failed
             && e.PayloadJson.Contains("provider down", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunAsync_TwoConcurrentCallsOnSameWorkflow_OnlyOneActuallyRuns()
+    {
+        // Reproduces a live bug: a stale UI re-click (or the scheduler and a
+        // manual "Run now" landing at once) could fire two RunAsync calls
+        // for the same workflow before the first had written Status=Running,
+        // racing two full plan+execute+gate cycles against each other.
+        var workflow = await _store.CreateAsync("race me");
+        var engine = new FakeEngineExecutor { NextResult = OneSuccessfulStep(), Delay = TimeSpan.FromMilliseconds(200) };
+        var executor = new LlmWorkflowExecutor(
+            _store, new SimpleWorkflowPlanner(), engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        var run1 = executor.RunAsync(workflow.Id);
+        await Task.Delay(20); // let run1 pass its in-flight claim before run2 starts
+        var run2 = executor.RunAsync(workflow.Id);
+        await Task.WhenAll(run1, run2);
+
+        Assert.Equal(1, engine.Calls); // the second call was a no-op, not a second full run
+        var events = await _store.GetEventsAsync(workflow.Id);
+        Assert.Equal(1, events.Count(e => e.EventType == WorkflowEventTypes.RunStarted));
     }
 
     [Fact]

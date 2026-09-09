@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.Engine;
@@ -37,6 +38,9 @@ public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
     private readonly IWorkflowScratchpadStore _scratchpad;
     private readonly WorkflowSessionNotifier _sessionNotifier;
     private readonly ILogger<ParallelWorkflowExecutor> _logger;
+
+    /// <summary>See LlmWorkflowExecutor's identical field for why this exists and its limits.</summary>
+    private readonly ConcurrentDictionary<string, byte> _inFlight = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Maximum number of concurrent step executions. Prevents resource
@@ -78,6 +82,23 @@ public sealed partial class ParallelWorkflowExecutor : IWorkflowExecutor
             return mission;
         }
 
+        if (!_inFlight.TryAdd(mission.Id, 0))
+        {
+            return mission;
+        }
+
+        try
+        {
+            return await RunClaimedAsync(mission, ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            _inFlight.TryRemove(mission.Id, out _);
+        }
+    }
+
+    private async Task<Workflow> RunClaimedAsync(Workflow mission, CancellationToken ct)
+    {
         // ── Plan ─────────────────────────────────────────────────────────
         // See LlmWorkflowExecutor for why: reuse a plan that was already
         // generated (and possibly human-edited) during a review step and

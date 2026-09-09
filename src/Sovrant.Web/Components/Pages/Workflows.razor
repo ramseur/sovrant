@@ -172,7 +172,11 @@
 
                 <!-- ── Actions ───────────────────────────────────────── -->
                 <div class="orch-detail-section" style="display:flex;gap:12px;align-items:center;">
-                    @if (!IsTerminal(_selected.Status))
+                    @if (_selected.Status == WorkflowStatus.Running)
+                    {
+                        <span class="text-muted text-sm">Already running — check back, or the scheduler will keep it moving.</span>
+                    }
+                    else if (!IsTerminal(_selected.Status))
                     {
                         <button class="btn-primary" style="max-width:180px;"
                                 disabled="@_isRunning"
@@ -395,7 +399,7 @@
 
     private async Task RunNowAsync()
     {
-        if (_selected is null || _isRunning) return;
+        if (_selected is null || _isRunning || _selected.Status == WorkflowStatus.Running) return;
 
         _isRunning = true;
         StateHasChanged();
