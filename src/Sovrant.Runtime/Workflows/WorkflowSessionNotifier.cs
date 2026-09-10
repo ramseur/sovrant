@@ -50,15 +50,49 @@ public sealed partial class WorkflowSessionNotifier
         };
         if (message is null) return;
 
+        await PostAsync(workflow, "assistant", message, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Seeds the workflow's linked session with its goal, framed as the
+    /// user's own message, the moment the workflow is created — before any
+    /// planning or step execution has happened. Without this, opening the
+    /// chat link on a workflow that's still Planning (or a plain-created one
+    /// that hasn't been picked up by the scheduler yet) shows nothing at
+    /// all: step execution is the only thing that otherwise ever writes to
+    /// this session, and planning uses a separate shared planner session,
+    /// not the workflow's own. Called once, right after
+    /// <see cref="IWorkflowStore.CreateAsync"/> returns, at every creation
+    /// entry point (Web, Desktop, CLI, HTTP API, the Workflow tool).
+    ///
+    /// Only seeds when the session is actually empty. The Workflow tool lets
+    /// a model pass its *own* current chat session id when spawning a
+    /// workflow mid-conversation — that session already has the user's real
+    /// message in it, and re-posting the goal as a synthetic "user" turn
+    /// would insert a confusing duplicate into a real conversation.
+    /// </summary>
+    public async Task NotifyCreatedAsync(Workflow workflow, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(workflow);
+        if (string.IsNullOrEmpty(workflow.SessionId)) return;
+
+        var existing = await _sessionStore.LoadAsync(workflow.SessionId, workflow.OwnerUserId, ct).ConfigureAwait(false);
+        if (existing.Count > 0) return;
+
+        await PostAsync(workflow, "user", workflow.Goal, ct).ConfigureAwait(false);
+    }
+
+    private async Task PostAsync(Workflow workflow, string role, string content, CancellationToken ct)
+    {
         try
         {
             await _sessionStore.AppendAsync(
-                workflow.SessionId,
+                workflow.SessionId!,
                 new SessionEntry(
                     Id: $"wf-status-{Guid.NewGuid():N}",
                     Timestamp: DateTimeOffset.UtcNow,
-                    Role: "assistant",
-                    Content: message),
+                    Role: role,
+                    Content: content),
                 workflow.OwnerUserId,
                 ct).ConfigureAwait(false);
         }

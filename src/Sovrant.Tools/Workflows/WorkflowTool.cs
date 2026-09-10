@@ -23,11 +23,13 @@ public sealed class WorkflowTool : ITool
 
     private readonly IWorkflowStore _store;
     private readonly IWorkflowExecutor _executor;
+    private readonly WorkflowSessionNotifier _sessionNotifier;
 
-    public WorkflowTool(IWorkflowStore store, IWorkflowExecutor executor)
+    public WorkflowTool(IWorkflowStore store, IWorkflowExecutor executor, WorkflowSessionNotifier sessionNotifier)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _executor = executor ?? throw new ArgumentNullException(nameof(executor));
+        _sessionNotifier = sessionNotifier ?? throw new ArgumentNullException(nameof(sessionNotifier));
     }
 
     public ToolDefinition Definition => s_definition;
@@ -63,6 +65,7 @@ public sealed class WorkflowTool : ITool
             projectId: input.GetStringProp("project_id"),
             ownerUserId: input.GetStringProp("owner_user_id"),
             ct: ct).ConfigureAwait(false);
+        await _sessionNotifier.NotifyCreatedAsync(workflow, ct).ConfigureAwait(false);
 
         return JsonSerializer.Serialize(new
         {

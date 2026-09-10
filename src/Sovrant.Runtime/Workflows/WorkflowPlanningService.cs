@@ -17,11 +17,13 @@ public sealed class WorkflowPlanningService
 {
     private readonly IWorkflowStore _store;
     private readonly IWorkflowPlanner _planner;
+    private readonly WorkflowSessionNotifier _sessionNotifier;
 
-    public WorkflowPlanningService(IWorkflowStore store, IWorkflowPlanner planner)
+    public WorkflowPlanningService(IWorkflowStore store, IWorkflowPlanner planner, WorkflowSessionNotifier sessionNotifier)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _planner = planner ?? throw new ArgumentNullException(nameof(planner));
+        _sessionNotifier = sessionNotifier ?? throw new ArgumentNullException(nameof(sessionNotifier));
     }
 
     /// <summary>
@@ -41,6 +43,7 @@ public sealed class WorkflowPlanningService
     {
         var workflow = await _store.CreateAsync(goal, sessionId, workspaceId, projectId, ownerUserId, ct)
             .ConfigureAwait(false);
+        await _sessionNotifier.NotifyCreatedAsync(workflow, ct).ConfigureAwait(false);
         var plan = await _planner.PlanAsync(workflow, ct).ConfigureAwait(false);
 
         await _store.UpdateStateAsync(

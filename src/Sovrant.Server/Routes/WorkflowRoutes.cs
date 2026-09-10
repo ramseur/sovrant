@@ -37,6 +37,7 @@ internal static class WorkflowRoutes
             CreateWorkflowRequest req,
             HttpContext ctx,
             IWorkflowStore store,
+            WorkflowSessionNotifier sessionNotifier,
             CancellationToken ct) =>
         {
             if (string.IsNullOrWhiteSpace(req.Goal))
@@ -45,6 +46,7 @@ internal static class WorkflowRoutes
             var callerId = HttpContextAuthExtensions.GetUserId(ctx);
             var workflow = await store.CreateAsync(
                 req.Goal, req.SessionId, req.WorkspaceId, req.ProjectId, callerId, ct);
+            await sessionNotifier.NotifyCreatedAsync(workflow, ct);
             return Results.Json(workflow, s_jsonOptions, statusCode: 201);
         });
 

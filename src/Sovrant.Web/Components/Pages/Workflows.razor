@@ -231,6 +231,7 @@
     [Inject] private IWorkflowStore WorkflowStore { get; set; } = default!;
     [Inject] private IWorkflowExecutor Executor { get; set; } = default!;
     [Inject] private WorkflowPlanningService Planner { get; set; } = default!;
+    [Inject] private WorkflowSessionNotifier SessionNotifier { get; set; } = default!;
     [Inject] private WorkflowExportService Exporter { get; set; } = default!;
     [Inject] private IArtifactStore ArtifactStore { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
@@ -379,6 +380,7 @@
             workspaceId: ActiveContext.WorkspaceId,
             projectId: string.IsNullOrEmpty(ActiveContext.ProjectId) ? null : ActiveContext.ProjectId,
             ownerUserId: Session.UserId);
+        await SessionNotifier.NotifyCreatedAsync(workflow);
 
         _isCreating = false;
         _status = "Workflow created — the scheduler will pick it up on its next poll tick.";

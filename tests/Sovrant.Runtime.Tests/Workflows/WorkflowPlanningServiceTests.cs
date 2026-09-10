@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Runtime.Engine;
+using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Storage;
 
@@ -10,6 +11,8 @@ public sealed class WorkflowPlanningServiceTests : IAsyncDisposable
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
     private readonly SqliteWorkflowStore _store;
+    private readonly InMemorySessionStore _sessionStore = new();
+    private readonly WorkflowSessionNotifier _notifier;
 
     public WorkflowPlanningServiceTests()
     {
@@ -17,12 +20,55 @@ public sealed class WorkflowPlanningServiceTests : IAsyncDisposable
         _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
         _provider.InitializeAsync().GetAwaiter().GetResult();
         _store = new SqliteWorkflowStore(_provider);
+        _notifier = new WorkflowSessionNotifier(_sessionStore, NullLogger<WorkflowSessionNotifier>.Instance);
     }
 
     public async ValueTask DisposeAsync()
     {
         await _provider.DisposeAsync();
         if (File.Exists(_dbPath)) File.Delete(_dbPath);
+    }
+
+    private sealed class InMemorySessionStore : ISessionStore
+    {
+        public List<(string SessionId, SessionEntry Entry)> Appended { get; } = [];
+
+        public Task AppendAsync(string sessionId, SessionEntry entry, string? ownerUserId = null, CancellationToken ct = default)
+        {
+            Appended.Add((sessionId, entry));
+            return Task.CompletedTask;
+        }
+        public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionEntry>>(
+                Appended.Where(a => a.SessionId == sessionId).Select(a => a.Entry).ToList());
+        public Task<IReadOnlyList<string>> ListAsync(string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<bool> DeleteAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult(true);
+        public Task<int> DeleteAllAsync(CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+        public Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+        public Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>([]);
+        public Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>([]);
+        public Task<IReadOnlyList<string>?> GetMcpConnectionsAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>?>(null);
+        public Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task UpdatePrivacyAsync(string sessionId, string ownerUserId, bool isPrivate, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<bool?>(null);
+        public Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string?> GetAgentNameAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
     }
 
     private sealed class TwoStepPlanner : IWorkflowPlanner
@@ -38,7 +84,7 @@ public sealed class WorkflowPlanningServiceTests : IAsyncDisposable
     [Fact]
     public async Task GenerateAsync_CreatesWorkflowAndLandsInAwaitingHumanWithPlan()
     {
-        var service = new WorkflowPlanningService(_store, new TwoStepPlanner());
+        var service = new WorkflowPlanningService(_store, new TwoStepPlanner(), _notifier);
 
         var workflow = await service.GenerateAsync("build something");
 
@@ -55,9 +101,42 @@ public sealed class WorkflowPlanningServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task GenerateAsync_SeedsLinkedSessionWithGoalImmediately()
+    {
+        // Without this, the chat link on a still-Planning workflow shows
+        // nothing at all -- neither planning nor step execution write to
+        // the workflow's own session until well after creation.
+        var service = new WorkflowPlanningService(_store, new TwoStepPlanner(), _notifier);
+
+        var workflow = await service.GenerateAsync("build something");
+
+        var posted = Assert.Single(_sessionStore.Appended);
+        Assert.Equal(workflow.SessionId, posted.SessionId);
+        Assert.Equal("user", posted.Entry.Role);
+        Assert.Equal("build something", posted.Entry.Content);
+    }
+
+    [Fact]
+    public async Task GenerateAsync_ExistingChatSession_DoesNotDuplicateTheGoalAsANewMessage()
+    {
+        // Mirrors the Workflow tool: a model can pass its own current chat
+        // session id when spawning a workflow mid-conversation. That session
+        // already has the user's real message -- seeding a synthetic
+        // duplicate would corrupt a real conversation.
+        var existingSessionId = "chat-already-in-progress";
+        await _sessionStore.AppendAsync(existingSessionId, new SessionEntry(
+            Id: "real-1", Timestamp: DateTimeOffset.UtcNow, Role: "user", Content: "let's build something"));
+
+        var service = new WorkflowPlanningService(_store, new TwoStepPlanner(), _notifier);
+        await service.GenerateAsync("build something", sessionId: existingSessionId);
+
+        Assert.Single(_sessionStore.Appended); // still just the original real message
+    }
+
+    [Fact]
     public async Task SavePlanAsync_BeforeAnyRun_PersistsEditedSteps()
     {
-        var service = new WorkflowPlanningService(_store, new TwoStepPlanner());
+        var service = new WorkflowPlanningService(_store, new TwoStepPlanner(), _notifier);
         var workflow = await service.GenerateAsync("build something");
 
         var edited = await service.SavePlanAsync(workflow.Id,
@@ -76,7 +155,7 @@ public sealed class WorkflowPlanningServiceTests : IAsyncDisposable
     [Fact]
     public async Task SavePlanAsync_AfterRunStarted_Throws()
     {
-        var service = new WorkflowPlanningService(_store, new TwoStepPlanner());
+        var service = new WorkflowPlanningService(_store, new TwoStepPlanner(), _notifier);
         var workflow = await service.GenerateAsync("build something");
         await _store.AppendEventAsync(workflow.Id, WorkflowEventTypes.RunStarted, "{}");
 
@@ -87,7 +166,7 @@ public sealed class WorkflowPlanningServiceTests : IAsyncDisposable
     [Fact]
     public async Task SavePlanAsync_EmptyStepList_Throws()
     {
-        var service = new WorkflowPlanningService(_store, new TwoStepPlanner());
+        var service = new WorkflowPlanningService(_store, new TwoStepPlanner(), _notifier);
         var workflow = await service.GenerateAsync("build something");
 
         await Assert.ThrowsAsync<ArgumentException>(() =>

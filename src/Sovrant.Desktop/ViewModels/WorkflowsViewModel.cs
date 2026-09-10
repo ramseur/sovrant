@@ -16,6 +16,7 @@ public partial class WorkflowsViewModel : ViewModelBase
     private readonly IWorkflowExecutor _executor;
     private readonly WorkflowPlanningService _planner;
     private readonly WorkflowExportService _exporter;
+    private readonly WorkflowSessionNotifier _sessionNotifier;
     private readonly IArtifactStore _artifactStore;
     private readonly ActiveContextViewModel _activeContext;
 
@@ -75,6 +76,7 @@ public partial class WorkflowsViewModel : ViewModelBase
         IWorkflowExecutor executor,
         WorkflowPlanningService planner,
         WorkflowExportService exporter,
+        WorkflowSessionNotifier sessionNotifier,
         IArtifactStore artifactStore,
         ActiveContextViewModel activeContext)
     {
@@ -82,6 +84,7 @@ public partial class WorkflowsViewModel : ViewModelBase
         _executor = executor;
         _planner = planner;
         _exporter = exporter;
+        _sessionNotifier = sessionNotifier;
         _artifactStore = artifactStore;
         _activeContext = activeContext;
         LoadAll();
@@ -126,6 +129,7 @@ public partial class WorkflowsViewModel : ViewModelBase
             workspaceId: _activeContext.ActiveWorkspaceId,
             projectId: string.IsNullOrEmpty(_activeContext.ActiveProjectId) ? null : _activeContext.ActiveProjectId,
             ownerUserId: App.SovrantUserId).ConfigureAwait(true);
+        await _sessionNotifier.NotifyCreatedAsync(workflow).ConfigureAwait(true);
 
         IsCreating = false;
         StatusMessage = "Workflow created — the scheduler will pick it up on its next poll tick.";

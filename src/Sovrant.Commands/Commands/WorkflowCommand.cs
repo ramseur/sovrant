@@ -23,15 +23,18 @@ public sealed class WorkflowCommand : ISlashCommand
     private readonly IWorkflowStore _store;
     private readonly IWorkflowExecutor _executor;
     private readonly WorkflowExportService _exporter;
+    private readonly WorkflowSessionNotifier _sessionNotifier;
 
     public WorkflowCommand(
         IWorkflowStore store,
         IWorkflowExecutor executor,
-        WorkflowExportService exporter)
+        WorkflowExportService exporter,
+        WorkflowSessionNotifier sessionNotifier)
     {
         _store = store;
         _executor = executor;
         _exporter = exporter;
+        _sessionNotifier = sessionNotifier;
     }
 
     public string Name => "workflow";
@@ -74,6 +77,7 @@ public sealed class WorkflowCommand : ISlashCommand
             return new SlashCommandResult("Usage: /workflow create <goal>");
 
         var workflow = await _store.CreateAsync(goal, ct: ct).ConfigureAwait(false);
+        await _sessionNotifier.NotifyCreatedAsync(workflow, ct).ConfigureAwait(false);
         return new SlashCommandResult(
             $"Workflow created: `{workflow.Id}`\nGoal: {workflow.Goal}\nStatus: {workflow.Status}");
     }
