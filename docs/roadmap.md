@@ -12151,7 +12151,7 @@ Workflows (Phase 51, formerly missions) and federated claw-to-claw coordination 
 
 ## Phase 133 — Conversation Folders
 
-**Status:** Planned (2026-10-02) — design agreed; design mock in progress in `docs/design/web.html` / `desktop.html` (Chat screen rail panel + chat header + Move dialog). No `src/` changes until the mock is approved.
+**Status:** Planned (2026-10-02) — design agreed; design mock committed in `docs/design/web.html` / `desktop.html` (Chat screen rail panel, folder menu, chat header, Move dialog, and drag-and-drop states). No `src/` changes until the mock is approved.
 
 ### Why
 
@@ -12280,7 +12280,13 @@ UNFILED
 - **Folder rows:** expand/collapse chevron, folder icon, name, count (conversations in the folder and all its subfolders), and a "⋯" menu — New subfolder, Rename, Move to…, Delete folder (with the line "Conversations and subfolders inside move up to *parent*. No conversation is ever deleted.").
 - **Conversation rows:** title plus the derived label line; "⋯" menu — Move to folder…, Rename, Make private, Delete.
 - **Move dialog:** a folder-tree picker with Unfiled at the top, the current folder marked, folders that would break the depth limit (or, for a folder move, its own descendants) disabled, and "New folder" inline.
-- **Drag and drop:** conversations onto folders and folders onto folders (HTML5 drag-and-drop on Web, Avalonia `DragDrop` on Desktop). The Move dialog stays the keyboard-accessible path.
+- **Drag and drop:** conversations onto folders and folders onto folders — HTML5 drag events (`@ondragstart` / `@ondragover` / `@ondrop`) on Web, Avalonia's `DragDrop` on Desktop, both calling the same folder service (one call per drop). The Move dialog and the ⋯ menu's "Move to…" stay as the path for touch screens and keyboard users, where HTML5 drag and drop doesn't work.
+  - **Drop targets:** any folder row. Dropping onto the **Unfiled** heading takes a conversation out of its folder.
+  - **Invalid drops are refused while dragging, not after:** a folder onto itself or one of its own subfolders, a drop that would put any folder past 5 levels deep, or a folder drop that would duplicate a sibling's name. The target shows a "not allowed" state and the drag preview says why; nothing is sent to the server. The service re-checks every move anyway, so a stale client can't bypass the rules.
+  - **Hovering a collapsed folder for ~500 ms expands it,** so you can drop deeper into the tree.
+  - **The list auto-scrolls** when dragging near its top or bottom edge.
+  - **No manual ordering of conversations** — dropped conversations keep the folder's normal newest-first order. (`sort_order` exists for folders only.)
+  - **Rows in the ACTIVE section aren't draggable** — running conversations are filed from their tree row or the chat header.
 - **Chat header:** breadcrumb of where the conversation lives (`Client A › Proposals › Proposal draft v2`), its link labels, and a Move button — so a conversation can be filed from inside it.
 - **Search** covers every folder and shows each result's folder path.
 - **Expanded/collapsed state** saved per user in the DB (`user_preferences`), per the "one disk config, everything else in DB" rule.
@@ -12311,7 +12317,7 @@ UNFILED
 
 ### Acceptance criteria
 
-- [ ] Design mock updated on both `web.html` and `desktop.html` (rail folder tree, folder menu, chat header, Move dialog), parity diff still chrome-only, logged in `docs/design/README.md`
+- [x] Design mock updated on both `web.html` and `desktop.html` (rail folder tree, folder menu, chat header, Move dialog, valid and refused drag states), parity diff still chrome-only, logged in `docs/design/README.md`
 - [ ] V048 applies cleanly to a copy of a real database with existing sessions and runs; existing rows untouched (`folder_id`, `agent_runs.session_id` NULL)
 - [ ] Folders nest; creating or moving a folder below level 5 is rejected
 - [ ] Moving a folder into itself or a descendant is rejected
@@ -12322,5 +12328,6 @@ UNFILED
 - [ ] Labels reflect live links: attaching an agent, creating a linked workflow, or launching a swarm from a chat updates that conversation's label with no stored "type"
 - [ ] Swarm and team runs launched from a chat record `agent_runs.session_id`
 - [ ] Web + Desktop parity: folder tree, ⋯ menus, Move dialog, drag and drop, chat-header breadcrumb, search across folders
+- [ ] Drag and drop refuses invalid drops (into own subfolder, past depth 5, duplicate sibling name) before anything is sent; dropping on Unfiled unfiles; hovering a collapsed folder expands it; the server rejects the same moves if a client sends them anyway
 - [ ] Web sidebar uses `ListWithTitlesAsync` (no per-session history load)
 - [ ] Endpoints documented in `docs/server.md`, SDK methods added, `docs/persistence.md` updated for V048, CHANGELOG entry

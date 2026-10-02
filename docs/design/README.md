@@ -183,14 +183,21 @@ Roadmap Phase 133. Mocked here first per this folder's usual process — no `src
 
 **New icons:** `folder`, `folderPlus`, `dots`, `pencil` and `trash`. All are standard straight-line or simple-arc paths.
 
-**Mock state:** the old Chat-only boolean (`chatWelcome`) became a four-way `chatState` (`thread | welcome | menu | move`) behind the same `#screenToggle` control.
+**Drag and drop** (toggles: *Dragging*, *Refused drop*): two states, both sending nothing to the server until a valid drop.
+- **Valid drop:** "Kickoff notes" is dragged onto the Proposals folder. The target gets a brand-colored inset outline, the source row fades to 40%, and a drag preview attached to the cursor names the result: "Move to Proposals".
+- **Refused drop:** the "Client A" folder is dragged onto its own subfolder Proposals. The target gets a red inset outline with `not-allowed`, and the preview gives the reason: "Can't move a folder into its own subfolder".
 
-Not modeled, deliberately (same reasoning as Orchestration's inline forms): the conversation-row "⋯" menu (Move to folder…, Rename, Make private, Delete), drag-and-drop states, and inline rename. These are transient interaction states, not distinct screens.
+The same refusal treatment covers the other two rules: going past 5 levels deep, and duplicating a sibling folder's name. Like the folder menu, the preview is rendered into the rail so the scrolling list can't clip it.
 
-**Verified:** rendered all four Chat states in headless Edge.
+**Mock state:** the old Chat-only boolean (`chatWelcome`) became a six-way `chatState` (`thread | welcome | menu | move | drag | dragno`) behind the same `#screenToggle` control.
+
+Not modeled, deliberately (same reasoning as Orchestration's inline forms): the conversation-row "⋯" menu (Move to folder…, Rename, Make private, Delete), the hover-to-expand and auto-scroll behaviors during a drag, and inline rename. These are transient interaction states, not distinct screens.
+
+**Verified:** rendered all six Chat states in headless Edge.
 - **Thread:** checked in dark and light themes, with the tree scrolled to show Unfiled.
 - **Folder menu:** fully visible after the clipping fix.
 - **Move dialog:** the scrim covers the whole window.
+- **Dragging / Refused drop:** the target outline and drag preview render beside the right row.
 - **Parity:** `web.html`/`desktop.html` diff is still 49 lines, all chrome, with line endings ignored. `desktop.html` is CRLF and `web.html` is LF; that was already the case before this pass.
 
 ## Open decisions

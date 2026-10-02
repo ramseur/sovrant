@@ -106,6 +106,12 @@
   .sfrow .more{width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--t3);display:flex;align-items:center;justify-content:center;opacity:0;cursor:pointer;flex-shrink:0}
   .sfrow .more svg{width:15px;height:15px}
   .sfrow:hover .more,.sfrow.menu .more{opacity:1} .sfrow .more:hover{background:var(--hover);color:var(--t1)}
+  .sfrow.dragging{opacity:.4}
+  .sfrow.drop{background:var(--brand-soft);color:var(--brand);box-shadow:inset 0 0 0 2px var(--brand)}
+  .sfrow.nodrop{background:color-mix(in srgb,var(--fail) 10%,transparent);box-shadow:inset 0 0 0 2px var(--fail);cursor:not-allowed}
+  .sfghost{position:absolute;top:0;left:0;z-index:25;pointer-events:none;display:flex;flex-direction:column;gap:2px;padding:7px 11px;border-radius:9px;background:var(--card);border:1px solid var(--border);box-shadow:0 10px 24px rgba(0,0,0,.22);max-width:250px}
+  .sfghost .gt{display:flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600;color:var(--t1)} .sfghost .gt svg{width:14px;height:14px;color:var(--t3)}
+  .sfghost .gs{font-size:11px;color:var(--brand)} .sfghost .gs.no{color:var(--fail)}
   .sfmenu{position:absolute;top:0;left:0;z-index:20;width:228px;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:5px;display:flex;flex-direction:column;cursor:default}
   .sfmenu button{display:flex;align-items:center;gap:9px;height:32px;border:none;background:transparent;border-radius:7px;padding:0 9px;color:var(--t1);font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
   .sfmenu button:hover{background:var(--hover)} .sfmenu button svg{width:14px;height:14px;color:var(--t2)}
@@ -379,7 +385,7 @@ const S = {
   dashboard:{g:'dashboard',p:'Overview',t:'Dashboard',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
     stats:[['My workflows',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
     note:'Scoped to you. Command Center is the same pattern scoped to everyone — one design, two data sources.'},
-  chat:{g:'chat',p:'Conversation',t:'Chat',url:'/',note:'The one genuinely bespoke shape. Welcome state until the first message, then thread + collapsed work strips (Phase 126) + composer. Rail panel: session folders (Phase 133) — per-user tree, up to 5 levels, derived link labels; use the toggles above for the folder menu and Move dialog.'},
+  chat:{g:'chat',p:'Conversation',t:'Chat',url:'/',note:'The one genuinely bespoke shape. Welcome state until the first message, then thread + collapsed work strips (Phase 126) + composer. Rail panel: session folders (Phase 133) — per-user tree, up to 5 levels, derived link labels; use the toggles above for the folder menu, Move dialog, and drag-and-drop states.'},
   artifacts:{g:'knowledge',p:'Browse',t:'Artifacts',url:'/artifacts',sub:'1 artifact',
     items:[{n:'finance-chatbot-customization-plan.md',mono:1,b:['5.0 KB','text/markdown','2026-06-03'],tag:null}],
     acts:[['Download .zip',0],['Open folder',0]],
@@ -522,6 +528,7 @@ function railHTML(s){
   return `<div class="rail" style="width:${w}px">
     <button class="ctog">${sv(I.chev,2)}</button>
     ${s.g==='chat'&&railOpen&&chatState==='menu'?sfFolderMenuHTML():''}
+    ${s.g==='chat'&&railOpen&&(chatState==='drag'||chatState==='dragno')?sfGhostHTML():''}
     <div class="navg">${navs}</div>
     ${panel}
     ${railOpen?`<div class="foot"><div class="frow"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
@@ -679,11 +686,11 @@ function welcomeHTML(){
    workflow, swarm/team runs, webhook source) — nothing about a conversation's
    "type" is stored, because a chat can gain or lose those links at any time. */
 const SF = [
-  {k:'f',d:0,n:'Client A',ct:4,open:true},
+  {k:'f',d:0,n:'Client A',ct:4,open:true,id:'clienta'},
     {k:'f',d:1,n:'Proposals',ct:2,open:true,id:'proposals'},
       {k:'s',d:2,n:'Proposal draft v2',mt:'Agent · proposal-writer',on:true},
       {k:'s',d:2,n:'Pricing comparison',mt:'Swarm · 1 run'},
-    {k:'s',d:1,n:'Kickoff notes'},
+    {k:'s',d:1,n:'Kickoff notes',id:'kickoff'},
     {k:'s',d:1,n:'Weekly status report',mt:'<span class="ok">● Workflow · Running</span>'},
   {k:'f',d:0,n:'Research',ct:7},
   {k:'f',d:0,n:'Personal',ct:3},
@@ -696,11 +703,13 @@ const SF_UNFILED = [
 ];
 function sfRowHTML(r){
   const menu = chatState==='menu' && r.id==='proposals';
+  const dragging = (chatState==='drag' && r.id==='kickoff') || (chatState==='dragno' && r.id==='clienta');
+  const drop = chatState==='drag' && r.id==='proposals', nodrop = chatState==='dragno' && r.id==='proposals';
   const lead = r.k==='f'
     ? `<span class="tw${r.open?' open':''}">${sv(I.chev,2.4)}</span><span class="fi">${sv(I.folder,2)}</span>`
     : `<span class="tw"></span><span class="dt"></span>`;
   const tail = r.k==='f' ? `<span class="ct">${r.ct}</span>` : '';
-  return `<div class="sfrow${r.on?' on':''}${menu?' menu':''}" style="--d:${r.d}">${lead}
+  return `<div class="sfrow${r.on?' on':''}${menu?' menu':''}${dragging?' dragging':''}${drop?' drop':''}${nodrop?' nodrop':''}" style="--d:${r.d}">${lead}
     <span class="tx"><span class="nm">${r.n}</span>${r.mt?`<span class="mt">${r.mt}</span>`:''}</span>${tail}
     <button class="more" title="More">${sv(I.dots,2.4)}</button></div>`;
 }
@@ -713,6 +722,11 @@ function sfFolderMenuHTML(){
     <button class="danger">${sv(I.trash,2)}Delete folder</button>
     <div class="hint">Conversations and subfolders inside move up to “Client A”. No conversation is ever deleted.</div>
   </div>`;
+}
+function sfGhostHTML(){
+  return chatState==='drag'
+    ? `<div class="sfghost"><span class="gt">${sv(I.chat,2)}Kickoff notes</span><span class="gs">Move to Proposals</span></div>`
+    : `<div class="sfghost"><span class="gt">${sv(I.folder,2)}Client A</span><span class="gs no">Can't move a folder into its own subfolder</span></div>`;
 }
 function sessionTreeHTML(){
   return `<div class="sgl">Folders</div>${SF.map(sfRowHTML).join('')}
@@ -788,7 +802,7 @@ function render(){
   const ct=document.getElementById('screenToggle');
   if(cur==='chat'){
     ct.style.display='flex';
-    ct.innerHTML=[['thread','Thread'],['welcome','Welcome'],['menu','Folder menu'],['move','Move dialog']].map(([k,t])=>`<button class="cbtn${chatState===k?' on':''}" onclick="setChatState('${k}')">${t}</button>`).join('');
+    ct.innerHTML=[['thread','Thread'],['welcome','Welcome'],['menu','Folder menu'],['move','Move dialog'],['drag','Dragging'],['dragno','Refused drop']].map(([k,t])=>`<button class="cbtn${chatState===k?' on':''}" onclick="setChatState('${k}')">${t}</button>`).join('');
   } else if(cur==='orchestration'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${orchView==='team'?' on':''}" onclick="setOrchView('team')">Team</button><button class="cbtn${orchView==='defaults'?' on':''}" onclick="setOrchView('defaults')">Defaults</button>`;
@@ -803,7 +817,7 @@ function render(){
     ? railHTML(s)+`<div class="content">${ctxHTML(s)}<div class="body">${inner}</div></div>`
     : `<div class="content">${inner}</div>`)
     + (cur==='chat'&&chatState==='move'?moveDialogHTML():'');
-  placeSfMenu();
+  placeSfMenu(); placeSfGhost();
 }
 
 /* Anchor the folder menu beside its row; open upward when there's no room below. */
@@ -814,6 +828,13 @@ function placeSfMenu(){
   const below=rr.bottom-ra.top+2, above=rr.top-ra.top-mh-2;
   m.style.top=(rr.bottom+mh+2>ra.bottom && above>0 ? above : below)+'px';
   m.style.left=(rr.right-ra.left-40)+'px';
+}
+function placeSfGhost(){
+  const g=document.querySelector('.rail .sfghost'), row=document.querySelector('.sfrow.drop,.sfrow.nodrop'), rail=document.querySelector('.rail');
+  if(!g||!row||!rail) return;
+  const rr=row.getBoundingClientRect(), ra=rail.getBoundingClientRect();
+  g.style.top=(rr.top-ra.top+rr.height*0.6)+'px';
+  g.style.left=(rr.left-ra.left+120)+'px';
 }
 
 function setTheme(m){document.documentElement.setAttribute('data-theme',m);try{localStorage.setItem('sovrant-design-web-theme',m)}catch(e){}}
