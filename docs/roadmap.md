@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-10-02 (Phase 133 planned — Conversation Folders: per-user nested folder tree for every conversation type, labels derived from live links rather than a stored type, every piece of work gets a conversation (option A). Fixes ✅ — swarm file locks now actually apply to `Write`/`Edit` (`SwarmToolExecutor` keyed on non-existent `WriteFile`/`EditFile`, so per-write locking never ran) and honor `SwarmConfig.FileLocksEnabled`; `GraduatedToolTiers` now covers all 60 registered tools (13 had silently defaulted to Moderate) with a reflection-based coverage test; README + docs synced to the Phase 129 Missions → Workflows rename and corrected to 60 tools / 2,282 tests. Previous update 2026-09-10: Phase 130 planned — OpenRouter account registration & in-app key issuance via OAuth PKCE against OpenRouter's own `/auth` flow, reusing Phase 101's PKCE + loopback-listener plumbing; "Get an OpenRouter key" button on Providers settings (Web + Desktop) removes the manual copy/paste key step entirely. Phase 128 shipped ✅ — five-part plan complete: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required, V045/V046 migrations). Phase 129 in progress — Missions → Workflows: full-stack rename ✅, `WorkflowSchedulerService` background execution ✅, dedicated Workflows page ✅, chat-session status messages on terminal/AwaitingHuman ✅, plan generation + human review before running ✅ (2026-09-05), real per-step output + artifact count surfaced in the journal ✅, concurrent-Run race fixed via an in-process claim guard ✅ (2026-09-09); positioning callout, team-picker/run-mode launch form, Claude Agent SDK dual-path execution, and a new item 7 (turn an existing chat into a workflow, planned 2026-09-09) remain unplanned. v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 ✅ + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-10-02 (Phase 133 built ✅ — Conversation Folders shipped on Web + Desktop (`48f1a98`), 2,337 tests, 146 endpoints, V048. Earlier the same day — Conversation Folders planned: per-user nested folder tree for every conversation type, labels derived from live links rather than a stored type, every piece of work gets a conversation (option A). Fixes ✅ — swarm file locks now actually apply to `Write`/`Edit` (`SwarmToolExecutor` keyed on non-existent `WriteFile`/`EditFile`, so per-write locking never ran) and honor `SwarmConfig.FileLocksEnabled`; `GraduatedToolTiers` now covers all 60 registered tools (13 had silently defaulted to Moderate) with a reflection-based coverage test; README + docs synced to the Phase 129 Missions → Workflows rename and corrected to 60 tools / 2,282 tests. Previous update 2026-09-10: Phase 130 planned — OpenRouter account registration & in-app key issuance via OAuth PKCE against OpenRouter's own `/auth` flow, reusing Phase 101's PKCE + loopback-listener plumbing; "Get an OpenRouter key" button on Providers settings (Web + Desktop) removes the manual copy/paste key step entirely. Phase 128 shipped ✅ — five-part plan complete: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required, V045/V046 migrations). Phase 129 in progress — Missions → Workflows: full-stack rename ✅, `WorkflowSchedulerService` background execution ✅, dedicated Workflows page ✅, chat-session status messages on terminal/AwaitingHuman ✅, plan generation + human review before running ✅ (2026-09-05), real per-step output + artifact count surfaced in the journal ✅, concurrent-Run race fixed via an in-process claim guard ✅ (2026-09-09); positioning callout, team-picker/run-mode launch form, Claude Agent SDK dual-path execution, and a new item 7 (turn an existing chat into a workflow, planned 2026-09-09) remain unplanned. v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 ✅ + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -34,6 +34,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | Phase 74 | DB-backed document templates — 42 of 44 built-in templates in `knowledge_pages` via V037; Scriban rendering; admin Edit/Revert on Documents page (Web + Desktop); copy-on-write overlay; `sovrant document lint` CLI; authoring guide ✅ |
 | **v1.5 — done** | Phase 128 | Code generation quality gates — artifact security hardening (content-security headers, API zip endpoint, RemoteArtifactStore fix, Artifacts.razor abstraction); `.sln` + `Directory.Build.props` + CI for all 21 templates (every project immediately runnable); `CodeValidateTool` (structural checks via `IArtifactStore.ListAsync`, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata; V045/V046 migrations ✅ |
 | **v1.5 — done** | Bug fixes | Swarm file locking — `SwarmToolExecutor` now locks under the real `Write`/`Edit` tool names (was `WriteFile`/`EditFile`, so concurrent swarm workers could overwrite each other's files) and respects `FileLocksEnabled`; governance tiers — `GraduatedToolTiers` gains the 13 tools that had no entry (`LS`, `MCPTool`, code scaffolding, document, `CoordinationStatus`), guarded by `GraduatedToolTiersCoverageTests`; no permission decisions change (2026-10-02) ✅ |
+| **v1.5 — done** | Phase 133 | Conversation folders — per-user folder tree (up to 5 levels, all workspaces) for every conversation type on Web + Desktop: tree, ⋯ menus, Move dialog, chat-header breadcrumb, search across folders, drag and drop with refusals while dragging; labels derived from live links; V048; 5 endpoints + SDK (2026-10-02) ✅ |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -46,11 +47,11 @@ What we are actively working on and shipping next, in priority order.
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **60 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, workflows, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
-- **2,282 tests** across 10 projects, 0 failures, 3 skipped integration tests (verified 2026-10-02 via `dotnet test Sovrant.slnx`)
-- **141 server endpoints** + 1 SignalR hub (chat, sessions, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, workflows, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
+- **2,337 tests** across 10 projects, 0 failures, 3 skipped integration tests (verified 2026-10-02 via `dotnet test Sovrant.slnx`)
+- **146 server endpoints** + 1 SignalR hub (chat, sessions, session-folders, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, workflows, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
-- SQLite persistence layer with 47 versioned migrations (V001–V047) — V047 renamed the mission layer to "workflows" (Phase 129, `missions`/`mission_events`/`mission_scratchpad` → `workflows`/`workflow_events`/`workflow_scratchpad`, additive `ALTER TABLE ... RENAME`), V045 seed built-in tool guides for CodeCreate/CodeCreateMulti (Phase 128D), V046 seed CodeValidateTool guide (Phase 128E), V044 enrich built-in skill descriptions + agent/tool list fixes (Phase 114), V040 `mcp_servers.id` stable surrogate for workspace-scoped gating (Phase 105), V041 `workspace_memory` owner/privacy columns (Phase 123), V042 `session_summaries`/`learned_patterns`/`instincts` owner scoping (Phase 123), V043 email-as-user-id rewrite (replaces `usr_{hex}` PKs), V038 `knowledge_attributions` table (Phase 116F), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` schema (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
+- SQLite persistence layer with 48 versioned migrations (V001–V048) — V048 added conversation folders (Phase 133: `session_folders`, `sessions.folder_id`, `agent_runs.session_id`), V047 renamed the mission layer to "workflows" (Phase 129, `missions`/`mission_events`/`mission_scratchpad` → `workflows`/`workflow_events`/`workflow_scratchpad`, additive `ALTER TABLE ... RENAME`), V045 seed built-in tool guides for CodeCreate/CodeCreateMulti (Phase 128D), V046 seed CodeValidateTool guide (Phase 128E), V044 enrich built-in skill descriptions + agent/tool list fixes (Phase 114), V040 `mcp_servers.id` stable surrogate for workspace-scoped gating (Phase 105), V041 `workspace_memory` owner/privacy columns (Phase 123), V042 `session_summaries`/`learned_patterns`/`instincts` owner scoping (Phase 123), V043 email-as-user-id rewrite (replaces `usr_{hex}` PKs), V038 `knowledge_attributions` table (Phase 116F), V039 `keystore` table — master AES key in DB (Phase 96), V030 `is_private` (Phase 98), V031 `agent_name` (Phase 106), V032–V033 `knowledge_pages` + `knowledge_attributions` schema (Phase 108/116F), V034–V037 `role`/`recommended_level` + `fields_json`/`filename_template` + skill/agent/doc-template seeds (Phase 112A–D) on top of the Phase 32/42.5/51/52/57/78 foundation
 - Single `.env` file configuration — `sovrant.config` removed; all bootstrap knobs are env vars; routing and swarm config fully DB-backed
 - **Integrations Gallery** on Web and Desktop — catalog-first MCP onramp with Automation (Composio, n8n, Zapier, Make), Platform (GitHub, Slack, Notion, Linear, Stripe, PostgreSQL, Supabase, Filesystem), and Search (Brave, Exa, Tavily) tiers; credentials stored in encrypted keystore (Phase 95 ✅)
 - **Model switcher with provider discovery** — configured providers selectable inline; unconfigured known providers shown with click-to-configure deep-link to Settings → Providers on both Web and Desktop
@@ -230,7 +231,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
 | Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
 | Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
-| Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | Planned |
+| Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — runs started outside chat still open |
 
 ### v1.0 release polish ✅
 
@@ -12151,7 +12152,7 @@ Workflows (Phase 51, formerly missions) and federated claw-to-claw coordination 
 
 ## Phase 133 — Conversation Folders
 
-**Status:** Planned (2026-10-02) — design agreed; design mock committed in `docs/design/web.html` / `desktop.html` (Chat screen rail panel, folder menu, chat header, Move dialog, and drag-and-drop states). No `src/` changes until the mock is approved.
+**Status:** ✅ Built (2026-10-02, commit `48f1a98`) — Web + Desktop, verified live; see **Build notes** below. Still open: linked conversations for runs started outside chat, a live Postgres run, and a hand check of Desktop drag and drop.
 
 ### Why
 
@@ -12293,6 +12294,67 @@ UNFILED
 - **Cap:** the 20-item cap applies to Unfiled only; folders load their contents when expanded.
 - **Fix while here:** the Web sidebar (`Sidebar.razor`) loads each session's full message history just to build its label (N+1 query) and ignores the stored `title`. It switches to `ListWithTitlesAsync`, matching Desktop.
 
+### Build notes (2026-10-02, commit `48f1a98`)
+
+**Shipped**
+- **Storage:** V048, a Postgres schema block, and `db/supabase/migrations/20261002000000_session_folders.sql`. There are three folder stores, each registered alongside `ISessionStore` in its backend:
+  - `SqliteSessionFolderStore`
+  - `PostgresSessionFolderStore` — serializes each owner's tree writes with an advisory lock
+  - `RemoteSessionFolderStore`
+- **Shared logic:**
+  - `SessionFolderRules` holds the depth, cycle, sibling-name and unique-name-on-delete rules. The stores enforce them, and both UIs use them to refuse a drop before sending it.
+  - `SessionFolderTree` builds the rows both sidebars render.
+  - `SessionSidebarService` loads folders, sessions, labels and fallback titles, plus the expanded-folder preference (`user_preferences` key `sidebar.expanded_folders`).
+- **Labels:**
+  - `SqliteSessionLinkResolver` derives them with two queries per page, one each against workflows and agent_runs.
+  - Ad-hoc agent runs, whose session id is the run id, are labelled from their template.
+  - `TurnContext`, set in `ConversationRuntime.RunTurnAsync`, lets `AgentOrchestrator` and the `Swarm` tool stamp `agent_runs.session_id`. The `Swarm` tool now writes a `swarm` run row when launched from a chat.
+- **API and SDK:**
+  - 5 new endpoints (141 → 146).
+  - `GET /v1/sessions` rows gain `session_id`, `title`, `updated_at`, `folder_id`, `agent_name`, `is_private` and `labels`; the original `id` is kept. System sessions are no longer listed.
+  - New SDK methods: `listSessionFolders`, `createSessionFolder`, `updateSessionFolder`, `deleteSessionFolder`, `moveSessionToFolder`.
+- **Web:**
+  - `Sidebar.razor` is rewritten around the tree, with new `SessionMoveDialog`, `FolderNameDialog` and `SessionFolderHeader` components.
+  - The ⋯ menu renders outside the scrolling list, at a fixed position.
+  - Drag and drop uses HTML5, plus a `dragstart` shim in `interop.js` for Firefox.
+  - `ActiveContextService` gains `CurrentSessionId`.
+- **Desktop:**
+  - `SidebarViewModel.Folders.cs` drives the tree.
+  - `SidebarView` gets the tree, `MenuFlyout` menus, and drag and drop in code-behind via `DragDrop.DoDragDropAsync`.
+  - `SessionFolderDialogOverlay` is window-wide, like the command palette.
+  - `ChatView` gets a chat-header strip.
+
+**Verified**
+- **Tests:** 2,337 passing. New tests cover the rules, the tree, the SQLite store, the link resolver, the routes, and the orchestrator's run-to-chat link.
+- **Web:** live in headless Edge against an isolated database, 22/22 checks:
+  - labels
+  - creating folders and subfolders, and refusing a duplicate name
+  - dragging into a folder, a subfolder and Unfiled, and refusing a drag into a folder's own subfolder
+  - the Move dialog and the chat header
+  - deleting a folder moves its contents up, with no conversation lost
+  - search shows each result's folder path
+  - expanded state is saved
+- **Desktop:** live on the same isolated database, using window-only capture. Checked the tree, New folder, the chat header, the Move dialog, the ⋯ menu and Delete folder.
+- **Migration:** V048 applied to a read-only snapshot of a real database. Schema went from 47 to 48, every existing row was untouched, and the integrity check passed.
+
+**Deviations from the plan**
+- Folders are listed alphabetically. `sort_order` is stored, but there's no way to reorder folders by hand yet.
+- The conversation ⋯ menu has Move to folder…, Rename and Delete, but not "Make private". Privacy stays on the chat header's existing toggle.
+- Dropping a *folder* on the FOLDERS heading moves it to the top level. The plan only described dropping conversations on Unfiled.
+- The Web sidebar shows every filed conversation; the 20-item cap applies only to Unfiled.
+- Untitled conversations (workflow, webhook and agent-run chats) take a display title from their first message, which is loaded only for those conversations.
+
+**Fixed along the way**
+- **Remote mode:** the session list read `session_id`, but the API returned only `id`.
+- **Postgres:** session search read a column its query didn't select.
+- **Web sidebar:** it loaded every conversation's full history just to build labels.
+
+**Still open**
+- **Runs started outside chat:** swarm and team runs launched from Orchestration's Run button or `POST /v1/swarm` don't yet get a linked conversation, so they don't appear in the sidebar.
+- **Postgres:** the folder store hasn't been run against a live Postgres/Supabase database.
+- **Desktop drag and drop:** needs a hand check. Avalonia's OS drag loop can't be driven without taking over the real mouse.
+- **Found, not fixed:** `sovrant db migrate` throws after migrating. It disposes a service provider synchronously while that provider holds the async-only `SqliteStorageProvider`.
+
 ### Effect on chat and workflows
 
 - **Chat:** no change to how conversations run. A folder is metadata on the session — resume, compaction, clear, privacy, and model switching are unaffected. Deleting a conversation removes it from its folder automatically.
@@ -12318,16 +12380,16 @@ UNFILED
 ### Acceptance criteria
 
 - [x] Design mock updated on both `web.html` and `desktop.html` (rail folder tree, folder menu, chat header, Move dialog, valid and refused drag states), parity diff still chrome-only, logged in `docs/design/README.md`
-- [ ] V048 applies cleanly to a copy of a real database with existing sessions and runs; existing rows untouched (`folder_id`, `agent_runs.session_id` NULL)
-- [ ] Folders nest; creating or moving a folder below level 5 is rejected
-- [ ] Moving a folder into itself or a descendant is rejected
-- [ ] Two sibling folders can't share a name (case-insensitive); the same name under different parents is allowed
-- [ ] Deleting a folder moves its conversations and subfolders to its parent; no conversation is deleted
-- [ ] A user can't see another user's folders or file another user's conversation (404)
-- [ ] Same behavior on the SQLite and Postgres folder stores
-- [ ] Labels reflect live links: attaching an agent, creating a linked workflow, or launching a swarm from a chat updates that conversation's label with no stored "type"
-- [ ] Swarm and team runs launched from a chat record `agent_runs.session_id`
-- [ ] Web + Desktop parity: folder tree, ⋯ menus, Move dialog, drag and drop, chat-header breadcrumb, search across folders
-- [ ] Drag and drop refuses invalid drops (into own subfolder, past depth 5, duplicate sibling name) before anything is sent; dropping on Unfiled unfiles; hovering a collapsed folder expands it; the server rejects the same moves if a client sends them anyway
-- [ ] Web sidebar uses `ListWithTitlesAsync` (no per-session history load)
-- [ ] Endpoints documented in `docs/server.md`, SDK methods added, `docs/persistence.md` updated for V048, CHANGELOG entry
+- [x] V048 applies cleanly to a copy of a real database with existing sessions and runs; existing rows untouched (`folder_id`, `agent_runs.session_id` NULL)
+- [x] Folders nest; creating or moving a folder below level 5 is rejected
+- [x] Moving a folder into itself or a descendant is rejected
+- [x] Two sibling folders can't share a name (case-insensitive); the same name under different parents is allowed
+- [x] Deleting a folder moves its conversations and subfolders to its parent; no conversation is deleted
+- [x] A user can't see another user's folders or file another user's conversation (404)
+- [ ] Same behavior on the SQLite and Postgres folder stores — Postgres store written to the same rules and builds, but not yet run against a live Postgres/Supabase database
+- [x] Labels reflect live links: attaching an agent, creating a linked workflow, or launching a swarm from a chat updates that conversation's label with no stored "type"
+- [x] Swarm and team runs launched from a chat record `agent_runs.session_id`
+- [x] Web + Desktop parity: folder tree, ⋯ menus, Move dialog, drag and drop, chat-header breadcrumb, search across folders — Desktop drag and drop built but not live-verified (needs a hand check)
+- [x] Drag and drop refuses invalid drops (into own subfolder, past depth 5, duplicate sibling name) before anything is sent; dropping on Unfiled unfiles; hovering a collapsed folder expands it; the server rejects the same moves if a client sends them anyway
+- [x] Web sidebar uses `ListWithTitlesAsync` (no per-session history load)
+- [x] Endpoints documented in `docs/server.md`, SDK methods added, `docs/persistence.md` updated for V048, CHANGELOG entry
