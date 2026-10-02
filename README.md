@@ -23,7 +23,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-15. See [LICENSE](LICENSE).
-**Status:** 60 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,273 tests passing across 10 projects.
+**Status:** 60 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,282 tests passing across 10 projects.
 
 | Web | Desktop |
 |---|---|
@@ -1167,7 +1167,7 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 2,273 tests across 10 projects
+dotnet test Sovrant.slnx   # 2,282 tests across 10 projects
 ```
 
 Test projects (10): `Sovrant.Runtime.Tests` (998) · `Sovrant.Agents.Tests` (240) · `Sovrant.Tools.Tests` (404) · `Sovrant.Server.Tests` (161) · `Sovrant.Api.Tests` (215) · `Sovrant.Runtime.Documents.Tests` (87) · `Sovrant.Commands.Tests` (56) · `Sovrant.Mcp.Tests` (34) · `Sovrant.Lsp.Tests` (26) · `Sovrant.Integration.Tests` (1).

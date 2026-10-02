@@ -15,6 +15,11 @@ Versions correspond to tags on the `development` branch.
 
 - **Renamed the mission layer to "workflows"** (roadmap item) — `Sovrant.Runtime.Missions` → `Sovrant.Runtime.Workflows` across the whole stack: domain types, SQLite/Postgres/Supabase schema, the `/v1/missions*` → `/v1/workflows*` HTTP API (clean cutover, no alias period), the `/mission` → `/workflow` CLI slash command, the `Mission` → `Workflow` agent tool (governance tool-tier key updated in lockstep so gating doesn't silently drop), Command Center/User Dashboard cockpit rows (`Kind: "mission"` → `"workflow"`, dangling `/missions/{id}` links now point at `/workflows/{id}`), and the `sdk/js` client (`createMission`/`listMissions`/etc. → `createWorkflow`/`listWorkflows`/etc.). Purely a naming pass — no behavior change. Newly created workflow IDs get a `workflow-` prefix instead of `mission-`; existing `mission-`-prefixed IDs are untouched (IDs are opaque, nothing parses the prefix).
 
+### Fixed
+
+- **Swarm file locks never applied to `Write`/`Edit`** — `SwarmToolExecutor` keyed its write-tool map on `WriteFile`/`EditFile`, names no registered tool uses, so concurrent swarm workers could overwrite each other's files with no lock check (only the up-front `FilesToModify` declaration was enforced). Writes and edits now check and auto-acquire the lock under the real tool names. The executor also now honors `SwarmConfig.FileLocksEnabled` (previously it would have locked regardless). The working-directory guard still applies only to `NotebookEdit`, as before — `Write`/`Edit` legitimately target project folders outside the process's working directory; a real directory boundary for file tools is planned as Phase 124.
+- **13 built-in tools had no explicit governance tier** — `LS` and `MCPTool` were keyed under the wrong names and the code-scaffolding, document, and `CoordinationStatus` tools were never added, so all fell back to the Moderate default. Read-only ones are now Safe; artifact-writing ones are Moderate. No permission decision changes (Safe and Moderate are treated alike); the plan view now shows the right tier. A new coverage test fails if a registered tool lacks a tier.
+
 ---
 
 ## [1.5.0] — 2026-08-26

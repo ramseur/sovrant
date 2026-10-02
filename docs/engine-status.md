@@ -1,7 +1,7 @@
 # Sovrant Engine — Status Report
 
 **Branch:** `development`
-**Last updated:** 2026-10-02 (v1.5.0 + unreleased Phase 129 Missions → Workflows rename; 60 tools, 141 server endpoints + SignalR hub, 2,273 tests across 10 projects, JS SDK covering the server, V001–V047 migrations)
+**Last updated:** 2026-10-02 (v1.5.0 + unreleased Phase 129 Missions → Workflows rename; 60 tools, 141 server endpoints + SignalR hub, 2,282 tests across 10 projects, JS SDK covering the server, V001–V047 migrations)
 **Test models:** `gemini-2.5-flash` (Google AI Studio, free tier), `gpt-4o-mini` (OpenAI, paid tier)
 
 ---

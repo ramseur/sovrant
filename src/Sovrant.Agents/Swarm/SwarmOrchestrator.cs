@@ -357,7 +357,9 @@ public sealed partial class SwarmOrchestrator : ISwarmOrchestrator
         // excluded entirely — agents get only the built-in tool set.
         var effectiveRegistry = BuildMcpFilteredRegistry(config);
 
-        var swarmExecutor = new SwarmToolExecutor(innerExecutor, _fileLockManager, node.Id, bypass, bypass ? effectiveRegistry : null);
+        var swarmExecutor = new SwarmToolExecutor(
+            innerExecutor, _fileLockManager, node.Id, bypass, bypass ? effectiveRegistry : null,
+            fileLocksEnabled: config.FileLocksEnabled);
 
         // Priority 1: If the plan references a team, try to find a matching team member.
         if (plan.TeamId is not null)
