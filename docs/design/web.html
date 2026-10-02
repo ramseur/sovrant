@@ -87,6 +87,47 @@
   .nav.on{background:var(--brand-soft);color:var(--brand)}
   .nav.on::before{content:"";position:absolute;left:-8px;top:6px;bottom:6px;width:3px;border-radius:0 3px 3px 0;background:var(--brand)}
   .rdiv{height:1px;background:var(--border);margin:4px 10px;flex-shrink:0}
+
+  /* Session folders (Phase 133) — tree rows in the Chat rail panel */
+  .sfbar{display:flex;align-items:center;gap:6px;padding:6px 12px 8px}
+  .sfrow{position:relative;display:flex;align-items:center;gap:7px;min-height:34px;border-radius:8px;padding:4px 4px 4px calc(6px + var(--d,0)*16px);color:var(--t2);font-size:13px;cursor:pointer;flex-shrink:0}
+  .sfrow:hover{background:var(--hover);color:var(--t1)}
+  .sfrow.on{background:var(--brand-soft);color:var(--brand)}
+  .sfrow.on .nm{font-weight:600}
+  .sfrow .tw{display:flex;width:14px;justify-content:center;color:var(--t3);flex-shrink:0} .sfrow .tw svg{width:12px;height:12px}
+  .sfrow .tw.open svg{transform:rotate(90deg)}
+  .sfrow .fi{display:flex;color:var(--t3);flex-shrink:0} .sfrow .fi svg{width:15px;height:15px}
+  .sfrow .dt{width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0;margin:0 4px 0 5px}
+  .sfrow .tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .sfrow .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sfrow .mt{font-size:11px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sfrow .mt .ok{color:var(--ok)}
+  .sfrow .ct{font-size:11px;color:var(--t3);padding:0 4px}
+  .sfrow .more{width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--t3);display:flex;align-items:center;justify-content:center;opacity:0;cursor:pointer;flex-shrink:0}
+  .sfrow .more svg{width:15px;height:15px}
+  .sfrow:hover .more,.sfrow.menu .more{opacity:1} .sfrow .more:hover{background:var(--hover);color:var(--t1)}
+  .sfmenu{position:absolute;top:0;left:0;z-index:20;width:228px;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:5px;display:flex;flex-direction:column;cursor:default}
+  .sfmenu button{display:flex;align-items:center;gap:9px;height:32px;border:none;background:transparent;border-radius:7px;padding:0 9px;color:var(--t1);font:inherit;font-size:12.5px;text-align:left;cursor:pointer}
+  .sfmenu button:hover{background:var(--hover)} .sfmenu button svg{width:14px;height:14px;color:var(--t2)}
+  .sfmenu .sep{height:1px;background:var(--border);margin:4px 2px}
+  .sfmenu .danger{color:var(--fail)} .sfmenu .danger svg{color:var(--fail)}
+  .sfmenu .hint{font-size:11px;color:var(--t3);line-height:1.45;padding:2px 9px 6px}
+  /* Chat header: where this conversation lives + what it's linked to */
+  .chead{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 16px;border-bottom:1px solid var(--border);flex-shrink:0;font-size:12.5px;color:var(--t2);flex-wrap:wrap}
+  .chead .crumb{display:flex;align-items:center;gap:5px;min-width:0} .chead .crumb svg{width:13px;height:13px;color:var(--t3)}
+  .chead .ttl{color:var(--t1);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .chead .links{display:flex;gap:6px;margin-left:4px} .chead .links .badge{margin-left:0;text-transform:none;letter-spacing:0;font-size:11px;font-weight:600}
+  .chead .sp{flex:1}
+  /* Move-to-folder picker — scrim covers the whole app view */
+  .view{position:relative}
+  .sfscrim{position:absolute;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;z-index:30;padding:16px}
+  .sfdlg{width:100%;max-width:420px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.25);display:flex;flex-direction:column;max-height:100%}
+  .sfdlg h3{margin:0;font-size:15px;padding:16px 18px 4px}
+  .sfdlg .sd{font-size:12px;color:var(--t3);padding:0 18px 10px;line-height:1.45}
+  .sfdlg .pick{border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:6px;overflow:auto;display:flex;flex-direction:column;gap:2px}
+  .sfdlg .pick .sfrow .cur{font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);padding-right:6px}
+  .sfdlg .pick .sfrow.dis{opacity:.45;cursor:not-allowed}
+  .sfdlg .ft{display:flex;align-items:center;gap:8px;padding:12px 14px}
   .slab{padding:10px 21px 6px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--t3);flex-shrink:0}
   .sublist{flex:1;overflow-y:auto;padding:2px 10px 10px;display:flex;flex-direction:column;gap:2px;min-height:0}
   .sublist::-webkit-scrollbar{width:6px}.sublist::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -310,7 +351,7 @@ const I = {
   proj:'<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2.5h8.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z"/>',
   admin:'<path d="M12 2l8 3.5v6c0 5-3.4 8.9-8 10.5-4.6-1.6-8-5.5-8-10.5v-6z"/>',
   search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
-  plus:'<path d="M12 5v14M5 12h14"/>', refresh:'<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>', folder:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>', folderPlus:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><path d="M12 11v6M9 14h6"/>', dots:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>', pencil:'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>', trash:'<path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/>', refresh:'<path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/>',
   lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   box:'<path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/>',
   send:'<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>',
@@ -338,7 +379,7 @@ const S = {
   dashboard:{g:'dashboard',p:'Overview',t:'Dashboard',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
     stats:[['My workflows',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
     note:'Scoped to you. Command Center is the same pattern scoped to everyone — one design, two data sources.'},
-  chat:{g:'chat',p:'Conversation',t:'Chat',url:'/',note:'The one genuinely bespoke shape. Welcome state until the first message, then thread + collapsed work strips (Phase 126) + composer.'},
+  chat:{g:'chat',p:'Conversation',t:'Chat',url:'/',note:'The one genuinely bespoke shape. Welcome state until the first message, then thread + collapsed work strips (Phase 126) + composer. Rail panel: session folders (Phase 133) — per-user tree, up to 5 levels, derived link labels; use the toggles above for the folder menu and Move dialog.'},
   artifacts:{g:'knowledge',p:'Browse',t:'Artifacts',url:'/artifacts',sub:'1 artifact',
     items:[{n:'finance-chatbot-customization-plan.md',mono:1,b:['5.0 KB','text/markdown','2026-06-03'],tag:null}],
     acts:[['Download .zip',0],['Open folder',0]],
@@ -431,7 +472,7 @@ const S = {
     note:'Reached from the footer, not the rail — so it has no group and no sub-nav.'}
 };
 
-let cur='dashboard', railOpen=true, chatWelcome=false, orchView='team';
+let cur='dashboard', railOpen=true, chatState='thread', orchView='team';
 
 function buildIndex(){
   const el=document.getElementById('index');
@@ -449,7 +490,7 @@ function buildIndex(){
 function go(k){ cur=k; buildIndex(); render(); }
 function toggleRail(){ railOpen=!railOpen; document.getElementById('railBtn').classList.toggle('on',railOpen);
   document.getElementById('railBtn').textContent = railOpen?'Collapse rail':'Expand rail'; render(); }
-function setChatState(v){ chatWelcome=v; render(); }
+function setChatState(v){ chatState=v; render(); }
 function setOrchView(v){ orchView=v; render(); }
 
 function railHTML(s){
@@ -463,10 +504,8 @@ function railHTML(s){
   if(railOpen){
     const g=GROUPS[s.g];
     if(s.g==='chat'){
-      panel=`<div class="rdiv"></div><div style="padding:6px 12px 8px"><div class="search"><span style="display:flex">${sv(I.search,2)}</span><input placeholder="Search conversations…"></div></div>
-      <div class="slab">Recent</div><div class="sublist">
-      ${['Fix OpenRouter 401 fallback bug','Draft v1.5.0 changelog + PR notes','Workspace provider visibility bug','Left-nav redesign — Web + Desktop'].map((t,i)=>
-        `<div class="sub" style="padding-left:10px;gap:9px"><span style="width:6px;height:6px;border-radius:50%;background:${i===0?'var(--ok)':'var(--t3)'};flex-shrink:0"></span><span style="overflow:hidden;text-overflow:ellipsis">${t}</span></div>`).join('')}</div>`;
+      panel=`<div class="rdiv"></div><div class="sfbar"><div class="search"><span style="display:flex">${sv(I.search,2)}</span><input placeholder="Search conversations…"></div><button class="ib" title="New folder">${sv(I.folderPlus,2)}</button></div>
+      <div class="sublist" style="padding-top:0">${sessionTreeHTML()}</div>`;
     } else if(g.subs && g.subs.length){
       let last='';
       const rows=g.subs.map(k=>{
@@ -482,6 +521,7 @@ function railHTML(s){
   }
   return `<div class="rail" style="width:${w}px">
     <button class="ctog">${sv(I.chev,2)}</button>
+    ${s.g==='chat'&&railOpen&&chatState==='menu'?sfFolderMenuHTML():''}
     <div class="navg">${navs}</div>
     ${panel}
     ${railOpen?`<div class="foot"><div class="frow"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
@@ -633,13 +673,82 @@ function welcomeHTML(){
   </div>`;
 }
 
+/* ── Session folders (Phase 133) ─────────────────────────────────────────────
+   Folders are per-user, span every workspace, nest up to 5 levels, and hold
+   conversations only. A row's meta line is DERIVED from live links (agent,
+   workflow, swarm/team runs, webhook source) — nothing about a conversation's
+   "type" is stored, because a chat can gain or lose those links at any time. */
+const SF = [
+  {k:'f',d:0,n:'Client A',ct:4,open:true},
+    {k:'f',d:1,n:'Proposals',ct:2,open:true,id:'proposals'},
+      {k:'s',d:2,n:'Proposal draft v2',mt:'Agent · proposal-writer',on:true},
+      {k:'s',d:2,n:'Pricing comparison',mt:'Swarm · 1 run'},
+    {k:'s',d:1,n:'Kickoff notes'},
+    {k:'s',d:1,n:'Weekly status report',mt:'<span class="ok">● Workflow · Running</span>'},
+  {k:'f',d:0,n:'Research',ct:7},
+  {k:'f',d:0,n:'Personal',ct:3},
+];
+const SF_UNFILED = [
+  {k:'s',d:0,n:'Fix OpenRouter 401 fallback bug'},
+  {k:'s',d:0,n:'Draft v1.5.0 changelog + PR notes'},
+  {k:'s',d:0,n:'#support triage',mt:'Webhook · slack'},
+  {k:'s',d:0,n:'Workflow: Q3 vendor review',mt:'Workflow · Review · 2 runs'},
+];
+function sfRowHTML(r){
+  const menu = chatState==='menu' && r.id==='proposals';
+  const lead = r.k==='f'
+    ? `<span class="tw${r.open?' open':''}">${sv(I.chev,2.4)}</span><span class="fi">${sv(I.folder,2)}</span>`
+    : `<span class="tw"></span><span class="dt"></span>`;
+  const tail = r.k==='f' ? `<span class="ct">${r.ct}</span>` : '';
+  return `<div class="sfrow${r.on?' on':''}${menu?' menu':''}" style="--d:${r.d}">${lead}
+    <span class="tx"><span class="nm">${r.n}</span>${r.mt?`<span class="mt">${r.mt}</span>`:''}</span>${tail}
+    <button class="more" title="More">${sv(I.dots,2.4)}</button></div>`;
+}
+function sfFolderMenuHTML(){
+  return `<div class="sfmenu">
+    <button>${sv(I.folderPlus,2)}New subfolder</button>
+    <button>${sv(I.pencil,2)}Rename</button>
+    <button>${sv(I.folder,2)}Move to…</button>
+    <div class="sep"></div>
+    <button class="danger">${sv(I.trash,2)}Delete folder</button>
+    <div class="hint">Conversations and subfolders inside move up to “Client A”. No conversation is ever deleted.</div>
+  </div>`;
+}
+function sessionTreeHTML(){
+  return `<div class="sgl">Folders</div>${SF.map(sfRowHTML).join('')}
+    <div class="sgl">Unfiled</div>${SF_UNFILED.map(sfRowHTML).join('')}`;
+}
+function moveDialogHTML(){
+  const rows=[
+    {d:0,n:'Unfiled',icon:false},
+    {d:0,n:'Client A'},{d:1,n:'Proposals',cur:true},
+    {d:0,n:'Research',on:true},{d:1,n:'Benchmarks'},
+    {d:0,n:'Personal'},
+  ].map(r=>`<div class="sfrow${r.on?' on':''}" style="--d:${r.d}"><span class="tw"></span><span class="fi">${r.icon===false?sv(I.chat,2):sv(I.folder,2)}</span>
+      <span class="tx"><span class="nm">${r.n}</span></span>${r.cur?'<span class="cur">Current</span>':''}</div>`).join('');
+  return `<div class="sfscrim"><div class="sfdlg">
+    <h3>Move “Proposal draft v2”</h3>
+    <div class="sd">Pick a folder. Links to its agent, workflow, and runs stay as they are — a folder only changes where the conversation is listed.</div>
+    <div class="pick">${rows}</div>
+    <div class="ft"><button class="btn ghost">${sv(I.folderPlus,2)}New folder</button><span style="flex:1"></span><button class="btn">Cancel</button><button class="btn pri">Move here</button></div>
+  </div></div>`;
+}
+function chatHeadHTML(){
+  return `<div class="chead">
+    <span class="crumb">${sv(I.folder,2)}<span>Client A</span>${sv(I.chev,2.4)}<span>Proposals</span>${sv(I.chev,2.4)}<span class="ttl">Proposal draft v2</span></span>
+    <span class="links"><span class="badge b-brand">Agent · proposal-writer</span></span>
+    <span class="sp"></span>
+    <button class="btn ghost">${sv(I.folder,2)}Move</button>
+  </div>`;
+}
+
 function chatHTML(s){
-  if(chatWelcome) return `<div class="convo">${welcomeHTML()}
+  if(chatState==='welcome') return `<div class="convo">${welcomeHTML()}
     <div class="composer"><div class="cbox"><div class="ta">Type a message or / for commands…</div>
       <div class="cbar"><button class="ib">${sv(I.clip,2)}</button><button class="ib">${sv(I.plus,2.2)}</button><span class="sp"></span>
       <span style="font-size:11.5px;color:var(--t3)">gemma-4-31b-it</span><button class="send">${sv(I.send,2)}</button></div></div></div>
   </div>`;
-  return `<div class="convo">
+  return `<div class="convo" style="position:relative">${chatHeadHTML()}
     <div class="msgs">
       <div class="msg u"><div class="who">ER</div><div class="bub">Why are OpenRouter chats failing?</div></div>
       <div class="msg a"><div class="who">${sv(I.chat,2)}</div><div>
@@ -679,7 +788,7 @@ function render(){
   const ct=document.getElementById('screenToggle');
   if(cur==='chat'){
     ct.style.display='flex';
-    ct.innerHTML=`<button class="cbtn${!chatWelcome?' on':''}" onclick="setChatState(false)">Thread</button><button class="cbtn${chatWelcome?' on':''}" onclick="setChatState(true)">Welcome</button>`;
+    ct.innerHTML=[['thread','Thread'],['welcome','Welcome'],['menu','Folder menu'],['move','Move dialog']].map(([k,t])=>`<button class="cbtn${chatState===k?' on':''}" onclick="setChatState('${k}')">${t}</button>`).join('');
   } else if(cur==='orchestration'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${orchView==='team'?' on':''}" onclick="setOrchView('team')">Team</button><button class="cbtn${orchView==='defaults'?' on':''}" onclick="setOrchView('defaults')">Defaults</button>`;
@@ -690,9 +799,21 @@ function render(){
   else if(s.p==='Overview') inner=overviewHTML(s);
   else if(s.p==='Settings') inner=settingsHTML(s);
   else if(s.p==='Conversation') inner=chatHTML(s);
-  document.getElementById('view').innerHTML = s.g
+  document.getElementById('view').innerHTML = (s.g
     ? railHTML(s)+`<div class="content">${ctxHTML(s)}<div class="body">${inner}</div></div>`
-    : `<div class="content">${inner}</div>`;
+    : `<div class="content">${inner}</div>`)
+    + (cur==='chat'&&chatState==='move'?moveDialogHTML():'');
+  placeSfMenu();
+}
+
+/* Anchor the folder menu beside its row; open upward when there's no room below. */
+function placeSfMenu(){
+  const m=document.querySelector('.rail .sfmenu'), row=document.querySelector('.sfrow.menu'), rail=document.querySelector('.rail');
+  if(!m||!row||!rail) return;
+  const rr=row.getBoundingClientRect(), ra=rail.getBoundingClientRect(), mh=m.offsetHeight;
+  const below=rr.bottom-ra.top+2, above=rr.top-ra.top-mh-2;
+  m.style.top=(rr.bottom+mh+2>ra.bottom && above>0 ? above : below)+'px';
+  m.style.left=(rr.right-ra.left-40)+'px';
 }
 
 function setTheme(m){document.documentElement.setAttribute('data-theme',m);try{localStorage.setItem('sovrant-design-web-theme',m)}catch(e){}}

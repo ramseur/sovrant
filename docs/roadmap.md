@@ -1,7 +1,7 @@
 # Sovrant — Roadmap
 
 **Branch:** `development`
-**Last updated:** 2026-10-02 (Fixes ✅ — swarm file locks now actually apply to `Write`/`Edit` (`SwarmToolExecutor` keyed on non-existent `WriteFile`/`EditFile`, so per-write locking never ran) and honor `SwarmConfig.FileLocksEnabled`; `GraduatedToolTiers` now covers all 60 registered tools (13 had silently defaulted to Moderate) with a reflection-based coverage test; README + docs synced to the Phase 129 Missions → Workflows rename and corrected to 60 tools / 2,282 tests. Previous update 2026-09-10: Phase 130 planned — OpenRouter account registration & in-app key issuance via OAuth PKCE against OpenRouter's own `/auth` flow, reusing Phase 101's PKCE + loopback-listener plumbing; "Get an OpenRouter key" button on Providers settings (Web + Desktop) removes the manual copy/paste key step entirely. Phase 128 shipped ✅ — five-part plan complete: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required, V045/V046 migrations). Phase 129 in progress — Missions → Workflows: full-stack rename ✅, `WorkflowSchedulerService` background execution ✅, dedicated Workflows page ✅, chat-session status messages on terminal/AwaitingHuman ✅, plan generation + human review before running ✅ (2026-09-05), real per-step output + artifact count surfaced in the journal ✅, concurrent-Run race fixed via an in-process claim guard ✅ (2026-09-09); positioning callout, team-picker/run-mode launch form, Claude Agent SDK dual-path execution, and a new item 7 (turn an existing chat into a workflow, planned 2026-09-09) remain unplanned. v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 ✅ + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
+**Last updated:** 2026-10-02 (Phase 133 planned — Conversation Folders: per-user nested folder tree for every conversation type, labels derived from live links rather than a stored type, every piece of work gets a conversation (option A). Fixes ✅ — swarm file locks now actually apply to `Write`/`Edit` (`SwarmToolExecutor` keyed on non-existent `WriteFile`/`EditFile`, so per-write locking never ran) and honor `SwarmConfig.FileLocksEnabled`; `GraduatedToolTiers` now covers all 60 registered tools (13 had silently defaulted to Moderate) with a reflection-based coverage test; README + docs synced to the Phase 129 Missions → Workflows rename and corrected to 60 tools / 2,282 tests. Previous update 2026-09-10: Phase 130 planned — OpenRouter account registration & in-app key issuance via OAuth PKCE against OpenRouter's own `/auth` flow, reusing Phase 101's PKCE + loopback-listener plumbing; "Get an OpenRouter key" button on Providers settings (Web + Desktop) removes the manual copy/paste key step entirely. Phase 128 shipped ✅ — five-part plan complete: artifact security hardening (content-security headers, RemoteArtifactStore field-name fix, API zip endpoint, Artifacts.razor abstraction fix); code manifest in ArtifactManifest; scaffold enrichment (.sln + Directory.Build.props + .editorconfig + CI for all 21 templates, every .NET scaffold immediately buildable with dotnet build {sln}); LLM instruction enrichment (IProjectTemplate.BuildCommand/RunCommand, CodeCreate next_steps response, tool description update); new CodeValidateTool (structural checks via IArtifactStore.ListAsync — no compiler in PATH required, V045/V046 migrations). Phase 129 in progress — Missions → Workflows: full-stack rename ✅, `WorkflowSchedulerService` background execution ✅, dedicated Workflows page ✅, chat-session status messages on terminal/AwaitingHuman ✅, plan generation + human review before running ✅ (2026-09-05), real per-step output + artifact count surfaced in the journal ✅, concurrent-Run race fixed via an in-process claim guard ✅ (2026-09-09); positioning callout, team-picker/run-mode launch form, Claude Agent SDK dual-path execution, and a new item 7 (turn an existing chat into a workflow, planned 2026-09-09) remain unplanned. v1.5 focus: Phase 114 ✅ skill enrichment + Phase 74 markdown document templates + Phase 128 ✅ + Phase 126 + Phase 129. Phase 123 ✅ — Memory System: workspace memory with public/private scoping, "+Remember" button in Chat (Web + Desktop), V041/V042 migrations, per-user injection in multi-user deployments. V040 MCP stable IDs (Phase 105 workspace-level gating). V043 email-as-user-id (replaces `usr_{hex}` PKs). PostgresSchema split to `db/postgres/PostgresSchema.sql` + `db/supabase/migrations/` (Phase 40C documentation update). Phase 127 planned — Supabase RLS. Phase 126 planned — chat conversation UX: collapsed work strips. Phase 125 planned — web search via integrations. Phase 124 planned — file system access controls. Phase 96 ✅ — MCP runtime variables: inline env var editor Web + Desktop, keystore in DB (V039). Phase 116 ✅ — Intelligent Knowledge Harness complete: A–H shipped; knowledge_attributions table, IKnowledgeRouter, per-turn PII sanitization, MCP tool relevance filtering, provenance Sources UI. Phase 113 ✅ — CachedKnowledgeStore + Phase 31 CacheInvalidator repair. Phase 112 ✅ — all built-in markdown (skills, agents, 42 doc templates) in DB; dual-write removed. Phase 108 ✅ — knowledge_pages universal store. Phase 103 ✅ — MCP trust gates + trust rules editor UI. Phase 101 ✅ — OAuth 2.1 + PKCE for MCP.)
 
 This document tracks planned features, architectural decisions, and the reasoning behind them.
 
@@ -230,6 +230,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
 | Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
 | Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
+| Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12145,3 +12146,181 @@ Workflows (Phase 51, formerly missions) and federated claw-to-claw coordination 
 - [ ] Existing Phase 57 single-target call sites (`PMCoordinator`'s current routing) continue to work unmodified against the pre-existing `status`/`delivered_at`/`acknowledged_at` columns
 - [ ] Retention cleanup only removes events acknowledged by all subscribers of a channel; dead-lettered and unacknowledged events are never auto-pruned
 - [ ] Migration is additive — verified against an existing DB with pre-Phase-132 `coordination_events` rows
+
+---
+
+## Phase 133 — Conversation Folders
+
+**Status:** Planned (2026-10-02) — design agreed; design mock in progress in `docs/design/web.html` / `desktop.html` (Chat screen rail panel + chat header + Move dialog). No `src/` changes until the mock is approved.
+
+### Why
+
+The sidebar is a flat "Recent" list capped at 20 conversations, newest first. Anyone using Sovrant for more than a few days loses older conversations below the cap, and there's no way to group work by client, project, or topic. Every kind of conversation should be fileable the same way — plain chats, agent chats, workflow chats, the chat a swarm or team run was launched from, and webhook conversations (Slack/Teams/Discord).
+
+Two findings from the planning pass shaped the design:
+
+- **A conversation's "type" isn't stable.** A chat can start plain, have an agent attached, launch a swarm, and (Phase 129 item 7) be turned into a workflow. Storing a fixed `kind` at creation would go stale, so this phase stores **no type at all** — the sidebar's labels are derived from live links instead (see "Labels" below).
+- **Not all work starts from a chat.** Workflows created on the Workflows page, swarms launched from Orchestration or `POST /v1/swarm`, and team runs don't start in a chat. Decision (**option A**): *every piece of work gets a conversation, and folders hold only conversations*. Workflows already do this — since 2026-09-09 every workflow gets its own linked session (`workflows.session_id`), regardless of where it was created. This phase extends the same rule to swarm and team runs. The rejected alternative — a polymorphic `folder_items(folder_id, item_type, item_id)` table holding sessions, workflows, and runs side by side — was turned down because the DB can't enforce those references, sessions and runs can live in different databases under the Supabase backend (`PostgresSessionStore` vs SQLite), and every item type would need its own sidebar row, click target, and delete rule.
+
+### Decisions (confirmed 2026-10-02)
+
+| Question | Decision |
+|---|---|
+| Folder scope | **Per user, across all workspaces** — matches the sidebar today, which isn't workspace-filtered |
+| Nesting | **Folders inside folders, up to 5 levels deep** |
+| Shared / team folders | **Out of scope** — folders are private to their owner |
+| Conversation types | **Not stored** — labels derived from live links |
+| Work not started in chat | **Option A** — every workflow / swarm / team run gets a linked conversation; folders hold conversations only |
+| Folders per conversation | **One** (like files on disk); tags can come later if needed |
+
+### What ships
+
+#### 1 — Storage: an adjacency-list folder tree (V048, additive)
+
+Each folder stores its parent's id (`NULL` = top level). Compared against the alternatives for storing a tree:
+
+| Approach | Reads | Moving a folder | Verdict |
+|---|---|---|---|
+| **Parent id + recursive query** | Load the user's whole tree in one query, build it in memory | Update 1 row | **Chosen** |
+| Materialized path (`/a/b/c`) | Subtree via `LIKE` | Rewrite every descendant's path | Fragile moves |
+| Closure table (ancestor/descendant pairs) | Fastest | Many rows rewritten per move | Overkill |
+| Nested sets | Fast | Renumber the whole tree | No |
+
+A user has tens to hundreds of folders, not millions, so the sidebar loads the whole tree at once. `WITH RECURSIVE` (SQLite 3.8.3+ and Postgres) is needed only for the cycle check on move and the subtree walk on delete.
+
+```sql
+-- V048 — additive only; no existing migration is edited
+CREATE TABLE session_folders (
+    folder_id        TEXT PRIMARY KEY,
+    owner_user_id    TEXT NOT NULL,
+    parent_folder_id TEXT REFERENCES session_folders(folder_id),  -- NULL = top level; deliberately no CASCADE
+    name             TEXT NOT NULL,
+    sort_order       INTEGER NOT NULL DEFAULT 0,
+    created_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    updated_at       TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+CREATE INDEX ix_session_folders_tree ON session_folders(owner_user_id, parent_folder_id);
+-- Sibling names unique, case-insensitive. COALESCE because NULLs never collide in a UNIQUE index.
+CREATE UNIQUE INDEX ux_session_folders_sibling
+    ON session_folders(owner_user_id, COALESCE(parent_folder_id, ''), name COLLATE NOCASE);
+
+ALTER TABLE sessions ADD COLUMN folder_id TEXT REFERENCES session_folders(folder_id) ON DELETE SET NULL;
+CREATE INDEX ix_sessions_folder ON sessions(user_id, folder_id);
+
+-- Option A: runs record the conversation they belong to (NULL for runs created before this phase)
+ALTER TABLE agent_runs ADD COLUMN session_id TEXT;
+CREATE INDEX ix_agent_runs_session ON agent_runs(session_id);
+```
+
+V048 is the next free version as of 2026-10-02; Phase 124 also plans a migration — whichever ships first takes V048 and the other takes the next number.
+
+**Tree rules (enforced by the folder service, not left to callers):**
+- **Depth limit 5.** Creating or moving a folder that would put any folder below level 5 is rejected.
+- **No cycles.** A folder can't be moved into itself or any of its descendants (recursive check).
+- **Deleting a folder never deletes conversations.** Its conversations and subfolders move up to the deleted folder's parent in one transaction, then the folder row is removed. No `ON DELETE CASCADE` on `parent_folder_id` — one click must never silently wipe a subtree. `sessions.folder_id ... ON DELETE SET NULL` is only a safety net.
+- **Ownership.** A user can only see their own folders and can only file their own conversations; another user's session id returns 404, the same rule `ISessionStore.DeleteAsync` already applies. Folder names never appear on Command Center or the User Dashboard.
+
+**Postgres / Supabase:** the same DDL goes into `db/postgres/PostgresSchema.sql` (guarded, safe to re-run) and a new `db/supabase/migrations/` file. The folder store is registered in the same DI switch as `ISessionStore`, so folders always live in the same database as the sessions they reference — the foreign key and the sidebar query never cross databases. If Phase 127 (Supabase RLS) ships first, `session_folders` gets the same `owner_user_id` policy as the other owner-scoped tables.
+
+#### 2 — Runtime and API
+
+- **`ISessionFolderStore`** — `SqliteSessionFolderStore`, `PostgresSessionFolderStore`, and a `RemoteSessionFolderStore` (HTTP, for Desktop/Web remote mode). Operations: `ListTreeAsync`, `CreateAsync(name, parentId)`, `RenameAsync`, `MoveFolderAsync` (depth + cycle checks), `DeleteAsync` (reparents contents), `MoveSessionAsync(sessionId, folderId | null)`.
+- **`SessionListItem`** gains `FolderId` (optional, so existing callers are unaffected).
+- **Endpoints** (141 → 146), with matching `@sovrant/sdk` methods:
+  - `GET /v1/session-folders` — the caller's whole tree
+  - `POST /v1/session-folders` — create (name, optional parent)
+  - `PATCH /v1/session-folders/{id}` — rename and/or move
+  - `DELETE /v1/session-folders/{id}` — delete, moving contents up
+  - `PUT /v1/sessions/{id}/folder` — file a conversation (`null` = unfile)
+
+#### 3 — Labels: derived from live links, never stored
+
+Each sidebar row shows a small meta line for every link the conversation has *right now*; a conversation can carry several:
+
+| Label | Derived from |
+|---|---|
+| Agent · *name* | `sessions.agent_name` (the currently attached agent) |
+| Workflow · *status* | a `workflows` row whose `session_id` is this session |
+| Swarm / Team · *n runs* | `agent_runs.session_id` (new in V048) |
+| Webhook · *source* | session id starts with `webhook:` |
+
+Internal sessions (`__sovrant_mission_planner__`, `__sovrant_context_compactor__`) have no owner and stay out of every list.
+
+#### 4 — Linking work that didn't start in a chat (option A)
+
+- **Workflows** — already done (`SqliteWorkflowStore.CreateAsync` gives every workflow a session; `WorkflowSessionNotifier` seeds it with the goal). Filing that conversation files the workflow.
+- **Swarm / team runs launched from a chat** — record the chat's id in `agent_runs.session_id`. Verified during planning that tools can't see the current chat's id today (`SessionContext` carries `SessionConfig`, which has no id; `AttributionScope` has it but only when the attribution store is configured, and doesn't expose it). Fix: a small ambient `TurnContext.SessionId` (`AsyncLocal`), set in `ConversationRuntime.RunTurnAsync` next to `AttributionScope.Begin`, read by the `Swarm`, `TeamRun`, and `Agent` tools when they create runs.
+- **Swarm / team runs launched outside chat** (Orchestration's Run button, `POST /v1/swarm`) — create a linked conversation at launch, the same way workflows do. Can ship after the folders themselves: until then those runs simply don't appear in the sidebar, which is today's behavior.
+- **Webhook conversations** — already sessions (`webhook:{source}:{user}`); fileable with no extra work.
+
+#### 5 — UX (Web + Desktop parity, mock first)
+
+Designed in `docs/design/web.html` / `desktop.html` before any `src/` change, per the design README's process. The session sidebar is part of the existing **Conversation** pattern — no new pattern.
+
+```
+[Search conversations…]                 [folder+]
+ACTIVE                       (unchanged from today)
+FOLDERS
+  ▾ Client A                                  4
+      ▾ Proposals                             2
+          • Proposal draft v2
+            Agent · proposal-writer
+          • Pricing comparison
+            Swarm · 1 run
+      • Kickoff notes
+      • Weekly status report
+        ● Workflow · Running
+  ▸ Research                                  7
+UNFILED
+  • Fix OpenRouter 401 fallback bug
+  • #support triage
+    Webhook · slack
+```
+
+- **Folder rows:** expand/collapse chevron, folder icon, name, count (conversations in the folder and all its subfolders), and a "⋯" menu — New subfolder, Rename, Move to…, Delete folder (with the line "Conversations and subfolders inside move up to *parent*. No conversation is ever deleted.").
+- **Conversation rows:** title plus the derived label line; "⋯" menu — Move to folder…, Rename, Make private, Delete.
+- **Move dialog:** a folder-tree picker with Unfiled at the top, the current folder marked, folders that would break the depth limit (or, for a folder move, its own descendants) disabled, and "New folder" inline.
+- **Drag and drop:** conversations onto folders and folders onto folders (HTML5 drag-and-drop on Web, Avalonia `DragDrop` on Desktop). The Move dialog stays the keyboard-accessible path.
+- **Chat header:** breadcrumb of where the conversation lives (`Client A › Proposals › Proposal draft v2`), its link labels, and a Move button — so a conversation can be filed from inside it.
+- **Search** covers every folder and shows each result's folder path.
+- **Expanded/collapsed state** saved per user in the DB (`user_preferences`), per the "one disk config, everything else in DB" rule.
+- **Cap:** the 20-item cap applies to Unfiled only; folders load their contents when expanded.
+- **Fix while here:** the Web sidebar (`Sidebar.razor`) loads each session's full message history just to build its label (N+1 query) and ignores the stored `title`. It switches to `ListWithTitlesAsync`, matching Desktop.
+
+### Effect on chat and workflows
+
+- **Chat:** no change to how conversations run. A folder is metadata on the session — resume, compaction, clear, privacy, and model switching are unaffected. Deleting a conversation removes it from its folder automatically.
+- **Workflows:** a workflow's conversation can be filed anywhere, and the workflow keeps posting status into it. Because deleting a folder never deletes conversations, the workflow → conversation link can't be broken by folder operations. The Workflows page's "Open chat session →" link shows the conversation's folder.
+- **Command Center / User Dashboard:** unchanged; folders are never shown to anyone but their owner.
+
+### Non-goals
+
+- Shared or team folders (folders are private to their owner)
+- A conversation in more than one folder, or tags
+- Folders for anything other than conversations (workflows, runs, artifacts) — option A routes all work through a conversation instead
+- Auto-filing rules (e.g. "file every workflow conversation into X") — possible follow-up once folders exist
+- CLI folder commands — the CLI has no sidebar; `sovrant session` could gain `--folder` later
+
+### Relationship to other phases
+
+- **Phase 129** (Workflows) — supplies the "every workflow has a conversation" rule this phase generalizes; item 7 (turn a chat into a workflow) is the clearest example of why a stored conversation type would go stale.
+- **Phase 52 / 57** (agent runs, coordination) — `agent_runs` gains `session_id`; no change to how runs execute.
+- **Phase 40C / 127** (Postgres/Supabase backend, RLS) — folder store follows the session store's backend; RLS policy added if 127 lands first.
+- **Phase 124** (file system access controls) — shares the "next free migration number" with this phase.
+- **Phase 98 / 99** (User Dashboard, private sessions) — privacy rules unchanged; folder names are owner-only.
+
+### Acceptance criteria
+
+- [ ] Design mock updated on both `web.html` and `desktop.html` (rail folder tree, folder menu, chat header, Move dialog), parity diff still chrome-only, logged in `docs/design/README.md`
+- [ ] V048 applies cleanly to a copy of a real database with existing sessions and runs; existing rows untouched (`folder_id`, `agent_runs.session_id` NULL)
+- [ ] Folders nest; creating or moving a folder below level 5 is rejected
+- [ ] Moving a folder into itself or a descendant is rejected
+- [ ] Two sibling folders can't share a name (case-insensitive); the same name under different parents is allowed
+- [ ] Deleting a folder moves its conversations and subfolders to its parent; no conversation is deleted
+- [ ] A user can't see another user's folders or file another user's conversation (404)
+- [ ] Same behavior on the SQLite and Postgres folder stores
+- [ ] Labels reflect live links: attaching an agent, creating a linked workflow, or launching a swarm from a chat updates that conversation's label with no stored "type"
+- [ ] Swarm and team runs launched from a chat record `agent_runs.session_id`
+- [ ] Web + Desktop parity: folder tree, ⋯ menus, Move dialog, drag and drop, chat-header breadcrumb, search across folders
+- [ ] Web sidebar uses `ListWithTitlesAsync` (no per-session history load)
+- [ ] Endpoints documented in `docs/server.md`, SDK methods added, `docs/persistence.md` updated for V048, CHANGELOG entry

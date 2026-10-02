@@ -160,6 +160,39 @@ Caught two real bugs during implementation, unrelated to the page itself but sur
 
 Verified live end-to-end on Web in Chrome: created a real workflow, confirmed it appears in the list with the correct status badge, confirmed the detail pane renders goal/empty-plan/event-journal correctly, cancelled it and confirmed the status transition, the event-journal append, and the action buttons correctly disappearing once terminal. Desktop builds clean (0 errors, no new warnings) and mirrors Web's exact binding shape, but live screenshot verification wasn't completed — the window was covered by what appeared to be an active screen-share on the user's machine, and capturing that screen region risked grabbing meeting content, so verification stopped there rather than risk it.
 
+## Conversation folders (2026-10-02, design-only)
+
+Roadmap Phase 133. Mocked here first per this folder's usual process — no `src/` changes yet.
+
+**Where it lives:** the Chat screen's rail panel, the chat header, and a Move dialog. The rail panel is part of the existing **Conversation** pattern, so this adds no new pattern and the screen count stays at 23.
+
+**Rail panel** (`sessionTreeHTML`): the flat "Recent" list becomes a folder tree.
+- **Top bar:** search, plus a New-folder button beside it.
+- **Folders section:** each folder row has an expand chevron, a folder icon, its name, and a count of everything in it including subfolders.
+- **Unfiled section:** conversations that aren't in any folder.
+- **Conversation rows:** title, plus a muted label line *derived from live links* — `Agent · proposal-writer`, `Swarm · 1 run`, `● Workflow · Running`, `Webhook · slack`. Nothing about a conversation's "type" is stored, because a chat can gain or lose those links at any time. Plain chats show no label line.
+- **Nesting:** each level indents 16px (via a `--d` depth variable). The sample goes three levels deep (Client A › Proposals › conversation); the real limit is 5.
+
+**Folder "⋯" menu** (toggle: *Folder menu*): New subfolder, Rename, Move to…, Delete folder. The delete item carries the rule in plain words: "Conversations and subfolders inside move up to 'Client A'. No conversation is ever deleted." The menu is attached to the rail rather than the scrolling list, so the list can't clip it, and it opens upward when there's no room below the row. In real code it's a popup layer.
+
+**Chat header** (`chatHeadHTML`, thread state only): where the conversation is filed (`Client A › Proposals › Proposal draft v2`), its link labels as badges (names keep their own case), and a Move button, so a conversation can be filed from inside it.
+
+**Move dialog** (toggle: *Move dialog*): a folder-tree picker. Unfiled is at the top, the current folder is marked, and the chosen destination is highlighted. It has an inline New folder button. The scrim covers the whole app window, not just the chat column. The dialog notes that moving never changes a conversation's links to its agent, workflow or runs.
+
+**New CSS:** `.sfbar`, `.sfrow` (+ `.tw/.fi/.dt/.tx/.nm/.mt/.ct/.more`), `.sfmenu`, `.chead`, `.sfscrim`, `.sfdlg`. All of them use existing tokens. Every control height lands on the documented scale (24, 32, 34, 44px).
+
+**New icons:** `folder`, `folderPlus`, `dots`, `pencil` and `trash`. All are standard straight-line or simple-arc paths.
+
+**Mock state:** the old Chat-only boolean (`chatWelcome`) became a four-way `chatState` (`thread | welcome | menu | move`) behind the same `#screenToggle` control.
+
+Not modeled, deliberately (same reasoning as Orchestration's inline forms): the conversation-row "⋯" menu (Move to folder…, Rename, Make private, Delete), drag-and-drop states, and inline rename. These are transient interaction states, not distinct screens.
+
+**Verified:** rendered all four Chat states in headless Edge.
+- **Thread:** checked in dark and light themes, with the tree scrolled to show Unfiled.
+- **Folder menu:** fully visible after the clipping fix.
+- **Move dialog:** the scrim covers the whole window.
+- **Parity:** `web.html`/`desktop.html` diff is still 49 lines, all chrome, with line endings ignored. `desktop.html` is CRLF and `web.html` is LF; that was already the case before this pass.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.
