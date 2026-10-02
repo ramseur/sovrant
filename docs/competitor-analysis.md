@@ -1,6 +1,6 @@
 # Sovrant — Competitor Analysis
 
-**Last updated:** 2026-10-02 (counts refreshed: 58 tools, 25 agent templates, Command Center cockpit, desktop app, web app, MCP server, workflow engine (renamed from missions), SDK covering the 141-endpoint server, BSL 1.1, v1.5.0; competitor assessments themselves last reviewed 2026-05-16)
+**Last updated:** 2026-10-02 (counts refreshed: 60 tools, 25 agent templates, Command Center cockpit, desktop app, web app, MCP server, workflow engine (renamed from missions), SDK covering the 141-endpoint server, BSL 1.1, v1.5.0; competitor assessments themselves last reviewed 2026-05-16)
 
 ---
 
@@ -17,7 +17,7 @@
 
 ## Executive Summary
 
-Sovrant is a clean-room C# / .NET 10 agentic AI engine with five independent frontends (CLI, HTTP server, desktop app, web UI, MCP server), enterprise multi-tenant infrastructure, and 56 tools. Its competitive landscape spans four distinct layers:
+Sovrant is a clean-room C# / .NET 10 agentic AI engine with five independent frontends (CLI, HTTP server, desktop app, web UI, MCP server), enterprise multi-tenant infrastructure, and 60 tools. Its competitive landscape spans four distinct layers:
 
 **Tier 1 direct competitors** are open source platforms that users evaluate alongside Sovrant for self-hosted agentic AI deployments. LibreChat and LobeChat are the strongest on community scale but are primarily chat UI layers — they lack agent orchestration depth. Onyx is purpose-built for enterprise search/RAG, not coding. BotSharp is the closest architectural peer in .NET but has lower market presence. OpenClaude carries Anthropic IP risk. opencode is the strongest open source coding agent and Sovrant's primary benchmark.
 
@@ -41,7 +41,7 @@ LibreChat is the most popular open source ChatGPT-style UI, with 25K+ GitHub sta
 
 Its agent capabilities are meaningful — users can define custom agents with tool access — but it is fundamentally a **conversation UI layer**, not an agentic execution engine. There is no server-side orchestration, no swarm decomposition, no workflow engine, and no session TTL or multi-tenant credential management. Deployment is Docker-based.
 
-**vs. Sovrant:** LibreChat wins on community scale and UI polish. Sovrant wins on depth of agent execution (Teams, Swarm, Workflows, 58 tools, LSP), enterprise server infrastructure, and .NET ecosystem fit.
+**vs. Sovrant:** LibreChat wins on community scale and UI polish. Sovrant wins on depth of agent execution (Teams, Swarm, Workflows, 60 tools, LSP), enterprise server infrastructure, and .NET ecosystem fit.
 
 ---
 
@@ -75,9 +75,9 @@ Onyx's focus is **document-centric enterprise search and RAG** — not agentic c
 
 BotSharp is the only other major open source agentic AI framework written in C#/.NET. It provides a modular plugin architecture, multi-LLM support, a built-in SvelteKit UI, MCP client integration, and an agent framework with routing and memory. It is maintained by the SciSharp community (known for NumSharp, TensorFlow.NET, etc.).
 
-BotSharp is the **closest architectural peer to Sovrant in the .NET ecosystem**. Key differences: BotSharp is a framework/library first (you build an app on top of it), while Sovrant is a complete runtime that ships a working server, five frontends, 56 tools, and enterprise infrastructure out of the box. BotSharp has a smaller community and less enterprise production surface than Sovrant.
+BotSharp is the **closest architectural peer to Sovrant in the .NET ecosystem**. Key differences: BotSharp is a framework/library first (you build an app on top of it), while Sovrant is a complete runtime that ships a working server, five frontends, 60 tools, and enterprise infrastructure out of the box. BotSharp has a smaller community and less enterprise production surface than Sovrant.
 
-**vs. Sovrant:** Direct .NET competitor. Sovrant leads on tool count (58 vs ~20), orchestration depth (Teams + Swarm + Workflows vs. agent routing), server maturity (141 OpenAI-compatible endpoints vs. no standardised API), and out-of-the-box deployment story. BotSharp has a longer track record in the .NET space.
+**vs. Sovrant:** Direct .NET competitor. Sovrant leads on tool count (60 vs ~20), orchestration depth (Teams + Swarm + Workflows vs. agent routing), server maturity (141 OpenAI-compatible endpoints vs. no standardised API), and out-of-the-box deployment story. BotSharp has a longer track record in the .NET space.
 
 ---
 
@@ -100,7 +100,7 @@ opencode is a clean-room MIT-licensed open source coding agent built by the SST 
 
 **Architecture:** A persistent background HTTP + SSE server (`opencode serve`) is the backend. Multiple client types connect — TUI, desktop (Tauri), VS Code extension (beta), web UI, and remote clients. SQLite via Drizzle ORM. 75+ LLM providers. Real LSP integration for 20+ languages.
 
-**vs. Sovrant:** opencode is Sovrant's primary open source benchmark. Sovrant leads on tool count (58 vs 20+), orchestration (Teams + Swarm + Workflows vs. none), enterprise server (141 OpenAI-compatible endpoints vs. local-only), multi-tenant credentials, and .NET ecosystem fit. opencode leads on community scale and Go/Node ecosystem penetration.
+**vs. Sovrant:** opencode is Sovrant's primary open source benchmark. Sovrant leads on tool count (60 vs 20+), orchestration (Teams + Swarm + Workflows vs. none), enterprise server (141 OpenAI-compatible endpoints vs. local-only), multi-tenant credentials, and .NET ecosystem fit. opencode leads on community scale and Go/Node ecosystem penetration.
 
 ---
 
@@ -166,7 +166,7 @@ Microsoft's low-code platform for building copilots and agents, embedded in the 
 
 Microsoft's first-party framework for building production AI agents in .NET and Python. Provides middleware patterns, memory abstractions, streaming, and integration with Azure AI Foundry and Azure AI Search. Architecturally similar to Sovrant's agent layer but designed as a library/SDK, not a complete runtime.
 
-**vs. Sovrant:** The Agent Framework provides the building blocks to construct an agent; Sovrant ships a complete, working agentic system with CLI, server, desktop, web, MCP, 56 tools, and enterprise infrastructure out of the box. A .NET team adopting the Agent Framework still needs to build frontends, persistence, auth, and tooling themselves. BotSharp is also built on similar patterns. Microsoft's enterprise ecosystem backing is significant.
+**vs. Sovrant:** The Agent Framework provides the building blocks to construct an agent; Sovrant ships a complete, working agentic system with CLI, server, desktop, web, MCP, 60 tools, and enterprise infrastructure out of the box. A .NET team adopting the Agent Framework still needs to build frontends, persistence, auth, and tooling themselves. BotSharp is also built on similar patterns. Microsoft's enterprise ecosystem backing is significant.
 
 ---
 
@@ -198,7 +198,7 @@ Sovrant is a clean-room C# / .NET 10 reimplementation of an agentic AI engine, i
 
 Five delivery modes: a CLI REPL, `Sovrant.Server` (ASP.NET Core with 115 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.Mcp` (stdio + HTTP/SSE MCP transports).
 
-The SmartRouter routes each LLM call across configured providers based on latency, cost, and health scores, with intent-aware model tier routing. 58 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, workflow management, skill execution, document generation, MCP resources, and quality verification. 25 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite (26 versioned migrations) with FTS5 full-text search. The Command Center cockpit (`/command` on Web and Desktop) gives the operator a single live view of every active workflow, team run, agent run, and session.
+The SmartRouter routes each LLM call across configured providers based on latency, cost, and health scores, with intent-aware model tier routing. 60 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, workflow management, skill execution, document generation, MCP resources, and quality verification. 25 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite (26 versioned migrations) with FTS5 full-text search. The Command Center cockpit (`/command` on Web and Desktop) gives the operator a single live view of every active workflow, team run, agent run, and session.
 
 **Legal posture:** clean-room reimplementation in a different language with no code-derivation IP risk. Source-available under BSL 1.1 with a three-year Apache 2.0 conversion (2029-05-15).
 
@@ -282,7 +282,7 @@ LibreChat, LobeChat, OpenWebUI, AnythingLLM, and Dify have basic agent capabilit
 
 ### .NET / Enterprise Runtime Fit
 
-BotSharp, Semantic Kernel, and Microsoft Agent Framework all target the .NET ecosystem as libraries. Sovrant is the only **complete runtime** in the .NET space — it ships working frontends, a server, persistence, 56 tools, and enterprise infrastructure without requiring the developer to assemble a stack. For .NET shops evaluating "build it ourselves with SK/Agent Framework" vs. "deploy Sovrant," Sovrant eliminates months of plumbing work.
+BotSharp, Semantic Kernel, and Microsoft Agent Framework all target the .NET ecosystem as libraries. Sovrant is the only **complete runtime** in the .NET space — it ships working frontends, a server, persistence, 60 tools, and enterprise infrastructure without requiring the developer to assemble a stack. For .NET shops evaluating "build it ourselves with SK/Agent Framework" vs. "deploy Sovrant," Sovrant eliminates months of plumbing work.
 
 ---
 
@@ -298,7 +298,7 @@ Dify's visual workflow builder and Copilot Studio's no-code canvas have no equiv
 
 1. **Five independent frontends** — CLI, HTTP server (115 endpoints), desktop app (Avalonia), web app (Blazor), and MCP server. No competitor in any tier ships more than three.
 2. **SmartRouter + intent-aware routing** — multi-provider routing with health/latency/cost scoring. Unique in the field.
-3. **58 tools with LSP** — highest tool count in any self-hosted product, plus 5 LSP tools (18 languages), swarm orchestration, workflow management, quality gates, and skill system.
+3. **60 tools with LSP** — highest tool count in any self-hosted product, plus 5 LSP tools (18 languages), swarm orchestration, workflow management, quality gates, and skill system.
 4. **Three-layer orchestration** — Teams + Swarm + Workflows. No competitor in Tier 1 or Tier 2 has anything comparable.
 5. **Enterprise multi-tenant out of the box** — per-request LLM keys, API token issuance, session TTL/LRU, rate limiting, usage tracking, workspace/project scoping, audit log. All shipped.
 6. **Native .NET 10** — zero runtime dependency for .NET shops; natural fit for Windows-first or Azure-first environments.
@@ -378,7 +378,7 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 | **Best for multi-user teams** | Partial (LibreChat) | ❌ | ✅ ChatGPT Enterprise | — | ✅ (self-hosted, shipped) |
 | **Best for enterprise deploy** | ❌ | ❌ | ✅ (managed) | ❌ (SDK only) | ✅ (self-hosted, shipped) |
 | **Best provider flexibility** | ✅ LibreChat / opencode | ✅ Dify | ❌ | — | ✅ + SmartRouter |
-| **Best agent / tool depth** | opencode | ❌ | ChatGPT | Semantic Kernel | ✅ (56 tools, 3-layer orchestration) |
+| **Best agent / tool depth** | opencode | ❌ | ChatGPT | Semantic Kernel | ✅ (60 tools, 3-layer orchestration) |
 | **Best .NET / Windows fit** | BotSharp | ❌ | Copilot Studio | Semantic Kernel / Agent Framework | ✅ (complete runtime) |
 | **Best legal posture** | ✅ (most) | ✅ | ✅ | ✅ | ✅ |
 | **Best community scale** | opencode / LobeChat | OpenWebUI | — | Semantic Kernel | Early stage |

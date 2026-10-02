@@ -5,6 +5,14 @@ namespace Sovrant.Runtime.Governance;
 /// <see cref="ToolTier"/> levels. Used by the permission policy, the
 /// plan approval gate, and the step tool enforcer to make tier-aware
 /// governance decisions.
+/// <para>
+/// Every tool registered by <c>AddSovrantTools</c> must have an entry here —
+/// enforced by <c>GraduatedToolTiersCoverageTests</c> in Sovrant.Tools.Tests.
+/// The legacy names <c>ReadFile</c>, <c>WriteFile</c>, <c>EditFile</c>,
+/// <c>ListDirectory</c>, <c>List</c>, and <c>McpProxy</c> are not registered
+/// tool names, but are kept because team allowed-tool lists and other
+/// governance code still refer to them.
+/// </para>
 /// </summary>
 public static class GraduatedToolTiers
 {
@@ -15,6 +23,7 @@ public static class GraduatedToolTiers
         ["Read"]                = ToolTier.Safe,
         ["Glob"]                = ToolTier.Safe,
         ["Grep"]                = ToolTier.Safe,
+        ["LS"]                  = ToolTier.Safe,
         ["ListDirectory"]       = ToolTier.Safe,
         ["List"]                = ToolTier.Safe,
         ["WebFetch"]            = ToolTier.Safe,
@@ -33,6 +42,12 @@ public static class GraduatedToolTiers
         ["AskUserQuestion"]     = ToolTier.Safe,
         ["EnterPlanMode"]       = ToolTier.Safe,
         ["ExitPlanMode"]        = ToolTier.Safe,
+        ["CoordinationStatus"]  = ToolTier.Safe,
+        ["CodeListTemplates"]   = ToolTier.Safe,
+        ["CodeValidate"]        = ToolTier.Safe,
+        ["DocumentListTemplates"]   = ToolTier.Safe,
+        ["DocumentSuggestTemplate"] = ToolTier.Safe,
+        ["DocumentListPackages"]    = ToolTier.Safe,
 
         // ── Moderate (writes/modifies state, but contained) ─────────
         ["WriteFile"]           = ToolTier.Moderate,
@@ -50,9 +65,15 @@ public static class GraduatedToolTiers
         ["ExitWorktree"]        = ToolTier.Moderate,
         ["Verify"]              = ToolTier.Moderate,
         ["Artifact"]            = ToolTier.Moderate,
+        ["MCPTool"]             = ToolTier.Moderate,
         ["McpProxy"]            = ToolTier.Moderate,
         ["McpAuth"]             = ToolTier.Moderate,
         ["LspRename"]           = ToolTier.Moderate,
+        ["CodeCreate"]          = ToolTier.Moderate,
+        ["CodeCreateMulti"]     = ToolTier.Moderate,
+        ["DocumentGenerate"]    = ToolTier.Moderate,
+        ["DocumentFromTemplate"] = ToolTier.Moderate,
+        ["DocumentPackage"]     = ToolTier.Moderate,
 
         // ── Dangerous (arbitrary command execution) ─────────────────
         ["Bash"]                = ToolTier.Dangerous,
@@ -67,7 +88,7 @@ public static class GraduatedToolTiers
         ["TeamDelegate"]        = ToolTier.Escalation,
         ["TeamRun"]             = ToolTier.Escalation,
         ["TeamPublish"]         = ToolTier.Escalation,
-        ["Workflow"]             = ToolTier.Escalation,
+        ["Workflow"]            = ToolTier.Escalation,
         ["Swarm"]               = ToolTier.Escalation,
         ["SwarmStatus"]         = ToolTier.Escalation,
     };

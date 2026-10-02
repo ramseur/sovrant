@@ -128,7 +128,7 @@ All tools registered in `IToolRegistry` are exposed via MCP, plus a synthetic `c
 
 ### Sovrant Tools
 
-All 56 standard tools are available:
+All 60 standard tools are available:
 
 **File:** `Read`, `Write`, `Edit`, `Glob`, `Grep`, `LS`
 **Shell:** `Bash`, `PowerShell`, `REPL`
@@ -141,6 +141,7 @@ All 56 standard tools are available:
 **Swarm & Coordination:** `Swarm`, `SwarmStatus`, `CoordinationStatus`
 **Discovery & Skills:** `ToolSearch`, `Skill`, `SkillCreate`
 **Artifacts & Documents:** `Artifact`, `DocumentGenerate`, `DocumentFromTemplate`, `DocumentListTemplates`, `DocumentSuggestTemplate`, `DocumentPackage`, `DocumentListPackages`
+**Code Scaffolding:** `CodeCreate`, `CodeCreateMulti`, `CodeListTemplates`, `CodeValidate`
 **Quality:** `Verify`
 **MCP:** `ListMcpResources`, `ReadMcpResource`, `MCPTool`, `McpAuth`
 **LSP:** `LspHover`, `LspDefinition`, `LspReferences`, `LspDiagnostics`, `LspRename`

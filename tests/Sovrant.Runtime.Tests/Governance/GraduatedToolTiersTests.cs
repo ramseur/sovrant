@@ -13,6 +13,13 @@ public sealed class GraduatedToolTiersTests
     [InlineData("WebFetch", ToolTier.Safe)]
     [InlineData("AskUserQuestion", ToolTier.Safe)]
     [InlineData("LspHover", ToolTier.Safe)]
+    [InlineData("LS", ToolTier.Safe)]
+    [InlineData("CoordinationStatus", ToolTier.Safe)]
+    [InlineData("CodeListTemplates", ToolTier.Safe)]
+    [InlineData("CodeValidate", ToolTier.Safe)]
+    [InlineData("DocumentListTemplates", ToolTier.Safe)]
+    [InlineData("DocumentSuggestTemplate", ToolTier.Safe)]
+    [InlineData("DocumentListPackages", ToolTier.Safe)]
     public void SafeTools_ReturnSafeTier(string toolName, ToolTier expected)
     {
         Assert.Equal(expected, GraduatedToolTiers.GetTier(toolName));
@@ -25,6 +32,12 @@ public sealed class GraduatedToolTiersTests
     [InlineData("TaskCreate", ToolTier.Moderate)]
     [InlineData("Artifact", ToolTier.Moderate)]
     [InlineData("LspRename", ToolTier.Moderate)]
+    [InlineData("MCPTool", ToolTier.Moderate)]
+    [InlineData("CodeCreate", ToolTier.Moderate)]
+    [InlineData("CodeCreateMulti", ToolTier.Moderate)]
+    [InlineData("DocumentGenerate", ToolTier.Moderate)]
+    [InlineData("DocumentFromTemplate", ToolTier.Moderate)]
+    [InlineData("DocumentPackage", ToolTier.Moderate)]
     public void ModerateTools_ReturnModerateTier(string toolName, ToolTier expected)
     {
         Assert.Equal(expected, GraduatedToolTiers.GetTier(toolName));

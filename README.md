@@ -23,7 +23,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-15. See [LICENSE](LICENSE).
-**Status:** 58 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,261 tests passing across 10 projects.
+**Status:** 60 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,273 tests passing across 10 projects.
 
 | Web | Desktop |
 |---|---|
@@ -320,7 +320,7 @@ sovrant router models
 sovrant router status
 ```
 
-### 58 Built-in Tools
+### 60 Built-in Tools
 
 Agents autonomously use tools for file operations, shell execution, web access, task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, agent delegation, team orchestration, swarm orchestration, workflow management, artifact retrieval, and document generation. Up to 20 tool rounds per turn with automatic retries.
 
@@ -417,7 +417,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     └───────────┬──────────────────┬─────────────────────────────┘
                 │                  │
     ┌───────────▼────────┐  ┌──────▼──────────────────────────┐
-    │  Sovrant.Api       │  │  Sovrant.Tools (58 tools)        │
+    │  Sovrant.Api       │  │  Sovrant.Tools (60 tools)        │
     │                    │  │                                  │
     │  SmartRouter       │  │  File:  Read Write Edit          │
     │  ├── OpenAI        │  │         Glob Grep LS             │
@@ -475,7 +475,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
 | `Sovrant.Runtime` | Core agentic loop, workflow engine, planner/executor, SQLite persistence (47 migrations V001–V047), permission system, tool executor, MCP client, cost tracking. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. Intent-aware model routing. |
-| `Sovrant.Tools` | All 58 tool implementations. 32 built-in skill `.md` files. |
+| `Sovrant.Tools` | All 60 tool implementations. 32 built-in skill `.md` files. |
 | `Sovrant.Storage.Postgres` | Optional PostgreSQL/Supabase backend — overrides `ISessionStore` and `ICredentialStore` with Npgsql implementations. Schema mirrors SQLite (V001–V047; see `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/`). Activated at boot when `system.database_backend = "supabase"` is set via the Admin → System Integrations UI. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
@@ -499,7 +499,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 
 ## Tools
 
-58 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+60 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -527,13 +527,19 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 ### Workflows
 `Workflow` *(create and drive long-lived goals with re-planning and acceptance gates)*
 
-### Swarm Orchestration
-`Swarm` *(auto-decompose + parallel DAG execution with optional team)* · `SwarmStatus` *(live progress tracking)*
+### Swarm Orchestration & Coordination
+`Swarm` *(auto-decompose + parallel DAG execution with optional team)* · `SwarmStatus` *(live progress tracking)* · `CoordinationStatus` *(pending coordination messages and recent events for an agent group)*
 
 *Submit complex tasks for automatic decomposition into parallel waves. See [Agent System](#agent-system).*
 
 ### Discovery & Skills
 `ToolSearch` *(keyword search over registered tools)* · `Skill` *(loads and executes a skill by name or /trigger)* · `SkillCreate` *(creates new `.md` skill files at runtime)*
+
+### Artifacts & Documents
+`Artifact` *(retrieve files produced by a run)* · `DocumentGenerate` · `DocumentFromTemplate` · `DocumentListTemplates` · `DocumentSuggestTemplate` *(route a free-text request to the best-matching template)* · `DocumentPackage` *(render a multi-document package against one data object)* · `DocumentListPackages`
+
+### Code Scaffolding
+`CodeCreate` · `CodeCreateMulti` *(scaffold a project from one of 21 templates, with build/run/test guidance)* · `CodeListTemplates` · `CodeValidate` *(compiler-free structural quality gates for a scaffolded project)*
 
 ### Quality
 `Verify` *(6-phase quality gate: build, type-check, lint, test, security scan, diff review)*
@@ -1161,7 +1167,7 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 2,261 tests across 10 projects
+dotnet test Sovrant.slnx   # 2,273 tests across 10 projects
 ```
 
 Test projects (10): `Sovrant.Runtime.Tests` (998) · `Sovrant.Agents.Tests` (240) · `Sovrant.Tools.Tests` (404) · `Sovrant.Server.Tests` (161) · `Sovrant.Api.Tests` (215) · `Sovrant.Runtime.Documents.Tests` (87) · `Sovrant.Commands.Tests` (56) · `Sovrant.Mcp.Tests` (34) · `Sovrant.Lsp.Tests` (26) · `Sovrant.Integration.Tests` (1).
