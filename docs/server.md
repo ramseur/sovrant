@@ -373,7 +373,7 @@ The server defaults to `DontAsk` — tools run without interactive prompts. This
 > | **Safe** | Auto-approve | Read, Glob, Grep, LS, WebFetch, WebSearch, Sleep, AskUserQuestion |
 > | **Moderate** | Auto-approve | Write, Edit, NotebookEdit, TodoWrite, Skill, Artifact, McpProxy |
 > | **Dangerous** | Require confirmation | Bash, PowerShell, REPL |
-> | **Escalation** | Always show plan | Agent, TeamDelegate, Swarm, Mission |
+> | **Escalation** | Always show plan | Agent, TeamDelegate, Swarm, Workflow |
 >
 > To restore the old behavior (auto-approve everything), set `SOVRANT_UNSAFE_DONTASK=true`.
 
@@ -853,7 +853,7 @@ Returns the run result with `run_id`, `status`, `output`, and `tokens_used`.
 
 ## Run Endpoints
 
-Agent runs are recorded for teams, swarms, and missions.
+Agent runs are recorded for teams, swarms, and workflows.
 
 ### Get Run — `GET /v1/runs/{id}`
 
@@ -882,31 +882,33 @@ Response: `{ "text": "...", "tool_calls": [...], "errors": [] }`.
 
 ---
 
-## Mission Endpoints
+## Workflow Endpoints
 
-Missions are goal-driven, multi-step agent tasks tracked through their lifecycle.
+Workflows (formerly "missions") are goal-driven, multi-step agent tasks tracked through their lifecycle. The `/v1/missions*` paths were replaced by `/v1/workflows*` in Phase 129 with no alias. `Sovrant.Server` also runs `WorkflowSchedulerService`, which advances `Planning`/`Running` workflows in the background (`SOVRANT_WORKFLOW_POLL_SECONDS`, default 20; `SOVRANT_WORKFLOW_MAX_CONCURRENT`, default 3).
 
-### Create Mission — `POST /v1/missions`
+### Create Workflow — `POST /v1/workflows`
 
 ```json
-{ "goal": "Migrate to v2 API", "workspace_id": "ws_...", "project_id": "proj_..." }
+{ "goal": "Migrate to v2 API", "session_id": "optional", "workspace_id": "ws_...", "project_id": "proj_..." }
 ```
 
-### List Missions — `GET /v1/missions`
+If `session_id` is omitted, the workflow gets its own linked chat session (id = workflow id), seeded with the goal.
+
+### List Workflows — `GET /v1/workflows`
 
 Query params: `ownerUserId`, `status`, `limit`.
 
-### Get Mission — `GET /v1/missions/{id}`
+### Get Workflow — `GET /v1/workflows/{id}`
 
-### Run Mission — `POST /v1/missions/{id}/run`
+### Run Workflow — `POST /v1/workflows/{id}/run`
 
-Drives the mission forward one engine cycle.
+Drives the workflow forward one engine cycle.
 
-### Get Events — `GET /v1/missions/{id}/events`
+### Get Events — `GET /v1/workflows/{id}/events`
 
 Returns the full event journal.
 
-### Export Mission — `GET /v1/missions/{id}/export`
+### Export Workflow — `GET /v1/workflows/{id}/export`
 
 Query param: `format` (`markdown` default, or `json`).
 
@@ -996,7 +998,7 @@ Aggregates everything currently in flight for the Command Center cockpit (Web `/
 
 ```json
 {
-  "active_missions": 1,
+  "active_workflows": 1,
   "active_team_runs": 0,
   "active_agent_runs": 2,
   "active_sessions": 3,
@@ -1035,7 +1037,7 @@ Aggregates the signed-in user's cross-workspace activity. Differs from Command C
 
 ```json
 {
-  "active_missions": 1,
+  "active_workflows": 1,
   "active_team_runs": 0,
   "active_agent_runs": 2,
   "active_sessions": 3,

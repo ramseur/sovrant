@@ -1,6 +1,6 @@
 # Sovrant — Competitor Analysis
 
-**Last updated:** 2026-05-16 (56 tools, 25 agent templates, Command Center cockpit, desktop app, web app, MCP server, mission engine, SDK covering the 115-endpoint server, BSL 1.1 published, v0.9.3 release candidate)
+**Last updated:** 2026-10-02 (counts refreshed: 58 tools, 25 agent templates, Command Center cockpit, desktop app, web app, MCP server, workflow engine (renamed from missions), SDK covering the 141-endpoint server, BSL 1.1, v1.5.0; competitor assessments themselves last reviewed 2026-05-16)
 
 ---
 
@@ -27,7 +27,7 @@ Sovrant is a clean-room C# / .NET 10 agentic AI engine with five independent fro
 
 **Bonus .NET ecosystem** (Semantic Kernel, Microsoft Agent Framework, Microsoft Conductor) compete in the developer SDK/framework layer. Semantic Kernel in particular is widely adopted for .NET LLM integration. Sovrant's advantage is being a complete runtime (not just an SDK) that ships with frontends, persistence, tools, and server-side multi-tenancy out of the box.
 
-**Sovrant's unique position:** the only option that is natively .NET 10, provides five independent frontends, ships a complete enterprise multi-tenant server, and has built-in orchestration with Teams + Swarm + Missions — all in a clean-room codebase with no IP entanglement.
+**Sovrant's unique position:** the only option that is natively .NET 10, provides five independent frontends, ships a complete enterprise multi-tenant server, and has built-in orchestration with Teams + Swarm + Workflows — all in a clean-room codebase with no IP entanglement.
 
 ---
 
@@ -39,9 +39,9 @@ Sovrant is a clean-room C# / .NET 10 agentic AI engine with five independent fro
 
 LibreChat is the most popular open source ChatGPT-style UI, with 25K+ GitHub stars and active development. It supports 20+ LLM providers (OpenAI, Anthropic, Azure, Ollama, Bedrock), multi-user authentication, file uploads, image generation, a plugin/tool system, MCP client support, and conversation management with folders and tags.
 
-Its agent capabilities are meaningful — users can define custom agents with tool access — but it is fundamentally a **conversation UI layer**, not an agentic execution engine. There is no server-side orchestration, no swarm decomposition, no mission engine, and no session TTL or multi-tenant credential management. Deployment is Docker-based.
+Its agent capabilities are meaningful — users can define custom agents with tool access — but it is fundamentally a **conversation UI layer**, not an agentic execution engine. There is no server-side orchestration, no swarm decomposition, no workflow engine, and no session TTL or multi-tenant credential management. Deployment is Docker-based.
 
-**vs. Sovrant:** LibreChat wins on community scale and UI polish. Sovrant wins on depth of agent execution (Teams, Swarm, Missions, 56 tools, LSP), enterprise server infrastructure, and .NET ecosystem fit.
+**vs. Sovrant:** LibreChat wins on community scale and UI polish. Sovrant wins on depth of agent execution (Teams, Swarm, Workflows, 58 tools, LSP), enterprise server infrastructure, and .NET ecosystem fit.
 
 ---
 
@@ -77,7 +77,7 @@ BotSharp is the only other major open source agentic AI framework written in C#/
 
 BotSharp is the **closest architectural peer to Sovrant in the .NET ecosystem**. Key differences: BotSharp is a framework/library first (you build an app on top of it), while Sovrant is a complete runtime that ships a working server, five frontends, 56 tools, and enterprise infrastructure out of the box. BotSharp has a smaller community and less enterprise production surface than Sovrant.
 
-**vs. Sovrant:** Direct .NET competitor. Sovrant leads on tool count (56 vs ~20), orchestration depth (Teams + Swarm + Missions vs. agent routing), server maturity (115 OpenAI-compatible endpoints vs. no standardised API), and out-of-the-box deployment story. BotSharp has a longer track record in the .NET space.
+**vs. Sovrant:** Direct .NET competitor. Sovrant leads on tool count (58 vs ~20), orchestration depth (Teams + Swarm + Workflows vs. agent routing), server maturity (141 OpenAI-compatible endpoints vs. no standardised API), and out-of-the-box deployment story. BotSharp has a longer track record in the .NET space.
 
 ---
 
@@ -100,7 +100,7 @@ opencode is a clean-room MIT-licensed open source coding agent built by the SST 
 
 **Architecture:** A persistent background HTTP + SSE server (`opencode serve`) is the backend. Multiple client types connect — TUI, desktop (Tauri), VS Code extension (beta), web UI, and remote clients. SQLite via Drizzle ORM. 75+ LLM providers. Real LSP integration for 20+ languages.
 
-**vs. Sovrant:** opencode is Sovrant's primary open source benchmark. Sovrant leads on tool count (56 vs 20+), orchestration (Teams + Swarm + Missions vs. none), enterprise server (115 OpenAI-compatible endpoints vs. local-only), multi-tenant credentials, and .NET ecosystem fit. opencode leads on community scale and Go/Node ecosystem penetration.
+**vs. Sovrant:** opencode is Sovrant's primary open source benchmark. Sovrant leads on tool count (58 vs 20+), orchestration (Teams + Swarm + Workflows vs. none), enterprise server (141 OpenAI-compatible endpoints vs. local-only), multi-tenant credentials, and .NET ecosystem fit. opencode leads on community scale and Go/Node ecosystem penetration.
 
 ---
 
@@ -188,7 +188,7 @@ Semantic Kernel is a **developer SDK**, not an application runtime. It has no CL
 
 Microsoft Conductor is a deterministic multi-agent workflow orchestrator that uses declarative YAML pipelines to coordinate agents (GitHub Copilot, Claude, custom) through defined steps. It is a **static orchestration tool** — workflows are defined ahead of time and executed in sequence, rather than decomposed and planned dynamically at runtime.
 
-**vs. Sovrant:** Conductor's YAML pipelines complement Sovrant's dynamic agent decomposition. Conductor is appropriate for repeatable, pre-defined workflows; Sovrant's Swarm and Mission engines handle dynamic, goal-driven tasks where the decomposition emerges at runtime. The two could coexist in a pipeline where Conductor handles CI/CD-style orchestration and Sovrant handles open-ended agentic execution.
+**vs. Sovrant:** Conductor's YAML pipelines complement Sovrant's dynamic agent decomposition. Conductor is appropriate for repeatable, pre-defined workflows; Sovrant's Swarm and Workflow engines handle dynamic, goal-driven tasks where the decomposition emerges at runtime. The two could coexist in a pipeline where Conductor handles CI/CD-style orchestration and Sovrant handles open-ended agentic execution.
 
 ---
 
@@ -198,7 +198,7 @@ Sovrant is a clean-room C# / .NET 10 reimplementation of an agentic AI engine, i
 
 Five delivery modes: a CLI REPL, `Sovrant.Server` (ASP.NET Core with 115 OpenAI-compatible endpoints), `Sovrant.Desktop` (Avalonia GUI for Windows/macOS/Linux), `Sovrant.Web` (Blazor Server browser UI), and `Sovrant.Mcp` (stdio + HTTP/SSE MCP transports).
 
-The SmartRouter routes each LLM call across configured providers based on latency, cost, and health scores, with intent-aware model tier routing. 56 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, mission management, skill execution, document generation, MCP resources, and quality verification. 25 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite (26 versioned migrations) with FTS5 full-text search. The Command Center cockpit (`/command` on Web and Desktop) gives the operator a single live view of every active mission, team run, agent run, and session.
+The SmartRouter routes each LLM call across configured providers based on latency, cost, and health scores, with intent-aware model tier routing. 58 tools cover file operations, shell execution (Bash, PowerShell, REPL), web access, task management, notebook editing, LSP code intelligence, sub-agents, plan/worktree mode, team orchestration, swarm orchestration, workflow management, skill execution, document generation, MCP resources, and quality verification. 25 agent templates and 32 built-in skills ship with the engine. Session state persists in SQLite (26 versioned migrations) with FTS5 full-text search. The Command Center cockpit (`/command` on Web and Desktop) gives the operator a single live view of every active workflow, team run, agent run, and session.
 
 **Legal posture:** clean-room reimplementation in a different language with no code-derivation IP risk. Source-available under BSL 1.1 with a three-year Apache 2.0 conversion (2029-05-15).
 
@@ -222,7 +222,7 @@ The SmartRouter routes each LLM call across configured providers based on latenc
 | **Session persistence** | ✅ MongoDB | ✅ Postgres | ✅ Postgres | ✅ SQL | None | ✅ SQLite | ✅ SQLite + FTS5 |
 | **Tool count** | ~10 | ~10 | ~5 | ~20 | ~40 (inherited) | 20+ | 56 |
 | **LSP integration** | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ 20+ langs | ✅ 18 languages |
-| **Agent orchestration** | Basic | ❌ | Partial | ✅ routing | ✅ (inherited) | ❌ | ✅ Teams + Swarm + Missions |
+| **Agent orchestration** | Basic | ❌ | Partial | ✅ routing | ✅ (inherited) | ❌ | ✅ Teams + Swarm + Workflows |
 | **Multi-tenant auth** | ✅ | ✅ | ✅ | Partial | ❌ | ❌ | ✅ |
 | **Enterprise credentials** | ❌ | ❌ | EE only | ❌ | ❌ | ❌ | ✅ Per-request LLM keys |
 | **Air-gapped deployment** | Partial | Partial | Partial | ✅ | Partial | Partial | ✅ |
@@ -276,7 +276,7 @@ LibreChat, LobeChat, Onyx, and BotSharp all have web UIs but none expose a stand
 
 ### Agent Orchestration Depth
 
-LibreChat, LobeChat, OpenWebUI, AnythingLLM, and Dify have basic agent capabilities within a single conversation. BotSharp has agent routing. opencode has no orchestration. Only Sovrant ships three independent orchestration layers: **Teams** (SQLite-backed, two backends — isolated process-per-agent and shared in-process), **Swarm** (auto-decomposition with DAG execution, file locking, quality gates), and **Missions** (long-lived goal-driven execution with driver registry). No competitor in any tier has this.
+LibreChat, LobeChat, OpenWebUI, AnythingLLM, and Dify have basic agent capabilities within a single conversation. BotSharp has agent routing. opencode has no orchestration. Only Sovrant ships three independent orchestration layers: **Teams** (SQLite-backed, two backends — isolated process-per-agent and shared in-process), **Swarm** (auto-decomposition with DAG execution, file locking, quality gates), and **Workflows** (long-lived goal-driven execution with driver registry). No competitor in any tier has this.
 
 ---
 
@@ -298,8 +298,8 @@ Dify's visual workflow builder and Copilot Studio's no-code canvas have no equiv
 
 1. **Five independent frontends** — CLI, HTTP server (115 endpoints), desktop app (Avalonia), web app (Blazor), and MCP server. No competitor in any tier ships more than three.
 2. **SmartRouter + intent-aware routing** — multi-provider routing with health/latency/cost scoring. Unique in the field.
-3. **56 tools with LSP** — highest tool count in any self-hosted product, plus 5 LSP tools (18 languages), swarm orchestration, mission management, quality gates, and skill system.
-4. **Three-layer orchestration** — Teams + Swarm + Missions. No competitor in Tier 1 or Tier 2 has anything comparable.
+3. **58 tools with LSP** — highest tool count in any self-hosted product, plus 5 LSP tools (18 languages), swarm orchestration, workflow management, quality gates, and skill system.
+4. **Three-layer orchestration** — Teams + Swarm + Workflows. No competitor in Tier 1 or Tier 2 has anything comparable.
 5. **Enterprise multi-tenant out of the box** — per-request LLM keys, API token issuance, session TTL/LRU, rate limiting, usage tracking, workspace/project scoping, audit log. All shipped.
 6. **Native .NET 10** — zero runtime dependency for .NET shops; natural fit for Windows-first or Azure-first environments.
 7. **Clean legal posture** — clean-room C# reimplementation with no Anthropic IP. Different language, different runtime, no code-derivation risk.
@@ -354,7 +354,7 @@ Both exploit Claude Code's trust model around project files and hooks. Sovrant's
 | Agent memory files | ✅ `~/.sovrant/memory.md` + `.sovrant/memory.md` |
 | LSP integration | ✅ 5 tools, 18 languages |
 | MCP server mode | ✅ `Sovrant.Mcp` (stdio + HTTP/SSE transports) |
-| Orchestration teams | ✅ Teams + Swarm + Missions |
+| Orchestration teams | ✅ Teams + Swarm + Workflows |
 | Desktop app | ✅ Avalonia (15 pages, setup wizard) |
 | Web UI | ✅ Blazor Server (15 pages) |
 | Frontend SDK | ✅ TypeScript SDK (115-endpoint coverage, SSE, React hook) |

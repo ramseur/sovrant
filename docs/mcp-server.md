@@ -137,7 +137,7 @@ All 56 standard tools are available:
 **Agent & Interaction:** `Agent`, `AskUserQuestion`, `Sleep`
 **Plan & Worktree:** `EnterPlanMode`, `ExitPlanMode`, `EnterWorktree`, `ExitWorktree`
 **Team Orchestration:** `TeamCreate`, `TeamDelete`, `TeamStatus`, `TeamDelegate`, `TeamRun`, `TeamPublish`
-**Missions:** `Mission`
+**Workflows:** `Workflow`
 **Swarm & Coordination:** `Swarm`, `SwarmStatus`, `CoordinationStatus`
 **Discovery & Skills:** `ToolSearch`, `Skill`, `SkillCreate`
 **Artifacts & Documents:** `Artifact`, `DocumentGenerate`, `DocumentFromTemplate`, `DocumentListTemplates`, `DocumentSuggestTemplate`, `DocumentPackage`, `DocumentListPackages`

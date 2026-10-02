@@ -1,6 +1,6 @@
 # Sovrant — Persistence Layer
 
-**Phases 32–42.5, 51, 52, 55, 57, 78, 85, 87, 88, 90, 93, 98, 108–116, 123–126** | **Last updated:** 2026-06-25 | **Current schema:** V043
+**Phases 32–42.5, 51, 52, 55, 57, 78, 85, 87, 88, 90, 93, 98, 108–116, 123–126** | **Last updated:** 2026-10-02 | **Current schema:** V047
 
 This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users, knowledge, hooks, MCP/LSP config) is managed by a relational database. Three deployment modes are supported:
 
@@ -30,7 +30,7 @@ The SQLite schema described in this document is the master reference; PostgreSQL
                                     │
    ┌──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┐
    ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼
-ISession IMemory IAudit IToken ICredl IWork-  IProject IUser  Eval  Swarm  Runtime Mission
+ISession IMemory IAudit IToken ICredl IWork-  IProject IUser  Eval  Swarm  Runtime Workflow
 Store    Store   Store  Usage  Store  space   Service  Service Store Event  Trace   Store
                         Store         Service                  Store Store
                   ITeam  IAgent IKnow-  IHook  IWorkspace IMcp   IKey
@@ -74,8 +74,8 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V007 | `V007__projects.sql` | Project-scoped indexes on sessions, token_usage, workspace_memory, project_members |
 | V008 | `V008__backfill_orphan_workspaces.sql` | One-time backfill: sets `workspace_id` on orphan sessions/audit rows to `ws-personal-{user_id}` where that workspace exists |
 | V009 | `V009__backfill_empty_user_ids.sql` | One-time backfill: fills `user_id = ''` rows in sessions/token_usage/credentials with the oldest active admin |
-| V010 | `V010__runtime_traces.sql` | `runtime_traces` (IExecutor state log), `mission_scratchpad` (shared store for parallel sub-agents) |
-| V011 | `V011__missions.sql` | `missions`, `mission_events` |
+| V010 | `V010__runtime_traces.sql` | `runtime_traces` (IExecutor state log), `mission_scratchpad` (shared store for parallel sub-agents; renamed `workflow_scratchpad` in V047) |
+| V011 | `V011__missions.sql` | `missions`, `mission_events` (renamed `workflows`, `workflow_events` in V047) |
 | V012 | `V012__unified_orchestration.sql` | `teams`, `team_members`, `agent_runs`; extends `swarm_events` with `kind` + `run_id` |
 | V013 | `V013__coordination_mailbox.sql` | `coordination_events`, `group_pm_assignments` |
 | V014 | `V014__session_titles.sql` | `sessions.title` column + partial index |
@@ -108,8 +108,12 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V041 | `V041__workspace_memory_privacy.sql` | Adds `owner_user_id` + `is_private` to `workspace_memory` for per-user note privacy |
 | V042 | `V042__memory_owner_user_id.sql` | Adds `owner_user_id` to `session_summaries`, `learned_patterns`, `instincts` so auto-generated memories are scoped to their session owner |
 | V043 | `V043__email_as_user_id.sql` | Rewrites `usr_{hex}` primary keys to email addresses; drops `username` column via table recreation |
+| V044 | `V044__enrich_builtin_skills.sql` | Seed data only — enriched descriptions for all 32 built-in skills, agent delegations for 9 skills, `verification-loop` tool reference fix (Phase 114) |
+| V045 | `V045__seed_builtin_tool_guides.sql` | Seed data only — built-in tool guides for `CodeCreate` / `CodeCreateMulti` (Phase 128D) |
+| V046 | `V046__seed_code_validate_tool_guide.sql` | Seed data only — tool guide for `CodeValidateTool` (Phase 128E) |
+| V047 | `V047__rename_missions_to_workflows.sql` | Renames `missions` → `workflows`, `mission_events` → `workflow_events`, `mission_scratchpad` → `workflow_scratchpad` (plus indexes and the `mission_id` → `workflow_id` FK column) via `ALTER TABLE ... RENAME` — no data loss, one-way (Phase 129) |
 
-V008, V009, V022, V035, V037 ship no new tables — they are data backfills or seed inserts. V014–V016, V023–V025, V027–V031, V034, V036, V040–V043 add only columns to existing tables.
+V008, V009, V022, V035, V037, V044–V046 ship no new tables — they are data backfills or seed inserts. V014–V016, V023–V025, V027–V031, V034, V036, V040–V043 add only columns to existing tables. V047 only renames existing tables and columns.
 
 Migrations are idempotent — running `InitializeAsync` multiple times is safe. The runner skips already-applied versions and records the SHA-256 checksum of each script in `schema_version.checksum`. Checksum drift is enforced: if a previously-applied `V00X__*.sql` file has been edited in place, `InitializeAsync` throws `MigrationDriftException` on the next boot. Legacy rows with `checksum = NULL` are tolerated so pre-42.5 installs upgrade cleanly.
 
@@ -209,8 +213,8 @@ The current schema spans **43 migrations (V001–V043)**. The tables below refle
 | **Keystore** | `keystore` | V039 | Master AES-256-GCM key stored in DB (migrated from `~/.sovrant/credentials/.keystore` file on first V039 boot; file deleted). |
 | **Swarm & evals** | `swarm_events`, `eval_runs`, `eval_results` | V005 | `swarm_events` extended with `kind`/`run_id` (V012), `user_id` (V025), `parent_swarm_id` (V029). |
 | **Audit** | `audit_governance`, `audit_bash` | V001 | No FK to sessions; workspace/project scoped via nullable TEXT columns. |
-| **Engine traces** | `runtime_traces`, `mission_scratchpad` | V010 | Append-only IExecutor state log; shared agent scratchpad. |
-| **Missions** | `missions`, `mission_events` | V011 | `missions` gained `is_private` (V030). |
+| **Engine traces** | `runtime_traces`, `workflow_scratchpad` | V010 (renamed V047) | Append-only IExecutor state log; shared agent scratchpad. |
+| **Workflows** | `workflows`, `workflow_events` | V011 (renamed V047) | Formerly `missions`/`mission_events`. Gained `is_private` (V030). |
 | **Unified orchestration** | `teams`, `team_members`, `agent_runs` | V012 | `teams` run-profile columns added V015. `agent_runs` gained `prompt` (V028), `is_private` (V030). |
 | **Inter-agent coordination** | `coordination_events`, `group_pm_assignments` | V013 | PM-to-PM mailbox; workspace-scoped. |
 | **Config / settings** | `hooks`, `workspace_settings`, `user_preferences`, `provider_profiles`, `server_settings` | V017–V021, V026 | Replaced on-disk JSON config files. `provider_profiles` got workspace-scoped sharing V027. |
@@ -393,8 +397,8 @@ These replaced the on-disk `hooks.json`, `settings.json`, and provider config fi
 | `SqliteSwarmEventStore` | `swarm_events` |
 | `SqliteEvalResultStore` | `eval_runs`, `eval_results` |
 | `SqliteRuntimeTraceStore` | `runtime_traces` |
-| `SqliteMissionScratchpadStore` | `mission_scratchpad` |
-| `SqliteMissionStore` | `missions`, `mission_events` |
+| `SqliteWorkflowScratchpadStore` | `workflow_scratchpad` |
+| `SqliteWorkflowStore` | `workflows`, `workflow_events` |
 | `SqliteTeamRegistry` | `teams`, `team_members` |
 | `SqliteAgentRunStore` | `agent_runs` |
 
@@ -417,8 +421,8 @@ SqliteProjectStore           →  IProjectService
 SqliteUserStore              →  IUserService
 SqliteSwarmEventStore        →  ISwarmEventStore
 SqliteRuntimeTraceStore      →  IRuntimeTraceStore
-SqliteMissionScratchpadStore →  IMissionScratchpadStore
-SqliteMissionStore           →  IMissionStore
+SqliteWorkflowScratchpadStore → IWorkflowScratchpadStore
+SqliteWorkflowStore           →  IWorkflowStore
 SqliteTeamRegistry           →  ITeamRegistry
 SqliteAgentRunStore          →  IAgentRunStore
 SqliteEvalResultStore        →  IEvalResultStore
@@ -779,7 +783,7 @@ After a fresh install and first run, `~/.sovrant/` contains:
 │   └── sovrant.db          ← SQLite database — all persistent state (V043 schema)
 │                             sessions, memory, audit, credentials, keystore,
 │                             workspaces, projects, users, knowledge, hooks,
-│                             MCP/LSP config, teams, missions, swarm, evals
+│                             MCP/LSP config, teams, workflows, swarm, evals
 ├── logs/
 │   └── sovrant-2026-06-18.log
 ├── memory.md                ← Global memory (human-edited, injected at session start)

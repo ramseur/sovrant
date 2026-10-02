@@ -394,13 +394,13 @@ const { runs } = await client.listRuns({ status: "completed" });
 
 > **Note:** Field names use `snake_case` on the wire to match the server. `run_mode` accepts `sequential` / `parallel` / `swarm`; `decomposition_mode` accepts `off` / `roleAware` / `open`. Invalid values return 400.
 
-### Missions
+### Workflows
 
 ```ts
-const mission = await client.createMission({ goal: "Migrate to v2 API" });
-await client.runMission(missionId);
-const { events } = await client.getMissionEvents(missionId);
-const exported = await client.exportMission(missionId, "markdown");
+const workflow = await client.createWorkflow({ goal: "Migrate to v2 API" });
+await client.runWorkflow(workflow.id);
+const { events } = await client.getWorkflowEvents(workflow.id);
+const exported = await client.exportWorkflow(workflow.id, "markdown");
 ```
 
 ### Swarm
@@ -452,7 +452,7 @@ const template = await client.getAgentTemplate("security-auditor");
 ```ts
 // Aggregated in-flight activity for the current user. Powers the /command page in Web and Desktop.
 const state = await client.getCommandCenterState();
-// { active_missions, active_team_runs, active_agent_runs, active_sessions, rows, generated_at }
+// { active_workflows, active_team_runs, active_agent_runs, active_sessions, rows, generated_at }
 
 // Optional: scope to a specific owner (admin tokens only).
 const peerState = await client.getCommandCenterState({ owner_user_id: "user-123" });
@@ -465,7 +465,7 @@ The cockpit polls every 30 seconds. Each row carries a `detail_route` pointing a
 ```ts
 // Cross-workspace personal activity view — own records plus teammates' public records.
 const dashboard = await client.getUserDashboardState();
-// { active_missions, active_team_runs, active_agent_runs, active_sessions, rows, generated_at }
+// { active_workflows, active_team_runs, active_agent_runs, active_sessions, rows, generated_at }
 // Each row includes is_private: boolean and owner_username: string
 ```
 
@@ -924,8 +924,8 @@ import type {
   // Teams
   Team, CreateTeamRequest, TeamMember, AddTeamMemberRequest,
   TeamRunRequest, TeamRunResponse, AgentRun, AgentRunFilter,
-  // Missions
-  Mission, CreateMissionRequest, MissionEvent,
+  // Workflows
+  Workflow, CreateWorkflowRequest, WorkflowEvent,
   // Swarm
   SwarmRunRequest, SwarmResult,
   // Engine
