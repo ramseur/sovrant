@@ -23,7 +23,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.1 — done** | Phase 73 | Code scaffolding — 21 templates, multi-component generation, manifest validation, 235 tests ✅ |
 | **v1.1 — done** | Phase 40C | Supabase backend (optional, admin-configured) — PostgreSQL stores for sessions + credentials; admin System Integrations UI; idempotent schema init; SQLite → Postgres migrator; boot-time DI switch; Web + Desktop parity ✅ |
 | **v1.2 — done** | Phase 98 | User Dashboard — cross-workspace activity view; own public (Shared) + own private + teammates' public; V030 `is_private`; Web + Desktop rail nav; pagination, timestamps, 30s poll, guide panels, page-preserve on refresh ✅ |
-| **v1.2 — done** | Phase 99 | Private sessions and agent runs — per-record privacy toggle on sessions, agent runs, and missions; masked in Command Center, excluded from User Dashboard; server-side enforcement via V030 `is_private` ✅ |
+| **v1.2 — done** | Phase 99 | Private sessions and agent runs — per-record privacy toggle on sessions, agent runs, and workflows (then called missions); masked in Command Center, excluded from User Dashboard; server-side enforcement via V030 `is_private` ✅ |
 | **v1.2 — done** | Phase 96 | MCP runtime variables — inline env var editor on Web + Desktop; KEY=VALUE textarea in stdio add form; JSON paste auto-populates env vars; master key moved into DB (V039 `keystore` table); AES-256-GCM encrypted at rest ✅ |
 | **v1.3 — done** | Phase 105 | MCP server permissions — workspace-level gating via V040 stable MCP IDs; `GetEnabledEntriesAsync` workspace filter; admin toggle UI on Web + Desktop; memory-gate guards at selection point ✅ (project-level deferred) |
 | **v1.3 — done** | Phase 123 | Memory System — workspace memory with public/private scoping; "+Remember" button in Chat (Web + Desktop); Workspace tab on Memory page; V041/V042 migrations; per-user injection in multi-user deployments ✅ |
@@ -199,7 +199,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Orchestration Studio — compose and run teams from the UI; Run button with task prompt | Phase 94 | ✅ Done |
 | Integrations Gallery — 14 integrations across Automation/Platform/Search tiers, encrypted credential keystore, Web + Desktop parity | Phase 95 | ✅ Done (Hermes pending details) |
 | MCP runtime variables — per-server variable store (name, value, secret flag) injected as env vars when the MCP server process is launched; variable editor in the Integrations UI lets users add/edit/remove variables at any time without reconfiguring the connection; covers servers like Sitecore MCP that require 10–20 env vars passed at runtime; encrypted at rest via existing keystore; Web + Desktop parity | Phase 96 | ✅ Done |
-| User Dashboard — personal cross-workspace activity view: own public + own private + teammates' public records in shared workspaces; other users' private records excluded entirely (no masked rows); Command Center remains unchanged as the admin-only view; V030 migration adds `is_private` to missions/agent_runs/sessions; new `UserDashboardAggregator`, `/v1/user-dashboard/state` endpoint; Web `/dashboard` + Desktop view both reached via 👤 rail nav for all signed-in users; server-side workspace gating via `IWorkspaceService.ListForUserAsync`; 8 aggregator unit tests covering own/public/private/non-member/team-run visibility; "Shared" stat redefined as own public items (not others' activity); both Command Center and Dashboard: paginated grid, header timestamp, 30s auto-refresh, page-preserve on refresh/navigation, guide panels | Phase 98 | ✅ Done |
+| User Dashboard — personal cross-workspace activity view: own public + own private + teammates' public records in shared workspaces; other users' private records excluded entirely (no masked rows); Command Center remains unchanged as the admin-only view; V030 migration adds `is_private` to missions (now `workflows`)/agent_runs/sessions; new `UserDashboardAggregator`, `/v1/user-dashboard/state` endpoint; Web `/dashboard` + Desktop view both reached via 👤 rail nav for all signed-in users; server-side workspace gating via `IWorkspaceService.ListForUserAsync`; 8 aggregator unit tests covering own/public/private/non-member/team-run visibility; "Shared" stat redefined as own public items (not others' activity); both Command Center and Dashboard: paginated grid, header timestamp, 30s auto-refresh, page-preserve on refresh/navigation, guide panels | Phase 98 | ✅ Done |
 | Private sessions and agent runs — users can mark any session or agent run as private via a toggle in the chat header and Agents UI; private records appear in the Command Center as masked rows (title and content hidden, existence acknowledged for accountability) but are completely excluded from the User Dashboard; only the owning user can see the full title, prompt, content, and run history of their private records; server-side enforcement ensures private content is never returned in any query for any other user regardless of role; audit log records the privacy toggle event | Phase 99 | ✅ Done |
 | Accurate cost reporting — replace the current placeholder cost display in the Command Center with real per-session cost calculated from token counts × model pricing; pull and cache OpenRouter's public `/api/v1/models` pricing data (prompt $/1k + completion $/1k per model) on a daily schedule; apply the correct rate for the model used in each turn; surface per-session cost, per-run cost, and a workspace total in the Command Center and activity detail views; cost shown as $0.00 for free-tier and local models; cached pricing refreshed automatically so rates stay current without manual updates | Phase 100 | Medium |
 | OAuth 2.1 + PKCE for MCP connections — replace API-key-only auth with a full OAuth 2.1 + PKCE flow for MCP servers that require it (Sitecore Marketer, Adobe AEM, and others); desktop uses authorization code + PKCE with loopback redirect `http://127.0.0.1:{port}/callback` via an ephemeral in-process HTTP listener; web uses ASP.NET Core OIDC middleware with an absolute redirect URI; RFC 8707 Resource Indicators bind each token to its specific MCP server so credentials cannot be replayed cross-server; tokens stored in the existing encrypted keystore (Windows Credential Manager on Desktop, encrypted DB on Web); automatic silent refresh with rotation before expiry; user-triggered revocation per server in the Integrations UI; no API keys exposed or pasted by the user — auth is entirely browser-driven on first connect | Phase 101 | ✅ Done |
@@ -209,14 +209,14 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Code template language management — surface the supported language and framework templates from Phase 73 scaffolding as editable knowledge pages; each language (TypeScript, Python, C#, Go, etc.) gets a template guideline page in the Knowledge section that defines coding conventions, preferred patterns, dependency standards, and generation hints used by the scaffolding engine; workspace admins can update guidelines to match company standards (e.g. internal package registries, required linting rules, banned dependencies); built-in guidelines are read-only with silent copy-on-write to user tier following the standard knowledge editing model; the scaffolding engine reads active guidelines at generation time so updates take effect immediately without rebuilding; Web + Desktop parity | Phase 108 | ✅ Done |
 | Multi-agent session scoping — allow a user to scope more than one agent onto a single chat session; each scoped agent contributes its system prompt and tool set for the duration of the session; the chat header and top context bar show all active agents (expanding the single-agent badge from Phase 106); agents can be added or removed mid-session without clearing history; `sessions.agent_name` (V031 scalar) replaced or extended to support a list of agent IDs stored as a relation or JSON column (new migration required); `ActiveContextService` and `ActiveContextViewModel` updated to carry a collection; Web + Desktop parity | Phase 109 | Medium |
 | CLI first-run experience — improve the experience for users launching `sovrant` for the first time; guided setup that detects missing configuration (no provider, no API key) and walks the user through provider selection and key entry interactively; `sovrant init` command as a standalone setup entrypoint; `sovrant doctor` command that checks health of all configuration and connectivity (provider reachable, model list accessible, DB migrations current, tool count); friendly error messages when the runtime fails to start rather than raw stack traces; color-coded status output; `--help` improvements with grouped command categories and examples; Web + Desktop parity not required — CLI-only surface | Phase 110 | High |
-| Navigation overhaul — replace the current top-bar and rail navigation with a collapsible left-side panel following the modern sidebar pattern (VS Code, Linear, Notion, Slack); primary sections (Chat, Sessions, Agents, Teams, Missions, Knowledge, Artifacts, Settings, Command Center, Dashboard) listed in the sidebar with icons and labels; sidebar collapses to icon-only mode with tooltip labels; user-resizable panel width; active section highlighted; nested expansion for sections with sub-pages (e.g. Settings → Providers / Users / Workspace / System; Knowledge → Skills / Documents / Tools); keyboard shortcut to toggle sidebar; Web and Desktop parity; Desktop uses a single `SidebarView` Avalonia control replacing the current `RailNav`; Web replaces the current `<NavMenu>` component with a new `<Sidebar>` component; breadcrumb header remains on all pages; mobile breakpoint collapses sidebar to overlay drawer | Phase 111 | Medium |
+| Navigation overhaul — replace the current top-bar and rail navigation with a collapsible left-side panel following the modern sidebar pattern (VS Code, Linear, Notion, Slack); primary sections (Chat, Sessions, Agents, Teams, Workflows, Knowledge, Artifacts, Settings, Command Center, Dashboard) listed in the sidebar with icons and labels; sidebar collapses to icon-only mode with tooltip labels; user-resizable panel width; active section highlighted; nested expansion for sections with sub-pages (e.g. Settings → Providers / Users / Workspace / System; Knowledge → Skills / Documents / Tools); keyboard shortcut to toggle sidebar; Web and Desktop parity; Desktop uses a single `SidebarView` Avalonia control replacing the current `RailNav`; Web replaces the current `<NavMenu>` component with a new `<Sidebar>` component; breadcrumb header remains on all pages; mobile breakpoint collapses sidebar to overlay drawer | Phase 111 | Medium |
 | Migrate built-in markdown knowledge into the DB — move all on-disk built-in markdown (32 skills, 25 agents) plus the 44 code-defined document templates out of the filesystem/C# and into the `knowledge_pages` table so users manage every template (base + their own) in the DB without code changes; copy-on-write overlay model (immutable base rows, user edits become `global`/project overlays that win, revert = delete overlay); built-ins seeded via SQL migration; registries flipped to read DB; document rendering becomes data-driven via a sandboxed templating engine; `.md` files and disk scans deleted once verified; SQLite-only (knowledge store is local even on Postgres backend) | Phase 112 | Done ✅ |
 | Caching: DB read cache + Phase 31 invalidation fix — `CachedKnowledgeStore` decorator wraps `IKnowledgeStore` with TTL-based in-process caching for rarely-changing content (skills, agents, document templates, tool/doc guides) and fires a `KnowledgePageChanged` event on every write; repairs Phase 31's `CacheInvalidator` whose file-watcher triggers were deleted by Phase 112, restoring HTTP-cache invalidation for `skills:list`, `templates:list`, and `knowledge:*` keys; opt-out via `SOVRANT_KNOWLEDGE_CACHE_TTL=0` | Phase 113 | ✅ Done |
 | Intelligent Knowledge Harness — on-demand per-turn knowledge loading via `IKnowledgeRouter` (keyword/trigger/intent scoring, no LLM call); dynamic per-turn addendum preserves stable system-prompt cache; full-round-trip PII sanitization for knowledge bodies and tool results; `knowledge_attributions` table; MCP tool relevance filtering per turn; provenance Sources section in Web + Desktop chat | Phase 116 | ✅ Done |
 | Enrich built-in skill definitions — 2-3 sentence descriptions, agent list wiring, `verification-loop` tools fix; V044 additive migration updates all 32 BuiltIn base rows; user overlays unaffected | Phase 114 | ✅ Done |
 | API endpoint integration — connect REST and GraphQL APIs as first-class platform integrations alongside MCP servers; harness auto-discovers endpoints via OpenAPI/Swagger spec import or GraphQL introspection, or admin can manually describe specific endpoints; discovered endpoints exposed as typed tools through the same `MCPTool` proxy layer (trust rules, session picker, `FilteredToolRegistry`); admin configures per workspace; credentials stored in encrypted keystore; Web + Desktop parity | Phase 117 | Planned |
 | Bootstrap configuration — declarative YAML file (`sovrant.bootstrap.yaml`) that pre-configures a Sovrant installation before or at first run; covers providers, MCP servers, knowledge/skills, agent templates, workspace setup, admin users, permission defaults, and branding; Sovrant installs and starts normally then applies the bootstrap idempotently; enables sales-assisted and partner-delivered custom installs without code changes | Phase 118 | Planned |
-| Orchestration improvements — enhanced mission run-mode for teams and swarms; missions get a named run-mode (autonomous, supervised, step-through) set at launch rather than inherited from global permission; Claws sourced from configured platform integrations can be added as team members if the integration is connected, giving orchestrations access to external agents alongside local ones | Phase 119 | Planned |
+| Orchestration improvements — enhanced workflow run-mode for teams and swarms; workflows get a named run-mode (autonomous, supervised, step-through) set at launch rather than inherited from global permission; Claws sourced from configured platform integrations can be added as team members if the integration is connected, giving orchestrations access to external agents alongside local ones | Phase 119 | Planned |
 | Multi-user web support — `Sovrant.Web` is currently single-user: `WebSessionService`, `ActiveContextService`, `SovrantConfig`, `MutableAuthProvider`, `IPermissionPolicy`, and `IToolConfirmationHandler` are all `AddSingleton`, meaning all browser circuits share one authenticated identity and one active workspace/model/MCP state; to support concurrent users each of these must become `AddScoped` (one instance per Blazor Server circuit); `WebSessionService` is the root dependency — real per-circuit identity (cookie/JWT per connection) must land first before workspace context and config can be safely isolated; `ActiveSessionsService` and `ChatSeedService` are already scoped, showing the intent; the remote mode (`Sovrant.Server` backend) is the closer path since the server already has multi-user auth — the web frontend just needs per-circuit context; workspace MCP/provider guards added in the meantime are already circuit-local and will remain correct after the scoped refactor | Phase 120 | Deferred |
 | Recent chats time grouping — organize the session list in the sidebar into labeled time buckets rather than a flat chronological list; groups: **Today**, **Previous 7 days**, **Previous 30 days**, then one collapsible group per calendar month (e.g. "May 2026", "April 2026"); group headers are sticky/pinned as the user scrolls; empty groups are hidden; the active session is highlighted within its group; Web (`Sidebar.razor`) and Desktop (`SidebarViewModel` + `SidebarView.axaml`) parity; no new API endpoint needed — `created_at` is already returned in session list queries | Phase 121 | Medium |
 | Image generation and inline display — allow models that support image output (e.g. `dall-e-3`, `gpt-image-1`, `flux`, `stable-diffusion` via OpenRouter, or any provider that returns `image_url` / base64 in the response) to generate images mid-conversation; generated images are stored as chat artifacts (`Artifact` with `Kind = "image"`) and rendered inline in the chat transcript for both Web and Desktop; the message bubble shows the image directly below the assistant text that prompted it, with a "Save" button to download the full-resolution file; clicking the image opens a lightbox (Web) or a full-size viewer window (Desktop); admin configures which providers and models are image-capable; no new conversation format needed — the existing artifact pipeline handles the binary payload | Phase 122 | Medium |
@@ -226,7 +226,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
 | Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
 | Code generation quality gates — artifact security hardening; `.sln` + `Directory.Build.props` + CI for all 21 templates (every scaffold immediately runnable); `CodeValidateTool` (structural checks, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata | Phase 128 | ✅ Done |
-| Missions → Workflows rename and UX review — surface-label rename (presentation-layer only); dedicated Workflows page (goal-first launch, active/recent cards, detail view with journal + artifacts); positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); `/v1/workflows` alias for `/v1/missions`; Phase 119 run-modes surfaced in the launch form; plus dual-path execution — Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, otherwise Sovrant's own mission engine as the base version (model/tier gate TBD) | Phase 129 | In progress (v1.5) — see Current Focus table above for shipped items |
+| Missions → Workflows rename and UX review — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover) ✅; dedicated Workflows page with plan review, Plan/Journal tabs, step output + artifact count, and linked chat session ✅; `WorkflowSchedulerService` background execution ✅; goal-first launch form (team picker, run-mode) still open; positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); Phase 119 run-modes surfaced in the launch form; plus dual-path execution — Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, otherwise Sovrant's own workflow engine as the base version (model/tier gate TBD) | Phase 129 | In progress (v1.5) — see Current Focus table above for shipped items |
 | OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
 | Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
 | Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
@@ -3007,7 +3007,7 @@ Features are grouped into discrete capabilities. Each can be `allow` or `deny` p
 | `agents` | Agent creation, editing, and execution |
 | `teams` | Team creation and TeamRun orchestration |
 | `swarms` | Swarm tool and swarm pipeline execution |
-| `missions` | Mission creation and management |
+| `workflows` | Workflow creation and management |
 | `mcp` | MCP server connections and tool proxy |
 | `knowledge` | Knowledge page authoring and browsing |
 | `artifacts` | Artifact read/write access |
@@ -5642,7 +5642,7 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 | **Prompt Composition Assistant** | All | When the intent classifier returns low confidence or `NeedsClarification`, instead of a generic "Could you clarify?", the UI shows structured options: radio buttons for likely intents, a template prompt the user can edit, or a guided wizard for complex multi-step requests |
 | **Thinking/Reasoning Transparency** | All | Show the intent classification, model tier selection, and routing decision in a collapsible "thinking" panel. Users see: "Intent: CodeGeneration (0.85 confidence) → Model: claude-sonnet → Tools: enabled". Builds trust and helps users learn to write better prompts |
 | **Token Usage Display** | Desktop, Web | Show input and output token counts per turn and cumulative per session. Rendered inline below each assistant message (e.g., "↑ 1,204 tokens · ↓ 832 tokens") and as a running total in the session header/sidebar. When Phase 55 cost tracking is active, also shows estimated cost per turn and session total (e.g., "↑ 1,204 · ↓ 832 · $0.003"). CLI surfaces this via `--verbose` flag or `sovrant dashboard` command |
-| **Unified Dashboard** | All | A multi-tab dashboard view that aggregates operational visibility into one place. Desktop: full Avalonia view navigable from sidebar or `Ctrl+Shift+D`. Web: `/dashboard` Blazor page with tab navigation. CLI: `sovrant dashboard` command that prints a combined status table. Tabs described below — cost is one tab, not the whole dashboard. The dashboard consumes existing endpoints (`GET /v1/status`, `GET /v1/usage`, `GET /v1/cost`) so the data layer is already built. Tabs: **Overview** (active model, provider health, active sessions, quick spend summary), **Cost & Budget** (Phase 55 — daily/weekly/monthly spend, per-model and per-session breakdowns, budget gauges, budget configuration), **Sessions** (active sessions with token counts, resume links, session timeline), **Providers** (provider health, latency, error rates, routing scores — data from `/v1/status`), **Models** (available models, pricing snapshot age, per-model usage stats). Additional tabs can be added by future phases (e.g. Evals, Missions, Team activity) |
+| **Unified Dashboard** | All | A multi-tab dashboard view that aggregates operational visibility into one place. Desktop: full Avalonia view navigable from sidebar or `Ctrl+Shift+D`. Web: `/dashboard` Blazor page with tab navigation. CLI: `sovrant dashboard` command that prints a combined status table. Tabs described below — cost is one tab, not the whole dashboard. The dashboard consumes existing endpoints (`GET /v1/status`, `GET /v1/usage`, `GET /v1/cost`) so the data layer is already built. Tabs: **Overview** (active model, provider health, active sessions, quick spend summary), **Cost & Budget** (Phase 55 — daily/weekly/monthly spend, per-model and per-session breakdowns, budget gauges, budget configuration), **Sessions** (active sessions with token counts, resume links, session timeline), **Providers** (provider health, latency, error rates, routing scores — data from `/v1/status`), **Models** (available models, pricing snapshot age, per-model usage stats). Additional tabs can be added by future phases (e.g. Evals, Workflows, Team activity) |
 | **Budget Inline Warnings** | Desktop, Web | When `BudgetEnforcer` hits 80% or 100% threshold, display an inline warning banner in the chat area: amber for 80% ("You've used 80% of your $5.00 session budget"), red for 100% with a "Budget exceeded" blocking message. Dismissible for 80%, non-dismissible for 100% |
 | **Tone & Personality Adaptation** | All | Configurable interaction style per workspace: "concise" (terse, code-focused), "mentor" (explains reasoning, suggests learning resources), "pair programmer" (collaborative, asks clarifying questions), "executive" (summaries and decisions only). Injected into system prompt based on user preference |
 
@@ -5767,7 +5767,7 @@ Stored per-workspace in user settings. Injected into system prompt by `Conversat
 - Dashboard Providers tab shows provider health, latency, error rates from `/v1/status`
 - Budget warnings appear inline in chat at 80% (amber, dismissible) and 100% (red, blocking)
 - Budget caps configurable from the dashboard Cost tab on Desktop and Web with immediate effect
-- Dashboard is extensible — future phases can add tabs (Evals, Missions, Teams) without restructuring
+- Dashboard is extensible — future phases can add tabs (Evals, Workflows, Teams) without restructuring
 - Smart follow-up suggestions appear after each turn
 - `dotnet build Sovrant.slnx` exits 0
 - All existing tests pass (no regressions)
@@ -6627,7 +6627,7 @@ which is intentionally deferred to Phase 74 (markdown-backed templates).
 
 Today Sovrant's autonomous capability lives primarily in the Claw integration
 (OpenClaw via Phase 50, Hermes via Phase 60). For long-running unsupervised
-missions we need **at least one alternate autonomous backend** so users are not
+workflows we need **at least one alternate autonomous backend** so users are not
 locked to a single external dependency, and so the **Swarm** subsystem can be
 driven in an autonomous mode without an external Claw process.
 
@@ -6635,16 +6635,16 @@ driven in an autonomous mode without an external Claw process.
 
 - **Swarm autonomous mode** — extend `SwarmCoordinator` so a swarm can accept a
   high-level goal and self-plan/re-plan across agents without an external Claw,
-  reusing `LlmMissionPlanner` + `ParallelMissionExecutor`. Gated on the Phase 58
+  reusing `LlmWorkflowPlanner` + `ParallelWorkflowExecutor`. Gated on the Phase 58
   Trust Boundary (sanitization, ethics, intent verification).
 - **Alternate autonomous providers** — add a pluggable `IAutonomousDriver`
   abstraction so OpenClaw, Hermes, Swarm-autonomous, and future providers
   (e.g. SWE-agent, OpenHands, AutoGen studio, crewAI) are swappable per
-  mission/workspace.
-- **Provider selection** — config + CLI flag + per-mission override. Registry
+  workflow/workspace.
+- **Provider selection** — config + CLI flag + per-workflow override. Registry
   reports per-provider capabilities (tool support, model family, cost tier).
-- **Shared mission contract** — single `MissionSpec` / `MissionEvent` schema
-  already used by Phase 51 extended to cover all drivers, so missions are
+- **Shared workflow contract** — single `Workflow` / `WorkflowEvent` schema
+  already used by Phase 51 extended to cover all drivers, so workflows are
   observable and auditable regardless of provider.
 
 ### Acceptance Criteria
@@ -6653,20 +6653,20 @@ driven in an autonomous mode without an external Claw process.
       (default) + `SwarmAutonomousDriver` registered through `DriverRegistry`.
       OpenClaw and Hermes drivers intentionally deferred — neither Phase 50
       nor Phase 60 actually shipped production code to wrap.
-- [x] Swarm can run a mission to completion with no external Claw
+- [x] Swarm can run a workflow to completion with no external Claw
       (`SwarmAutonomousDriver.AdvanceAsync` decomposes → orchestrates →
       writes terminal state)
-- [x] Missions emit the same event journal regardless of driver — swarm
-      events are projected onto `mission_events` via a stable
+- [x] Workflows emit the same event journal regardless of driver — swarm
+      events are projected onto `workflow_events` via a stable
       `swarm_*` type vocabulary
-- [ ] Driver selectable at mission-create time (CLI, API, Web, Desktop) —
+- [ ] Driver selectable at workflow-create time (CLI, API, Web, Desktop) —
       deferred; the seam exists but no UI writes a driver name onto the
-      mission row yet
+      workflow row yet
 - [ ] Trust Boundary sanitization + ethics + intent checks apply to all
       drivers — blocked on Phase 58 wiring
 - [ ] Integration tests exercise Swarm-autonomous driver end-to-end —
       unit-level coverage only (7 tests with fake decomposer/orchestrator
-      against a real `SqliteMissionStore`)
+      against a real `SqliteWorkflowStore`)
 
 ### Phase 67.1 — `IAutonomousDriver` abstraction
 
@@ -6723,7 +6723,7 @@ not a feature phase — the output is a measurably-tighter engine.
   `CancellationToken`; ensure tool executors propagate cancellation to LLM
   calls and subprocesses.
 - **Logging taxonomy** — unify `EventId` registry, scope fields
-  (workspace/project/session/run/mission), and redaction rules.
+  (workspace/project/session/run/workflow), and redaction rules.
 - **Startup profiling** — measure cold-start cost of CLI, Desktop, Web, MCP;
   remove unnecessary reflection/scan work on the hot path.
 - **Thread-safety sweep** — identify shared mutable state in
@@ -7975,7 +7975,7 @@ Delivered as five sequenced PRs on `sovrant-openc-dotnet-port`:
 
 Replace ad-hoc logging and the `RuntimeTraceWriter` JSONL stream with a real
 OpenTelemetry pipeline. Every meaningful unit of work — engine run, turn, tool
-call, router decision, provider HTTP request, swarm wave, mission step — emits
+call, router decision, provider HTTP request, swarm wave, workflow step — emits
 spans, metrics, and structured log records via the OTel SDK. Export is OTLP by
 default; the existing JSONL writer stays as an optional console exporter for
 local debugging.
@@ -7983,7 +7983,7 @@ local debugging.
 ### Why now
 
 - Operators running Sovrant.Server in production need standard observability,
-  not bespoke log files. The `/v1/runs/...` and `/v1/missions/...` surfaces
+  not bespoke log files. The `/v1/runs/...` and `/v1/workflows/...` surfaces
   already correlate by run/session/workspace IDs — those become trace
   attributes "for free".
 - Cost tracking (Phase 55) and budgets (V018) are already collected per
@@ -7996,7 +7996,7 @@ local debugging.
 
 - **Tracing**: Wrap top-level operations as spans (`engine.run`, `turn`,
   `tool.invoke`, `router.route`, `provider.http`, `swarm.wave`,
-  `mission.step`). Attach `workspace.id`, `project.id`, `session.id`,
+  `workflow.step`). Attach `workspace.id`, `project.id`, `session.id`,
   `run.id`, `model`, `provider`, `tier`, `intent`, `tools.invoked` as
   attributes.
 - **Metrics**: Counters / histograms / gauges for `sovrant.runs.total`,
@@ -8011,7 +8011,7 @@ local debugging.
   enabled via `SOVRANT_OTEL_CONSOLE=true`. Resource attributes seeded from
   `service.name=sovrant`, `service.version`, `deployment.environment`.
 - **Sampling**: Default to parent-based + ratio (`SOVRANT_OTEL_TRACE_RATIO`,
-  default `1.0` for dev, `0.1` recommended in prod). Mission/team runs always
+  default `1.0` for dev, `0.1` recommended in prod). Workflow/team runs always
   sampled to preserve audit completeness.
 - **Surfaces**: Activate in CLI/Server/Web/Desktop. CLI gets a simple
   `--otel-endpoint` flag; the rest read `OTEL_EXPORTER_OTLP_ENDPOINT` per
@@ -9510,7 +9510,7 @@ Phase 86 already plans the infrastructure (event broker, session status, evictio
 - **Phase 86 — Background Session Continuation:** the runtime infrastructure this phase depends on. Phase 92 is the product contract on top of Phase 86's plumbing.
 - **Phase 87 — Artifacts-by-Default:** ensures whatever the task produces lands in a deterministic location, so "come back and it's done" has somewhere to point.
 - **Phase 88 — Settings & Provider Profile Consolidation:** establishes the `sovrant.config` writer pattern Phase 92's Settings UI plugs into. The "Active sessions" section is one more consumer of that surface.
-- **Phase 89 — Command Center:** the cockpit surfaces multi-session steering at a higher level (teams/missions); active-sessions slots are the per-user, single-task version.
+- **Phase 89 — Command Center:** the cockpit surfaces multi-session steering at a higher level (teams/workflows); active-sessions slots are the per-user, single-task version.
 - **Future admin console (placeholder, not yet phased):** will own org-level policy and write to a DB-backed `org.settings.*` row that Phase 92's config layer reads as a fallback. Phase 92 is the per-user setting; the admin console is the org-level setting on top.
 
 ## Phase 93 — Configuration Boundary Audit: `sovrant.config` vs DB vs Keystore — Codify the Rules ✅
@@ -10265,7 +10265,7 @@ Reduce the real-money and energy cost of running Sovrant — both for self-hoste
 
 ### Motivation
 
-LLM API spend is the dominant variable cost in any agentic system. As Sovrant scales (more tools, longer missions, swarm orchestration), unchecked token usage compounds fast. Two levers exist: (a) use fewer tokens per call, and (b) use cheaper or free models for calls that don't need full capability.
+LLM API spend is the dominant variable cost in any agentic system. As Sovrant scales (more tools, longer workflows, swarm orchestration), unchecked token usage compounds fast. Two levers exist: (a) use fewer tokens per call, and (b) use cheaper or free models for calls that don't need full capability.
 
 ### Sub-area 1 — Context Efficiency (fewer tokens, same quality)
 
@@ -11154,15 +11154,15 @@ branding:
 
 ### Why
 
-Orchestration today inherits the global permission mode, which means a supervised workspace forces step-by-step confirmation even on batch missions that are designed to run unattended. Teams and swarms also lack a formal concept of a "mission" — a named, scoped run with a declared run-mode, progress tracking, and a clear lifecycle. Separately, integrations already bring external agents (Claws) into the workspace, but there is no way to assign them as members of a team; they exist as tools only.
+Orchestration today inherits the global permission mode, which means a supervised workspace forces step-by-step confirmation even on batch workflows that are designed to run unattended. Teams and swarms also lack a formal concept of a "workflow" — a named, scoped run with a declared run-mode, progress tracking, and a clear lifecycle. Separately, integrations already bring external agents (Claws) into the workspace, but there is no way to assign them as members of a team; they exist as tools only.
 
-This phase closes both gaps: missions become a first-class orchestration primitive with their own run-mode, and integration-sourced Claws become addressable team members.
+This phase closes both gaps: workflows become a first-class orchestration primitive with their own run-mode, and integration-sourced Claws become addressable team members.
 
 ### What ships
 
-**Mission run-mode**
+**Workflow run-mode**
 
-A mission is a named, bounded orchestration run assigned to a team or swarm. When launching a mission the operator (human or automated trigger) declares one of three run-modes:
+A workflow is a named, bounded orchestration run assigned to a team or swarm. When launching a workflow the operator (human or automated trigger) declares one of three run-modes:
 
 | Mode | Behaviour |
 |---|---|
@@ -11170,7 +11170,7 @@ A mission is a named, bounded orchestration run assigned to a team or swarm. Whe
 | `supervised` | Agent actions are confirmed by the session owner turn-by-turn; mirrors the current global supervised behaviour |
 | `step-through` | Each agent step pauses and surfaces a summary to the operator before proceeding |
 
-The declared mode overrides the workspace permission setting for the lifetime of the mission. Mission metadata (name, team, run-mode, status, started-at, completed-at, output summary) is stored in the DB and visible in the Command Center.
+The declared mode overrides the workspace permission setting for the lifetime of the workflow. Workflow metadata (name, team, run-mode, status, started-at, completed-at, output summary) is stored in the DB and visible in the Command Center.
 
 **Integration-sourced Claws as team members**
 
@@ -11179,18 +11179,18 @@ When an admin has a platform integration connected that exposes external agents 
 - Local Claws (existing behaviour)
 - Integration-sourced Claws — shown only if the backing integration is connected at the time of team composition; labelled with the integration name (e.g. `via GitHub Copilot`)
 
-Integration members participate in orchestration the same way local Claws do — routed via the existing `AgentRouter` — but their tool calls go through the integration's MCP proxy layer so trust rules and session selection still apply. If the integration is disconnected at mission launch, the affected member is skipped and the mission log records a `member_unavailable` event.
+Integration members participate in orchestration the same way local Claws do — routed via the existing `AgentRouter` — but their tool calls go through the integration's MCP proxy layer so trust rules and session selection still apply. If the integration is disconnected at workflow launch, the affected member is skipped and the workflow log records a `member_unavailable` event.
 
-**Web + Desktop parity:** mission launch UI on both surfaces; Command Center shows live mission status; team editor picker updated on both.
+**Web + Desktop parity:** workflow launch UI on both surfaces; Command Center shows live workflow status; team editor picker updated on both.
 
 ### Acceptance criteria
 
-- Launching a mission with `autonomous` run-mode in a supervised workspace executes without confirmation prompts; trust rules still fire normally
+- Launching a workflow with `autonomous` run-mode in a supervised workspace executes without confirmation prompts; trust rules still fire normally
 - Launching with `step-through` pauses after each agent action and waits for operator acknowledgement before proceeding
 - A connected integration that exposes agent endpoints surfaces those agents in the team member picker with the integration label
 - Removing or disconnecting an integration removes its Claws from the picker; existing team definitions retain the member reference but show a "disconnected" badge
-- A mission started with an unavailable integration member logs `member_unavailable` and continues with the remaining members rather than failing the whole mission
-- Mission history (name, run-mode, status, timing) is visible in the Command Center for completed and in-progress missions
+- A workflow started with an unavailable integration member logs `member_unavailable` and continues with the remaining members rather than failing the whole workflow
+- Workflow history (name, run-mode, status, timing) is visible in the Command Center for completed and in-progress workflows
 - All existing orchestration, team, and agent tests continue to pass
 
 ---
@@ -11880,7 +11880,7 @@ This single sentence prevents the most common expectation mismatch.
 
 #### 6 — Dual-path execution: Claude Agent SDK dynamic workflows when available
 
-Unlike items 1–5, this is an engine-level addition, not a presentation change. When the workflow's active model is a qualifying Claude tier (exact gate TBD at design time — candidates are the Opus/Sonnet 5 family resolved via `ModelTierResolver`, not simply "any Anthropic key configured"), workflow execution can route through the Claude Agent SDK's dynamic subagent/workflow orchestration instead of Sovrant's own planner/executor. When no qualifying Claude model is configured — no key, or a non-qualifying provider/model — workflows fall back to Sovrant's existing provider-agnostic mission engine (`LlmMissionPlanner` / `ParallelMissionExecutor`), which remains the base version and continues to work with any OpenAI-compatible provider.
+Unlike items 1–5, this is an engine-level addition, not a presentation change. When the workflow's active model is a qualifying Claude tier (exact gate TBD at design time — candidates are the Opus/Sonnet 5 family resolved via `ModelTierResolver`, not simply "any Anthropic key configured"), workflow execution can route through the Claude Agent SDK's dynamic subagent/workflow orchestration instead of Sovrant's own planner/executor. When no qualifying Claude model is configured — no key, or a non-qualifying provider/model — workflows fall back to Sovrant's existing provider-agnostic workflow engine (`LlmWorkflowPlanner` / `ParallelWorkflowExecutor`), which remains the base version and continues to work with any OpenAI-compatible provider.
 
 Open design questions to resolve before implementation, not before this roadmap entry:
 - Exact model/tier gate — which specific Claude models qualify, and where that check lives (`ModelTierResolver` vs a new capability flag)
@@ -11903,7 +11903,7 @@ The constraint is intentional and permanent. Sovrant's value is the AI layer. Ad
 ### Relationship to other phases
 
 - **Phase 51** ✅ built the engine (`IWorkflowStore`, `LlmWorkflowPlanner`, `ParallelWorkflowExecutor` — renamed 2026-09-03, formerly `IMissionStore`/`LlmMissionPlanner`/`ParallelMissionExecutor`) — remains the base-version execution path (item 6) and is otherwise not touched by items 2–6
-- **Phase 119** (planned) adds per-mission run-modes and integration-sourced Claws — Phase 129 uses those run-modes in the new launch form; Phase 119 should ship first or in parallel
+- **Phase 119** (planned) adds per-workflow run-modes and integration-sourced Claws — Phase 129 uses those run-modes in the new launch form; Phase 119 should ship first or in parallel
 - **Phase 94** ✅ (Orchestration Studio) remains as the team-composition surface; Phase 129 adds a goal-first surface on top
 - **Claude Agent SDK dependency (item 6, new)** — requires an Anthropic/Claude provider integration capable of driving the Agent SDK's dynamic subagent orchestration; needs its own design pass on the model/tier gate before implementation
 
@@ -12089,11 +12089,11 @@ Skills currently reach Sovrant one of two ways: the 32 built-in rows seeded by V
 Phase 57's `coordination_events` mailbox (V013) is a flat table: one row per message, one `source_group_id`, one `target_group_id`, a `status` that moves `pending → delivered → acknowledged`. That's enough for "PM agent A tells PM agent B something happened once," but it breaks down under the failure modes long-running orchestration actually hits:
 
 - If the target PM agent's process is mid-restart (isolated backend, Phase 18) or the agent simply hasn't taken a turn yet, there is no cursor — delivery is "is there a pending row for me," not "give me everything since the last one I processed." A crash between reading a row and marking it `delivered` can silently drop it.
-- Only one target group can consume a given event. A mission with three dependent downstream teams watching the same upstream group's progress needs three duplicate `coordination_events` rows today, not one channel with three subscribers.
+- Only one target group can consume a given event. A workflow with three dependent downstream teams watching the same upstream group's progress needs three duplicate `coordination_events` rows today, not one channel with three subscribers.
 - Delivery is polling-only ("child agents poll on turn start" per `docs/agent-systems.md`), so a PM agent that's mid-turn when an urgent blocker arrives doesn't see it until its next turn starts — there's no live-push option for in-process consumers that could otherwise learn about it immediately over the SignalR hub already used for chat streaming.
 - Nothing distinguishes "message failed to process N times and needs human eyes" from "message is still waiting" — a poison message just sits at `pending` forever.
 
-Missions (Phase 51) and federated claw-to-claw coordination (Phase 50) both compound this: they're long-lived, span process restarts, and — for claws — cross an actual network link where drops are routine. The fix is the same primitive event-sourcing systems use for this exact problem: an append-only, sequence-numbered stream per channel with a durable per-consumer offset, instead of a single mutable status flag per message.
+Workflows (Phase 51, formerly missions) and federated claw-to-claw coordination (Phase 50) both compound this: they're long-lived, span process restarts, and — for claws — cross an actual network link where drops are routine. The fix is the same primitive event-sourcing systems use for this exact problem: an append-only, sequence-numbered stream per channel with a durable per-consumer offset, instead of a single mutable status flag per message.
 
 ### What ships
 
@@ -12132,7 +12132,7 @@ Missions (Phase 51) and federated claw-to-claw coordination (Phase 50) both comp
 ### Relationship to other phases
 
 - **Phase 57** (Inter-Agent Communication) — this phase extends `coordination_events`/`GroupMailbox`/`PMCoordinator` rather than replacing them; the mediation model and `CoordinationStatusTool` are unchanged, only the delivery guarantees underneath.
-- **Phase 51** (Mission Engine) — missions are durable and span process restarts by design (`runtime_traces`); a mission step that depends on cross-group coordination needs the same durability from the coordination layer, which today it doesn't have.
+- **Phase 51** (workflow engine, formerly the mission engine) — workflows are durable and span process restarts by design (`runtime_traces`); a workflow step that depends on cross-group coordination needs the same durability from the coordination layer, which today it doesn't have.
 - **Phase 50** (OpenClaw federation) — claw-to-claw coordination crosses a real network link (routed bus); resumable offsets matter most here since network drops are the common case, not the exception.
 - **Phase 61** (Remote server mode / SignalR) — the live-push option reuses the existing `ChatHub` infrastructure rather than introducing a second real-time transport.
 
