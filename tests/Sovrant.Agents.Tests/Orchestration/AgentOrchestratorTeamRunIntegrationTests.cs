@@ -254,6 +254,81 @@ public sealed class AgentOrchestratorTeamRunIntegrationTests
         Assert.Equal(fromTurnContext ? "chat-from-turn" : "chat-explicit", runs.Created.Single().SessionId);
     }
 
+    [Theory]
+    [InlineData(false)] // started outside chat (Orchestration page, team-run API): gets its own conversation
+    [InlineData(true)]  // started from a chat turn: stays linked to that chat, no new conversation
+    public async Task Run_OutsideChat_GetsItsOwnConversation(bool fromChat)
+    {
+        var dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_test_{Guid.NewGuid():N}.db");
+        var provider = new Sovrant.Runtime.Storage.SqliteStorageProvider(
+            NullLogger<Sovrant.Runtime.Storage.SqliteStorageProvider>.Instance, dbPath);
+        await provider.InitializeAsync();
+        try
+        {
+            var sessions = new Sovrant.Runtime.Storage.SqliteSessionStore(provider);
+            var registry = new FakeTeamRegistry();
+            var team = new TeamInfo(
+                Id: $"team-own-{fromChat}", WorkspaceId: "ws-1", ProjectId: null, Name: "own-team",
+                Description: null, Origin: "user", CreatedBy: "alice", CreatedAt: DateTimeOffset.UtcNow)
+            {
+                RunMode = TeamRunMode.Parallel,
+                FileLocksEnabled = true,
+                DecompositionMode = TeamDecompositionMode.Off,
+            };
+            registry.CreateTeam(team);
+            var locks = new FileLockManager();
+            locks.TryAcquire("notes.md", "external-holder"); // every task blocks fast — no agent runs
+
+            var runs = new CapturingAgentRunStore();
+            var orchestrator = new AgentOrchestrator(
+                BuildRealSwarmOrchestrator(registry, locks), new UnreachableDecomposer(), registry, runs,
+                new PassingQualityGate(), new SwarmConfig { Enabled = true }, NullLogger<AgentOrchestrator>.Instance,
+                sessionStore: sessions);
+
+            var request = new EnsembleRunRequest
+            {
+                Goal = "Write the release notes",
+                TeamId = team.Id,
+                WorkspaceId = "ws-1",
+                UserId = "alice",
+                Plan = [new SwarmTaskNode { Id = "t1", Description = "writer", Wave = 0, FilesToModify = { "notes.md" } }],
+            };
+
+            EnsembleRunResult result;
+            if (fromChat)
+            {
+                using (Sovrant.Runtime.Conversation.TurnContext.Begin("chat-1", "alice"))
+                    result = await orchestrator.RunAsync(request);
+            }
+            else
+            {
+                result = await orchestrator.RunAsync(request);
+            }
+
+            var listed = await sessions.ListWithTitlesAsync("alice");
+            if (fromChat)
+            {
+                Assert.Equal("chat-1", runs.Created.Single().SessionId);
+                Assert.DoesNotContain(listed, s => s.SessionId == result.RunId);
+            }
+            else
+            {
+                Assert.Equal(result.RunId, runs.Created.Single().SessionId);
+                var conversation = listed.Single(s => s.SessionId == result.RunId);
+                Assert.Equal("Team run: Write the release notes", conversation.Title);
+                var entries = await sessions.LoadAsync(result.RunId, "alice");
+                Assert.Equal(["user", "assistant"], entries.Select(e => e.Role));
+                Assert.StartsWith("Team run finished", entries[1].Content, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            await provider.DisposeAsync();
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try { File.Delete(dbPath); } catch (IOException) { /* temp file; best-effort cleanup */ }
+        }
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private static SwarmOrchestrator BuildRealSwarmOrchestrator(

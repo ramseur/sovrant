@@ -1,3 +1,5 @@
+using Sovrant.Runtime.Workspaces;
+using Sovrant.Runtime.Session;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -43,6 +45,8 @@ internal static class SwarmRoutes
             ISwarmOrchestrator orchestrator,
             SwarmQualityGate qualityGate,
             ISwarmStateTracker stateTracker,
+            IAgentRunStore runStore,
+            ISessionStore sessionStore,
             HttpContext ctx,
             CancellationToken ct) =>
         {
@@ -88,6 +92,12 @@ internal static class SwarmRoutes
                 WorkspaceId: ctx.GetWorkspaceId(),
                 ProjectId: ctx.Request.Headers["X-Project-Id"].FirstOrDefault());
 
+            // Phase 133 — a swarm started over the API gets its own conversation (id = run id)
+            // and an agent_runs row pointing at it, so it shows up in the caller's sidebar.
+            var runOwner = swarmContext.UserId ?? WorkspaceIdentity.CurrentUserId;
+            var linkedRun = await StartLinkedRunAsync(runStore, new RunConversationService(sessionStore), runOwner,
+                swarmContext.WorkspaceId ?? WorkspaceIdentity.DefaultPersonalFor(runOwner), swarmContext.ProjectId, request.Prompt, ct);
+
             // Execute with SSE streaming
             var logger = ctx.RequestServices.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Server.SwarmRoutes");
             var result = await orchestrator.ExecuteAsync(plan, config, onEvent: evt =>
@@ -114,6 +124,8 @@ internal static class SwarmRoutes
                 result.Status = SwarmStatus.Completed;
                 stateTracker.Update(result.SwarmId, result);
             }
+
+            await FinishLinkedRunAsync(runStore, new RunConversationService(sessionStore), linkedRun, runOwner, result, ct);
 
             await WriteSseEventAsync(ctx.Response, "result", result, ct);
             await WriteSseDoneAsync(ctx.Response, ct);
@@ -306,6 +318,46 @@ internal static class SwarmRoutes
     {
         await response.WriteAsync("data: [DONE]\n\n", Encoding.UTF8, ct).ConfigureAwait(false);
         await response.Body.FlushAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>Phase 133 — records a <c>swarm</c> run linked to its own new conversation. Best-effort.</summary>
+    private static async Task<string?> StartLinkedRunAsync(
+        IAgentRunStore runStore, RunConversationService conversations, string owner, string workspaceId,
+        string? projectId, string prompt, CancellationToken ct)
+    {
+        var runId = $"run-{Guid.NewGuid():N}";
+        try
+        {
+            var linked = await conversations.StartAsync(runId, owner, "Swarm", prompt, ct).ConfigureAwait(false);
+            await runStore.CreateAsync(new AgentRunRecord(
+                RunId: runId, ParentRunId: null, TeamId: null, MemberId: null,
+                WorkspaceId: workspaceId, ProjectId: projectId, UserId: owner,
+                Kind: "swarm", Status: "running", StartedAt: DateTimeOffset.UtcNow,
+                Prompt: prompt.Length > 120 ? prompt[..117] + "…" : prompt,
+                SessionId: linked ? runId : null), ct).ConfigureAwait(false);
+            return runId;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null; // never fail the swarm over its ledger row
+        }
+    }
+
+    private static async Task FinishLinkedRunAsync(
+        IAgentRunStore runStore, RunConversationService conversations, string? runId, string owner, SwarmResult result, CancellationToken ct)
+    {
+        if (runId is null)
+            return;
+        var succeeded = result.Status == SwarmStatus.Completed;
+        try
+        {
+            await runStore.UpdateStatusAsync(runId, succeeded ? "succeeded" : "failed", result.TotalTokensUsed, 0, null, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // best-effort
+        }
+        await conversations.CompleteAsync(runId, owner, "Swarm", succeeded, result.CombinedOutput, result.Duration, ct).ConfigureAwait(false);
     }
 }
 

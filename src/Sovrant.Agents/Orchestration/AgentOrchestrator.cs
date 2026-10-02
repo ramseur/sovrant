@@ -40,6 +40,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
     private readonly ISwarmQualityGate _qualityGate;
     private readonly SwarmConfig _swarmConfig;
     private readonly IPMCoordinator? _pmCoordinator;
+    private readonly Sovrant.Runtime.Session.RunConversationService? _conversations;
     private readonly ILogger<AgentOrchestrator> _logger;
 
     public AgentOrchestrator(
@@ -50,7 +51,8 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
         ISwarmQualityGate qualityGate,
         SwarmConfig swarmConfig,
         ILogger<AgentOrchestrator> logger,
-        IPMCoordinator? pmCoordinator = null)
+        IPMCoordinator? pmCoordinator = null,
+        Sovrant.Runtime.Session.ISessionStore? sessionStore = null)
     {
         ArgumentNullException.ThrowIfNull(swarmOrchestrator);
         ArgumentNullException.ThrowIfNull(decomposer);
@@ -66,6 +68,7 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
         _qualityGate = qualityGate;
         _swarmConfig = swarmConfig;
         _pmCoordinator = pmCoordinator;
+        _conversations = sessionStore is null ? null : new Sovrant.Runtime.Session.RunConversationService(sessionStore);
         _logger = logger;
     }
 
@@ -96,7 +99,10 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
             },
             Status: "running",
             StartedAt: DateTimeOffset.UtcNow,
-            SessionId: request.SessionId ?? Sovrant.Runtime.Conversation.TurnContext.Current?.SessionId), ct).ConfigureAwait(false);
+            SessionId: await ResolveConversationAsync(request, runId, mode, ct).ConfigureAwait(false)), ct).ConfigureAwait(false);
+        var ownConversation = request.SessionId is null
+            && Sovrant.Runtime.Conversation.TurnContext.Current is null
+            && _conversations is not null;
 
         try
         {
@@ -249,6 +255,10 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
 
             LogRunComplete(_logger, runId, result.Status);
 
+            if (ownConversation)
+                await _conversations!.CompleteAsync(runId, request.UserId, KindLabel(mode),
+                    result.Status == SwarmStatus.Completed, result.CombinedOutput, result.Duration, ct).ConfigureAwait(false);
+
             // ── Publish team if requested ───────────────────────────────
             string? publishedTeamId = null;
             if (request.PublishTeamOnComplete && result.Status == SwarmStatus.Completed)
@@ -268,9 +278,32 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
         {
             LogRunFailed(_logger, runId, ex.Message);
             await _runStore.UpdateStatusAsync(runId, "failed", ct: ct).ConfigureAwait(false);
+            if (ownConversation)
+                await _conversations!.CompleteAsync(runId, request.UserId, KindLabel(mode), succeeded: false, ex.Message, ct: ct).ConfigureAwait(false);
             throw;
         }
     }
+
+    /// <summary>
+    /// Phase 133 — the conversation this run belongs to: the one the caller named,
+    /// else the chat whose turn launched it, else (outside chat) a new conversation
+    /// of its own whose id is the run id. Null only when no session store is wired.
+    /// </summary>
+    private async Task<string?> ResolveConversationAsync(EnsembleRunRequest request, string runId, string mode, CancellationToken ct)
+    {
+        if (request.SessionId is { } explicitId)
+            return explicitId;
+        if (Sovrant.Runtime.Conversation.TurnContext.Current?.SessionId is { } turnSession)
+            return turnSession;
+        if (_conversations is null)
+            return null;
+        return await _conversations.StartAsync(runId, request.UserId, KindLabel(mode), request.Goal, ct).ConfigureAwait(false)
+            ? runId
+            : null;
+    }
+
+    private static string KindLabel(string mode) =>
+        mode is "delegation" or "team" or "multi-team" ? "Team run" : "Swarm";
 
     private async Task<SwarmResult> RunQualityGateAsync(
         SwarmPlan plan,

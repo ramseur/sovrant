@@ -47,7 +47,7 @@ What we are actively working on and shipping next, in priority order.
 The engine is fully functional across five delivery modes with enterprise multi-tenant infrastructure:
 
 - **60 tools** across 18 categories (core file, extended, todo, tasks, plan mode, worktree, skills, MCP, agent, team, workflows, artifacts, documents, quality, swarm, coordination, LSP, code scaffolding)
-- **2,337 tests** across 10 projects, 0 failures, 3 skipped integration tests (verified 2026-10-02 via `dotnet test Sovrant.slnx`)
+- **2,343 tests** across 10 projects, 0 failures, 3 skipped integration tests (verified 2026-10-02 via `dotnet test Sovrant.slnx`)
 - **146 server endpoints** + 1 SignalR hub (chat, sessions, session-folders, config, status, models, usage, cost, command-center, webhooks, workspaces, projects, users, teams, runs, workflows, engine, artifacts, evals, swarm, tools, skills, agents, MCP auth, knowledge, trust-rules, attributions)
 - **5 delivery modes:** CLI REPL, HTTP server (:5200), desktop app (Avalonia), web app (Blazor :5100), MCP server (stdio)
 - Agentic loop with up to 20 tool rounds per turn
@@ -231,7 +231,8 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
 | Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
 | Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
-| Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — runs started outside chat still open |
+| Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — Postgres check moved to Phase 134 |
+| Postgres / Supabase backend audit — real Postgres test target (skipped when unavailable), store-by-store parity with the SQLite suites, schema diff V001–V048 vs `PostgresSchema.sql`, split-backend query audit, SQLite→Postgres migrator check; closes Phase 133's open Postgres criterion | Phase 134 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12152,7 +12153,7 @@ Workflows (Phase 51, formerly missions) and federated claw-to-claw coordination 
 
 ## Phase 133 — Conversation Folders
 
-**Status:** ✅ Built (2026-10-02, commit `48f1a98`) — Web + Desktop, verified live; see **Build notes** below. Still open: linked conversations for runs started outside chat, a live Postgres run, and a hand check of Desktop drag and drop.
+**Status:** ✅ Built (2026-10-02, commit `48f1a98`) — Web + Desktop, verified live; see **Build notes** below. Still open: a live Postgres run (now Phase 134) and a hand check of Desktop drag and drop.
 
 ### Why
 
@@ -12251,7 +12252,7 @@ Internal sessions (`__sovrant_mission_planner__`, `__sovrant_context_compactor__
 
 - **Workflows** — already done (`SqliteWorkflowStore.CreateAsync` gives every workflow a session; `WorkflowSessionNotifier` seeds it with the goal). Filing that conversation files the workflow.
 - **Swarm / team runs launched from a chat** — record the chat's id in `agent_runs.session_id`. Verified during planning that tools can't see the current chat's id today (`SessionContext` carries `SessionConfig`, which has no id; `AttributionScope` has it but only when the attribution store is configured, and doesn't expose it). Fix: a small ambient `TurnContext.SessionId` (`AsyncLocal`), set in `ConversationRuntime.RunTurnAsync` next to `AttributionScope.Begin`, read by the `Swarm`, `TeamRun`, and `Agent` tools when they create runs.
-- **Swarm / team runs launched outside chat** (Orchestration's Run button, `POST /v1/swarm`) — create a linked conversation at launch, the same way workflows do. Can ship after the folders themselves: until then those runs simply don't appear in the sidebar, which is today's behavior.
+- **Swarm / team runs launched outside chat** (Orchestration's Run button, `POST /v1/swarm`) — create a linked conversation at launch, the same way workflows do. *(✅ Done 2026-10-02 — `RunConversationService`; verified on SQLite, Postgres verification is part of Phase 134.)* Can ship after the folders themselves: until then those runs simply don't appear in the sidebar, which is today's behavior.
 - **Webhook conversations** — already sessions (`webhook:{source}:{user}`); fileable with no extra work.
 
 #### 5 — UX (Web + Desktop parity, mock first)
@@ -12350,8 +12351,8 @@ UNFILED
 - **Web sidebar:** it loaded every conversation's full history just to build labels.
 
 **Still open**
-- **Runs started outside chat:** swarm and team runs launched from Orchestration's Run button or `POST /v1/swarm` don't yet get a linked conversation, so they don't appear in the sidebar.
-- **Postgres:** the folder store hasn't been run against a live Postgres/Supabase database.
+- ~~**Runs started outside chat**~~ — ✅ done (2026-10-02): `RunConversationService` gives a team run started from the Orchestration page (Web + Desktop) or the team-run API, and a swarm started via `POST /v1/swarm`, its own conversation (id = run id) — seeded with the goal, titled "Team run: …" / "Swarm: …", outcome appended when the run ends — and records it in `agent_runs.session_id`, so the run shows in the sidebar with a "Team · 1 run" / "Swarm · 1 run" label and can be filed. Runs started from a chat stay linked to that chat. Not covered: the CLI's `sovrant swarm` (no sidebar) and `POST /v1/swarm/manager` (federation).
+- **Postgres:** the folder store hasn't been run against a live Postgres/Supabase database — now part of **Phase 134** (Postgres / Supabase backend audit).
 - **Desktop drag and drop:** needs a hand check. Avalonia's OS drag loop can't be driven without taking over the real mouse.
 - **Found, not fixed:** `sovrant db migrate` throws after migrating. It disposes a service provider synchronously while that provider holds the async-only `SqliteStorageProvider`.
 
@@ -12386,10 +12387,48 @@ UNFILED
 - [x] Two sibling folders can't share a name (case-insensitive); the same name under different parents is allowed
 - [x] Deleting a folder moves its conversations and subfolders to its parent; no conversation is deleted
 - [x] A user can't see another user's folders or file another user's conversation (404)
-- [ ] Same behavior on the SQLite and Postgres folder stores — Postgres store written to the same rules and builds, but not yet run against a live Postgres/Supabase database
+- [ ] Same behavior on the SQLite and Postgres folder stores — Postgres store written to the same rules and builds, but not yet run against a live Postgres/Supabase database (moved to **Phase 134**)
 - [x] Labels reflect live links: attaching an agent, creating a linked workflow, or launching a swarm from a chat updates that conversation's label with no stored "type"
 - [x] Swarm and team runs launched from a chat record `agent_runs.session_id`
 - [x] Web + Desktop parity: folder tree, ⋯ menus, Move dialog, drag and drop, chat-header breadcrumb, search across folders — Desktop drag and drop built but not live-verified (needs a hand check)
 - [x] Drag and drop refuses invalid drops (into own subfolder, past depth 5, duplicate sibling name) before anything is sent; dropping on Unfiled unfiles; hovering a collapsed folder expands it; the server rejects the same moves if a client sends them anyway
 - [x] Web sidebar uses `ListWithTitlesAsync` (no per-session history load)
 - [x] Endpoints documented in `docs/server.md`, SDK methods added, `docs/persistence.md` updated for V048, CHANGELOG entry
+
+---
+
+## Phase 134 — Postgres / Supabase Backend Audit
+
+**Status:** Planned (2026-10-02) — SQLite remains the primary, fully verified backend; this phase brings the optional Postgres/Supabase backend (Phase 40C) up to the same standard.
+
+### Why
+
+The Postgres/Supabase backend replaces a subset of stores (sessions, credentials, knowledge, MCP trust rules, attributions, and — since Phase 133 — conversation folders) while everything else stays on SQLite. It has drifted without anyone running it end to end:
+
+- `PostgresSessionStore.SearchAsync` selected three columns while its shared row reader read a fourth, so search failed on Postgres (found and fixed during Phase 133, never caught by a test).
+- `PostgresSchema.sql` tracked schema version 43 while the SQLite schema had reached 47.
+- Phase 133's `PostgresSessionFolderStore` follows the same rules as the SQLite store and builds, but has never run against a live database.
+- There is no automated Postgres test run at all — every Postgres code path is verified only by compiling.
+
+### What ships
+
+1. **A real Postgres test target.** A Testcontainers (or `SOVRANT_TEST_PG` connection-string) fixture so the store tests run against Postgres in CI and locally, skipped cleanly when no Postgres is available.
+2. **Store-by-store parity tests.** Run the existing SQLite store test suites (sessions, credentials, knowledge, trust rules, attributions, conversation folders) against the Postgres implementations, and fix every divergence.
+3. **Schema audit.** Walk V001–V048 against `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/`: every table, column, index, constraint, and default; idempotent re-run on an already-initialised database; correct `sovrant_schema_version`.
+4. **Split-backend audit.** List which stores live on Postgres vs SQLite under the Supabase backend, and check every cross-store query or join (e.g. Phase 133 labels read `workflows`/`agent_runs` from SQLite while sessions are on Postgres) for correctness.
+5. **SQLite → Postgres migrator check** against a copy of a real database, including V043+ rows and Phase 133 folders.
+6. **Supabase specifics:** connection-string handling, RLS interaction (Phase 127), and the `20261002000000_session_folders.sql` migration applied via the Supabase CLI.
+
+### Acceptance criteria
+
+- [ ] Postgres test fixture runs locally and in CI; skipped (not failed) when unavailable
+- [ ] Every Postgres-backed store passes the same test suite as its SQLite twin
+- [ ] Schema diff V001–V048 vs `PostgresSchema.sql` is empty (or every difference is documented and intentional)
+- [ ] `PostgresSchema.sql` re-runs cleanly on an initialised database; `sovrant_schema_version` matches the SQLite head
+- [ ] SQLite → Postgres migration verified on a copy of a real database
+- [ ] Conversation folders (Phase 133) verified on Postgres: nesting, depth limit, cycle refusal, sibling-name uniqueness, delete-moves-contents-up, ownership 404s
+
+### Relationship to other phases
+
+- **Phase 40C** built the backend; **Phase 127** (Supabase RLS) builds on it — this audit should land first or alongside.
+- **Phase 133** left one acceptance criterion open ("same behavior on the SQLite and Postgres folder stores") — closed by this phase.
