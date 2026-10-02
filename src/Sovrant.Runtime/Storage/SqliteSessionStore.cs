@@ -258,11 +258,11 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
         using var cmd = connection.CreateCommand();
         if (ownerUserId is null)
         {
-            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, workspace_id, is_private FROM sessions ORDER BY updated_at DESC";
+            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, workspace_id, is_private, folder_id, agent_name FROM sessions ORDER BY updated_at DESC";
         }
         else
         {
-            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, workspace_id, is_private FROM sessions WHERE user_id = $uid ORDER BY updated_at DESC";
+            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, workspace_id, is_private, folder_id, agent_name FROM sessions WHERE user_id = $uid ORDER BY updated_at DESC";
             cmd.Parameters.AddWithValue("$uid", ownerUserId);
         }
 
@@ -276,7 +276,9 @@ internal sealed class SqliteSessionStore(ISqliteConnectionFactory connectionFact
                 UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
                 OwnerUserId: await reader.IsDBNullAsync(3, ct).ConfigureAwait(false) ? null : reader.GetString(3),
                 WorkspaceId: await reader.IsDBNullAsync(4, ct).ConfigureAwait(false) ? null : reader.GetString(4),
-                IsPrivate: !await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) && reader.GetInt64(5) != 0));
+                IsPrivate: !await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) && reader.GetInt64(5) != 0,
+                FolderId: await reader.IsDBNullAsync(6, ct).ConfigureAwait(false) ? null : reader.GetString(6),
+                AgentName: await reader.IsDBNullAsync(7, ct).ConfigureAwait(false) ? null : reader.GetString(7)));
         }
         return summaries;
     }

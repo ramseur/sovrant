@@ -23,7 +23,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-15. See [LICENSE](LICENSE).
-**Status:** 60 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,282 tests passing across 10 projects.
+**Status:** 60 tools. 25 agent templates. 32 built-in skills. 146 server endpoints + SignalR hub. Conversation folders. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,337 tests passing across 10 projects.
 
 | Web | Desktop |
 |---|---|
@@ -344,6 +344,10 @@ Submit a single complex prompt and the swarm auto-decomposes it into a task DAG,
 
 Long-lived, goal-driven AI workflows that span multiple engine runs (formerly called "missions"). Describe a goal; the planner decomposes it into steps, agents execute them with re-planning and acceptance gates, and every transition lands in an event journal. Optionally review and edit the generated plan before it runs. Workflows are durable (persisted to SQLite), workspace-scoped, advanced in the background by `WorkflowSchedulerService` on the server, and manageable from the Workflows page (Web + Desktop) or the API (`/v1/workflows/*`). See [Workflows](#workflows).
 
+### Conversation Folders
+
+File any conversation — plain chats, agent chats, workflow chats, webhook conversations, and the chats that launched a swarm or team run — into folders you create. Folders are per user, span every workspace, and nest up to 5 levels. Drag a conversation (or a folder) onto a folder, or use **Move to folder…** from its ⋯ menu or the chat header's **Move** button; invalid moves (a folder into its own subfolder, past 5 levels, a duplicate name) are refused while you drag. Deleting a folder moves its contents up a level — no conversation is ever deleted. Each row shows labels derived from what the conversation is linked to right now (`Agent · researcher`, `Workflow · Running`, `Swarm · 2 runs`, `Webhook · slack`); nothing about a conversation's type is stored. Web + Desktop parity; API at `/v1/session-folders`. See [`docs/server.md`](docs/server.md#conversation-folders).
+
 ### Session Persistence
 
 Every conversation is stored in a SQLite database with full-text search via FTS5. Resume sessions by name across CLI invocations or HTTP requests. Automatic context compaction when conversations exceed token limits. See [Persistence](#persistence).
@@ -470,10 +474,10 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | Project | Description |
 |---|---|
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
-| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 141 endpoints + SignalR hub. |
+| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 146 endpoints + SignalR hub. |
 | `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and management pages. |
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
-| `Sovrant.Runtime` | Core agentic loop, workflow engine, planner/executor, SQLite persistence (47 migrations V001–V047), permission system, tool executor, MCP client, cost tracking. |
+| `Sovrant.Runtime` | Core agentic loop, workflow engine, planner/executor, SQLite persistence (48 migrations V001–V048), permission system, tool executor, MCP client, cost tracking. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. Intent-aware model routing. |
 | `Sovrant.Tools` | All 60 tool implementations. 32 built-in skill `.md` files. |
 | `Sovrant.Storage.Postgres` | Optional PostgreSQL/Supabase backend — overrides `ISessionStore` and `ICredentialStore` with Npgsql implementations. Schema mirrors SQLite (V001–V047; see `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/`). Activated at boot when `system.database_backend = "supabase"` is set via the Admin → System Integrations UI. |
@@ -481,7 +485,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.Mcp` | Shared MCP protocol handlers (tools/list, tools/call, resources, prompts, completions). Consumed by both the CLI's `mcp-server` stdio subcommand and `Sovrant.Server`'s HTTP/SSE MCP transport. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
-| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 141-endpoint server (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
+| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 146-endpoint server (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
 
 ### Key Design Decisions
 
@@ -776,7 +780,7 @@ The `SmartRouter` pings all configured providers on startup, scores them by late
 
 ## Server API
 
-The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 141 endpoints + SignalR hub across 27 route groups:
+The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 146 endpoints + SignalR hub across 27 route groups:
 
 | Group | Endpoints | Description |
 |---|---|---|
@@ -784,6 +788,7 @@ The server exposes an OpenAI-compatible chat completions endpoint plus comprehen
 | **Command Center** | `GET /v1/command-center/state` | Live aggregated cockpit state (active workflows, team runs, agent runs, sessions); private records masked |
 | **User Dashboard** | `GET /v1/user-dashboard/state` | Personal cross-workspace activity view; own + teammates' public; own private; others' private excluded |
 | **Sessions** | 7 endpoints | CRUD, config, export, message history |
+| **Conversation folders** | 5 endpoints | Per-user folder tree (create, rename/move, delete), file a conversation into a folder |
 | **Workspaces** | 17 endpoints | Workspace CRUD, members, invites, config, memory, usage |
 | **Projects** | 15 endpoints | Project CRUD within workspaces, members, config, archive |
 | **Users** | 9 endpoints | User management, profiles, usage, audit |
@@ -853,7 +858,7 @@ dotnet run --project src/Sovrant.Web
 
 The TypeScript/JavaScript SDK (`sdk/js`) provides a typed client for building custom frontends against the Sovrant server.
 
-- **`SovrantClient`** — covers the 141-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center (`getCommandCenterState`), user dashboard (`getUserDashboardState`), sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), workflows, swarm, engine, evals, artifacts, and registries
+- **`SovrantClient`** — covers the 146-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center (`getCommandCenterState`), user dashboard (`getUserDashboardState`), sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), workflows, swarm, engine, evals, artifacts, and registries
 - **SSE streaming** — real-time token-by-token responses with `streamChat()`
 - **React `useChat()` hook** — drop-in conversational UI component
 - **85+ TypeScript interfaces** — full type coverage for all request/response shapes
@@ -955,7 +960,7 @@ Any language server that speaks LSP over stdio can be plugged in.
 
 All durable state is stored in a single SQLite database at `~/.sovrant/data/sovrant.db`. The database is created automatically on first run — no installer or manual setup required.
 
-**47 migrations (V001–V047).** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users (with password hashes + reset tokens), per-user API tokens (with sliding-TTL `last_used_at`), swarm events (with user ownership), runtime traces, workflows (renamed from missions in V047), teams (with per-team run profiles), agent runs, inter-agent coordination, hooks, workspace settings, MCP/LSP server registry (incl. MCP HTTP transport), user preferences, provider profiles (encrypted API keys via the keystore), per-session MCP gating, unified workspace identity, workspace provider profiles, agent run prompts, swarm federation (`parent_swarm_id`), and per-record privacy (`is_private` on workflows/agent_runs/sessions — V030).
+**48 migrations (V001–V048).** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users (with password hashes + reset tokens), per-user API tokens (with sliding-TTL `last_used_at`), swarm events (with user ownership), runtime traces, workflows (renamed from missions in V047), teams (with per-team run profiles), agent runs, inter-agent coordination, hooks, workspace settings, MCP/LSP server registry (incl. MCP HTTP transport), user preferences, provider profiles (encrypted API keys via the keystore), per-session MCP gating, unified workspace identity, workspace provider profiles, agent run prompts, swarm federation (`parent_swarm_id`), and per-record privacy (`is_private` on workflows/agent_runs/sessions — V030).
 
 ### Optional Supabase / PostgreSQL Backend
 
@@ -1167,7 +1172,7 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 2,282 tests across 10 projects
+dotnet test Sovrant.slnx   # 2,337 tests across 10 projects
 ```
 
 Test projects (10): `Sovrant.Runtime.Tests` (998) · `Sovrant.Agents.Tests` (240) · `Sovrant.Tools.Tests` (404) · `Sovrant.Server.Tests` (161) · `Sovrant.Api.Tests` (215) · `Sovrant.Runtime.Documents.Tests` (87) · `Sovrant.Commands.Tests` (56) · `Sovrant.Mcp.Tests` (34) · `Sovrant.Lsp.Tests` (26) · `Sovrant.Integration.Tests` (1).
@@ -1180,9 +1185,9 @@ All tests use isolated in-memory SQLite databases. No external services or API k
 
 | Document | Contents |
 |---|---|
-| [`docs/server.md`](docs/server.md) | Full server API reference — all 141 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
+| [`docs/server.md`](docs/server.md) | Full server API reference — all 146 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | SDK reference, proxy setup, browser SSE, multi-tenant LLM keys, React hook, remote mode (dual-mode web frontend) |
-| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 47 migrations (V001–V047), domain stores, Supabase/PostgreSQL backend, security model, keystore integration |
+| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 48 migrations (V001–V048), domain stores, Supabase/PostgreSQL backend, security model, keystore integration |
 | [`docs/agent-systems.md`](docs/agent-systems.md) | Team vs Swarm deep dive — architecture, value analysis, unified orchestration, inter-agent coordination |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | MCP server mode — IDE config, available tools/resources, OAuth, env vars |
 | [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |

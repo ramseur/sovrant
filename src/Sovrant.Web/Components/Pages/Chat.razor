@@ -22,6 +22,12 @@
         </div>
     }
 
+    @if (_messages.Count > 0)
+    {
+        <!-- Phase 133 — where this conversation is filed, its links, and Move -->
+        <SessionFolderHeader SessionId="@_sessionId" />
+    }
+
     <!-- Messages area -->
     <div class="chat-messages" id="chat-messages">
         @if (_messages.Count == 0 && !_isSending)
@@ -232,6 +238,7 @@
         ActiveContext.OnChanged += OnContextChanged;
         ActiveContext.OnSessionResume += OnSessionResume;
         ActiveContext.OnNewSession += OnNewSession;
+        ActiveContext.SetCurrentSession(_sessionId);
 
         // Resume from ?session=<id> in the URL (Command Center deep-link).
         var uri = new Uri(Nav.Uri);
@@ -279,6 +286,7 @@
         InvokeAsync(async () =>
         {
             _sessionId = sessionId;
+            ActiveContext.SetCurrentSession(_sessionId);
             _messages.Clear();
             _tokenCount = 0;
             _sessionCost = 0;
@@ -435,6 +443,7 @@
         _tokenCount = 0;
         _sessionCost = 0;
         _sessionId = $"session-{Guid.NewGuid():N}";
+        ActiveContext.SetCurrentSession(_sessionId);
         _agentName = null;
         _agentSystemPrompt = null;
         ActiveContext.SetActiveAgent(null);
@@ -541,6 +550,7 @@
                 _tokenCount = 0;
             _sessionCost = 0;
                 _sessionId = $"session-{Guid.NewGuid():N}";
+                ActiveContext.SetCurrentSession(_sessionId);
                 return;
             }
 

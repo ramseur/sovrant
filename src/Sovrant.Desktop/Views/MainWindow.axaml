@@ -359,5 +359,8 @@
 
         <!-- Command palette overlay -->
         <views:CommandPaletteOverlay DataContext="{Binding CommandPalette}" />
+
+        <!-- Phase 133 — conversation-folder dialogs (Move picker, name prompt) -->
+        <views:SessionFolderDialogOverlay DataContext="{Binding Sidebar.FolderDialog}" />
     </Panel>
 </Window>

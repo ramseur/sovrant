@@ -1,4 +1,13 @@
 window.sovrantInterop = {
+    // Phase 133 — [top, bottom, left, right, viewportHeight] of an element, for
+    // placing the conversation-folder ⋯ menu outside the scrolling sidebar.
+    rectOf: function (elementId) {
+        const el = document.getElementById(elementId);
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return [r.top, r.bottom, r.left, r.right, window.innerHeight];
+    },
+
     scrollToBottom: function (elementId) {
         const el = document.getElementById(elementId);
         if (el) {
@@ -99,3 +108,13 @@ window.sovrantInterop = {
         document.documentElement.setAttribute('data-theme', saved);
     }
 })();
+
+
+// Phase 133 — Firefox only starts an HTML5 drag when dataTransfer has data; Blazor's
+// @ondragstart doesn't set any, so do it for the conversation-folder rows here.
+document.addEventListener('dragstart', function (e) {
+    if (e.target && e.target.closest && e.target.closest('[data-sf-drag]') && e.dataTransfer) {
+        e.dataTransfer.setData('text/plain', '');
+        e.dataTransfer.effectAllowed = 'move';
+    }
+}, true);

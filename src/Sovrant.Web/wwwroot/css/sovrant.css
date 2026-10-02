@@ -3862,3 +3862,136 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
     color: var(--text-muted);
     line-height: 1.4;
 }
+
+/* ===== Conversation folders (Phase 133) — see docs/design/web.html, Chat screen ===== */
+.sf-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+.sf-bar .sidebar-search { flex: 1; margin-bottom: 0; }
+.sf-icon-btn {
+    width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--text-secondary);
+}
+.sf-icon-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.sf-icon-btn svg { width: 16px; height: 16px; }
+
+.sf-row {
+    position: relative; display: flex; align-items: center; gap: 7px;
+    min-height: 34px; border-radius: 8px; flex-shrink: 0; cursor: pointer;
+    padding: 4px 4px 4px calc(6px + var(--d, 0) * 16px);
+    color: var(--text-secondary); font-size: 13px; user-select: none;
+}
+.sf-row:hover { background: var(--surface-hover); color: var(--text-primary); }
+.sf-row.on { background: color-mix(in srgb, var(--brand-primary) 18%, transparent); color: var(--brand-primary); }
+.sf-row.on .sf-name { font-weight: 600; }
+.sf-tw { display: flex; width: 14px; justify-content: center; color: var(--text-muted); flex-shrink: 0; }
+.sf-tw svg { width: 12px; height: 12px; transition: transform .12s; }
+.sf-tw.open svg { transform: rotate(90deg); }
+.sf-ico { display: flex; color: var(--text-muted); flex-shrink: 0; }
+.sf-ico svg { width: 15px; height: 15px; }
+.sf-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; margin: 0 4px 0 5px; }
+.sf-dot.live { background: var(--status-pass); }
+.sf-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.sf-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-meta { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sf-meta.active { color: var(--status-pass); }
+.sf-count { font-size: 11px; color: var(--text-muted); padding: 0 4px; }
+.sf-more {
+    width: 24px; height: 24px; border-radius: 6px; flex-shrink: 0; opacity: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: transparent; color: var(--text-muted);
+}
+.sf-more svg { width: 15px; height: 15px; }
+.sf-row:hover .sf-more, .sf-row.menu .sf-more, .sf-more:focus-visible { opacity: 1; }
+.sf-more:hover { background: var(--surface-hover); color: var(--text-primary); }
+
+/* Drag and drop */
+.sf-row.dragging { opacity: .4; }
+.sf-row.drop, .sf-drop-head.drop { background: color-mix(in srgb, var(--brand-primary) 18%, transparent); color: var(--brand-primary); box-shadow: inset 0 0 0 2px var(--brand-primary); }
+.sf-row.nodrop, .sf-drop-head.nodrop { background: color-mix(in srgb, var(--status-fail) 10%, transparent); box-shadow: inset 0 0 0 2px var(--status-fail); }
+.sf-drop-head { border-radius: 6px; display: flex; flex-direction: column; gap: 2px; }
+.sf-why { font-size: 11px; font-weight: 500; color: var(--status-fail); text-transform: none; letter-spacing: 0; white-space: normal; }
+
+/* "..." menu — rendered outside the scrolling list at a fixed position */
+.sf-menu-backdrop { position: fixed; inset: 0; z-index: 90; }
+.sf-menu {
+    position: fixed; z-index: 95; width: 228px; padding: 5px;
+    display: flex; flex-direction: column;
+    background: var(--surface-card); border: 1px solid var(--surface-border);
+    border-radius: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+}
+.sf-menu button {
+    display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 9px;
+    border-radius: 7px; background: transparent; color: var(--text-primary);
+    font-size: 12.5px; text-align: left;
+}
+.sf-menu button:hover:not(:disabled) { background: var(--surface-hover); }
+.sf-menu button:disabled { opacity: .45; cursor: not-allowed; }
+.sf-menu button svg { width: 14px; height: 14px; color: var(--text-secondary); }
+.sf-menu .danger, .sf-menu .danger svg { color: var(--status-fail); }
+.sf-sep { height: 1px; background: var(--surface-border); margin: 4px 2px; }
+.sf-hint { font-size: 11px; color: var(--text-muted); line-height: 1.45; padding: 2px 9px 6px; }
+
+/* Errors */
+.sf-error { font-size: 12px; color: var(--status-fail); padding: 0 18px 10px; line-height: 1.4; }
+.sf-error-inline { display: flex; align-items: flex-start; gap: 6px; padding: 6px 8px; margin-bottom: 8px; border-radius: 8px; background: color-mix(in srgb, var(--status-fail) 10%, transparent); }
+.sf-error-inline span { flex: 1; }
+.sf-error-x { background: transparent; color: var(--status-fail); font-size: 14px; line-height: 1; padding: 0 2px; }
+
+/* Dialogs (Move / name) */
+.sf-dialog {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: min(420px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+    display: flex; flex-direction: column; z-index: 101;
+    background: var(--surface-card); border: 1px solid var(--surface-border);
+    border-radius: 12px; box-shadow: 0 16px 48px rgba(0, 0, 0, .5);
+}
+.sf-dialog-sm { width: min(360px, calc(100vw - 32px)); }
+.sf-dialog h3 { margin: 0; font-size: 15px; padding: 16px 18px 4px; color: var(--text-primary); }
+.sf-dialog-sub { font-size: 12px; color: var(--text-muted); padding: 0 18px 10px; margin: 0; line-height: 1.45; }
+.sf-dialog-body { padding: 4px 18px 12px; }
+.sf-pick { border-top: 1px solid var(--surface-border); border-bottom: 1px solid var(--surface-border); padding: 6px; overflow: auto; display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.sf-pick-row {
+    display: flex; align-items: center; gap: 7px; min-height: 34px; border-radius: 8px;
+    padding: 4px 6px 4px calc(10px + var(--d, 0) * 16px);
+    background: transparent; color: var(--text-secondary); font-size: 13px; text-align: left;
+}
+.sf-pick-row:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-primary); }
+.sf-pick-row.on { background: color-mix(in srgb, var(--brand-primary) 18%, transparent); color: var(--brand-primary); font-weight: 600; }
+.sf-pick-row.dis { opacity: .45; cursor: not-allowed; }
+.sf-pick-row .sf-name { flex: 1; }
+.sf-cur { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); padding-right: 4px; }
+.sf-new-row { display: flex; gap: 6px; padding: 6px; }
+.sf-input {
+    width: 100%; height: 34px; padding: 0 10px; border-radius: 8px;
+    background: var(--input-bg); border: 1px solid var(--input-border);
+    color: var(--text-primary); font-size: 13px;
+}
+.sf-input:focus { outline: none; border-color: var(--brand-primary); }
+.sf-dialog-ft { display: flex; align-items: center; gap: 8px; padding: 12px 14px; }
+.sf-sp { flex: 1; }
+.sf-ghost { display: inline-flex; align-items: center; gap: 6px; background: transparent; color: var(--text-secondary); }
+.sf-ghost svg { width: 13px; height: 13px; }
+
+/* Chat header: where the conversation is filed + its links + Move */
+.sf-chead {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0;
+    min-height: 44px; padding: 0 16px; border-bottom: 1px solid var(--surface-border);
+    font-size: 12.5px; color: var(--text-secondary);
+}
+.sf-crumb { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.sf-crumb .sf-ico svg { width: 13px; height: 13px; }
+.sf-crumb-sep { display: flex; color: var(--text-muted); }
+.sf-crumb-sep svg { width: 12px; height: 12px; }
+.sf-crumb-title { color: var(--text-primary); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 40ch; }
+.sf-badge {
+    font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+    color: var(--brand-primary); background: color-mix(in srgb, var(--brand-primary) 16%, transparent);
+    border: 1px solid color-mix(in srgb, var(--brand-primary) 35%, transparent);
+}
+.sf-badge.active { color: var(--status-pass); background: color-mix(in srgb, var(--status-pass) 14%, transparent); border-color: color-mix(in srgb, var(--status-pass) 38%, transparent); }
+.sf-ghost-btn {
+    display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px;
+    border-radius: 8px; background: transparent; color: var(--text-secondary); font-size: 12.5px;
+}
+.sf-ghost-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
+.sf-ghost-btn svg { width: 14px; height: 14px; }

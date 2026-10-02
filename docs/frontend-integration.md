@@ -294,8 +294,16 @@ const models = await client.getModels();
 ### Session Management
 
 ```ts
-// List all sessions
-const sessionIds = await client.listSessions();
+// List all sessions (with title, folder, and derived labels on Phase 133+ servers)
+const { sessions } = await client.listSessions();
+
+// Conversation folders (Phase 133) — per user, up to 5 levels
+const { folders } = await client.listSessionFolders();
+const clientA = await client.createSessionFolder({ name: "Client A" });
+const proposals = await client.createSessionFolder({ name: "Proposals", parent_folder_id: clientA.folder_id });
+await client.moveSessionToFolder("session-abc", proposals.folder_id);   // null unfiles
+await client.updateSessionFolder(proposals.folder_id, { parent_folder_id: null }); // move to top level
+await client.deleteSessionFolder(proposals.folder_id);                  // contents move up; nothing else deleted
 
 // Get session details (history, token totals)
 const session = await client.getSession("session-abc");

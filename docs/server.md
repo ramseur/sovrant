@@ -242,11 +242,77 @@ OpenAI-compatible model list built from known providers.
 
 ### Sessions — `GET /v1/sessions`
 
-Lists saved session IDs. Non-admin callers see only sessions they own; admin callers see all sessions.
+Lists saved sessions, newest first. Non-admin callers see only sessions they own; admin callers see all sessions. Internal system sessions (workflow planner, context compactor) are never listed.
 
 ```json
-{ "sessions": [{ "id": "abc123" }, { "id": "def456" }] }
+{
+  "sessions": [
+    {
+      "id": "abc123",
+      "session_id": "abc123",
+      "title": "Proposal draft v2",
+      "updated_at": "2026-10-02T09:15:00.0000000+00:00",
+      "folder_id": "fld-…",
+      "agent_name": "proposal-writer",
+      "is_private": false,
+      "labels": [{ "text": "Agent · proposal-writer", "is_active": false }]
+    }
+  ]
+}
 ```
+
+`id` is kept for older clients; Phase 133 added the other fields. `folder_id` is the conversation folder it's filed in (`null` = unfiled). `labels` are derived from the conversation's live links — attached agent, linked workflow and its status, swarm/team runs it launched, webhook source — never stored; `is_active` marks something running right now.
+
+---
+
+## Conversation Folders
+
+Phase 133. Folders are per user (across every workspace), nest up to 5 levels, and hold conversations only. Every call acts on the **caller's own** tree — admins included — and another user's folder or conversation is indistinguishable from one that doesn't exist (`404`). Refusals carry a machine-readable `code`:
+
+| Status | `code` | When |
+|---|---|---|
+| 400 | `invalid_name` | Name empty, longer than 100 characters, or contains control characters |
+| 400 | `too_deep` | The change would put a folder below level 5 |
+| 400 | `cycle` | Moving a folder into itself or one of its own subfolders |
+| 404 | `not_found` | Folder (or target parent) missing or not yours |
+| 409 | `duplicate_name` | A folder with that name (ignoring case) already exists at that level |
+
+### List folders — `GET /v1/session-folders`
+
+```json
+{ "folders": [{ "folder_id": "fld-…", "parent_folder_id": null, "name": "Client A", "sort_order": 0, "created_at": "…", "updated_at": "…" }] }
+```
+
+### Create a folder — `POST /v1/session-folders`
+
+```json
+{ "name": "Proposals", "parent_folder_id": "fld-…" }
+```
+
+Omit `parent_folder_id` (or send `null`) for a top-level folder. Returns `201` with the folder.
+
+### Rename and/or move — `PATCH /v1/session-folders/{id}`
+
+```json
+{ "name": "Bids" }
+{ "parent_folder_id": "fld-…" }
+{ "parent_folder_id": null }
+```
+
+`parent_folder_id` is a move only when the property is present: `null` moves the folder to the top level; absent leaves it where it is.
+
+### Delete — `DELETE /v1/session-folders/{id}`
+
+Returns `204`. The folder's conversations and subfolders move up to its parent in the same transaction — no conversation is ever deleted. A moved subfolder whose name clashes at the new level gets a `" (2)"`, `" (3)"`, … suffix.
+
+### File a conversation — `PUT /v1/sessions/{id}/folder`
+
+```json
+{ "folder_id": "fld-…" }
+{ "folder_id": null }
+```
+
+`null` unfiles it. Returns `204`; `404` without a `code` when the conversation isn't yours, `404` with `code: not_found` when the folder isn't.
 
 ---
 

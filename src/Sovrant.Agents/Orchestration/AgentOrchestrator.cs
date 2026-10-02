@@ -95,7 +95,8 @@ public sealed partial class AgentOrchestrator : IAgentOrchestrator
                 _ => "swarm-task",
             },
             Status: "running",
-            StartedAt: DateTimeOffset.UtcNow), ct).ConfigureAwait(false);
+            StartedAt: DateTimeOffset.UtcNow,
+            SessionId: request.SessionId ?? Sovrant.Runtime.Conversation.TurnContext.Current?.SessionId), ct).ConfigureAwait(false);
 
         try
         {

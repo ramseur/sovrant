@@ -1,0 +1,190 @@
+@using Sovrant.Runtime.Session
+@using Sovrant.Web.Services
+@inject IServiceProvider Services
+@inject ActiveContextService ActiveContext
+
+@* Phase 133 — "Move to folder" picker, shared by the sidebar's ⋯ menus and the
+   chat header's Move button. Moves either a conversation or a folder. Folders
+   that would break a tree rule (own subfolder, depth limit, name clash) are
+   shown but disabled, with the reason as a tooltip. *@
+
+@if (_open)
+{
+    <div class="palette-backdrop" @onclick="Close"></div>
+    <div class="sf-dialog" role="dialog" aria-label="@_heading">
+        <h3>@_heading</h3>
+        <p class="sf-dialog-sub">
+            @(_movingFolderId is null
+                ? "Pick a folder. Links to its agent, workflow, and runs stay as they are — a folder only changes where the conversation is listed."
+                : "Pick where this folder and everything in it should go.")
+        </p>
+        <div class="sf-pick">
+            <button class="sf-pick-row @(_target is null ? "on" : "")" style="--d:0" @onclick="() => Select(null)">
+                <span class="sf-ico">@(_movingFolderId is null ? FolderIcons.Chat : FolderIcons.Folder)</span>
+                <span class="sf-name">@(_movingFolderId is null ? "Unfiled" : "Top level")</span>
+                @if (_currentParent is null)
+                {
+                    <span class="sf-cur">Current</span>
+                }
+            </button>
+            @foreach (var (folder, depth, refusal) in _rows)
+            {
+                var isCurrent = folder.FolderId == _currentParent;
+                var disabled = refusal is not null;
+                <button class="sf-pick-row @(_target == folder.FolderId ? "on" : "") @(disabled ? "dis" : "")"
+                        style="--d:@depth" disabled="@disabled"
+                        title="@(disabled ? SessionFolderRules.Describe(refusal!.Value) : null)"
+                        @onclick="() => Select(folder.FolderId)">
+                    <span class="sf-ico">@FolderIcons.Folder</span>
+                    <span class="sf-name">@folder.Name</span>
+                    @if (isCurrent)
+                    {
+                        <span class="sf-cur">Current</span>
+                    }
+                </button>
+            }
+            @if (_creating)
+            {
+                <div class="sf-new-row">
+                    <input class="sf-input" placeholder="Folder name" maxlength="@SessionFolderRules.MaxNameLength"
+                           @bind="_newName" @bind:event="oninput" @onkeydown="NewFolderKey" @ref="_newInput" />
+                    <button class="btn-sm btn-primary" @onclick="CreateFolder">Create</button>
+                </div>
+            }
+        </div>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="sf-error" role="alert">@_error</div>
+        }
+        <div class="sf-dialog-ft">
+            <button class="btn-sm sf-ghost" @onclick="StartCreate">@FolderIcons.FolderPlus New folder</button>
+            <span class="sf-sp"></span>
+            <button class="btn-sm" @onclick="Close">Cancel</button>
+            <button class="btn-sm btn-primary" disabled="@(_busy || _target == _currentParent)" @onclick="Move">Move here</button>
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Raised after a successful move so the caller can refresh.</summary>
+    [Parameter] public EventCallback OnMoved { get; set; }
+
+    private bool _open;
+    private bool _busy;
+    private string _heading = string.Empty;
+    private string? _sessionId;
+    private string? _movingFolderId;
+    private string? _currentParent;
+    private string? _target;
+    private string? _error;
+    private bool _creating;
+    private string _newName = string.Empty;
+    private ElementReference _newInput;
+    private IReadOnlyList<SessionFolder> _folders = [];
+    private IReadOnlyList<(SessionFolder Folder, int Depth, SessionFolderError? Refusal)> _rows = [];
+
+    private SessionSidebarService Sidebar => SessionSidebarService.From(Services);
+    private static string Me => Sovrant.Web.Program.SovrantUserId;
+
+    /// <summary>Opens the picker for a conversation currently in <paramref name="currentFolderId"/>.</summary>
+    public Task OpenForSessionAsync(string sessionId, string title, string? currentFolderId) =>
+        OpenAsync($"Move “{title}”", sessionId, null, currentFolderId);
+
+    /// <summary>Opens the picker for a folder currently under <paramref name="currentParentId"/>.</summary>
+    public Task OpenForFolderAsync(string folderId, string name, string? currentParentId) =>
+        OpenAsync($"Move “{name}”", null, folderId, currentParentId);
+
+    private async Task OpenAsync(string heading, string? sessionId, string? folderId, string? currentParent)
+    {
+        _heading = heading;
+        _sessionId = sessionId;
+        _movingFolderId = folderId;
+        _currentParent = currentParent;
+        _target = currentParent;
+        _error = null;
+        _creating = false;
+        _newName = string.Empty;
+        await LoadAsync();
+        _open = true;
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _folders = (await Sidebar.LoadAsync(Me)).Folders;
+            _rows = SessionFolderTree.PickerRows(_folders, _movingFolderId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _error = $"Couldn't load folders: {ex.Message}";
+        }
+    }
+
+    private void Select(string? folderId)
+    {
+        _target = folderId;
+        _error = null;
+    }
+
+    private async Task StartCreate()
+    {
+        _creating = true;
+        _error = null;
+        StateHasChanged();
+        await Task.Yield();
+        try { await _newInput.FocusAsync(); } catch (InvalidOperationException) { }
+    }
+
+    private async Task NewFolderKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await CreateFolder();
+        else if (e.Key == "Escape") _creating = false;
+    }
+
+    private async Task CreateFolder()
+    {
+        try
+        {
+            var created = await Sidebar.CreateFolderAsync(Me, _newName, _target);
+            _creating = false;
+            _newName = string.Empty;
+            await LoadAsync();
+            _target = created.FolderId;
+            ActiveContext.NotifyDataChanged();
+        }
+        catch (SessionFolderException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task Move()
+    {
+        _busy = true;
+        try
+        {
+            if (_movingFolderId is not null)
+                await Sidebar.MoveFolderAsync(Me, _movingFolderId, _target);
+            else if (_sessionId is not null && !await Sidebar.MoveSessionAsync(Me, _sessionId, _target))
+            {
+                _error = "That conversation can't be moved — it may have been deleted.";
+                return;
+            }
+            _open = false;
+            ActiveContext.NotifyDataChanged();
+            await OnMoved.InvokeAsync();
+        }
+        catch (SessionFolderException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Close() => _open = false;
+}

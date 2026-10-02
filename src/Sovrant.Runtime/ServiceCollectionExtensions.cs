@@ -196,6 +196,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISessionStore>(sp =>
             new SqliteSessionStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Phase 133 — conversation folders live beside sessions (the Postgres
+        // backend replaces both together); labels always read SQLite, where
+        // workflows and agent runs stay regardless of the session backend.
+        services.AddSingleton<ISessionFolderStore>(sp =>
+            new SqliteSessionFolderStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<ISessionLinkResolver>(sp =>
+            new SqliteSessionLinkResolver(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
         // Token usage tracking
         services.AddSingleton<ITokenUsageStore>(sp =>
             new SqliteTokenUsageStore(sp.GetRequiredService<ISqliteConnectionFactory>()));

@@ -128,11 +128,22 @@ public sealed class RemoteSessionStore : ISessionStore
         {
             foreach (var item in arr.EnumerateArray())
             {
-                var id = item.GetProperty("session_id").GetString();
+                // Older servers only send "id"; Phase 133 servers add session_id, folder, and labels.
+                var id = (item.TryGetProperty("session_id", out var sid) ? sid : item.GetProperty("id")).GetString();
                 if (id is null) continue;
-                var title = item.TryGetProperty("title", out var t) ? t.GetString() : null;
-                var updated = item.TryGetProperty("updated_at", out var u) ? u.GetDateTimeOffset() : DateTimeOffset.UtcNow;
-                summaries.Add(new SessionListItem(id, title, updated));
+                var title = item.TryGetProperty("title", out var t) && t.ValueKind == JsonValueKind.String ? t.GetString() : null;
+                var updated = item.TryGetProperty("updated_at", out var u) && u.ValueKind == JsonValueKind.String ? u.GetDateTimeOffset() : DateTimeOffset.UtcNow;
+                var folderId = item.TryGetProperty("folder_id", out var f) && f.ValueKind == JsonValueKind.String ? f.GetString() : null;
+                var agent = item.TryGetProperty("agent_name", out var a) && a.ValueKind == JsonValueKind.String ? a.GetString() : null;
+                var isPrivate = item.TryGetProperty("is_private", out var priv) && priv.ValueKind == JsonValueKind.True;
+                var labels = item.TryGetProperty("labels", out var l) && l.ValueKind == JsonValueKind.Array
+                    ? l.EnumerateArray()
+                        .Select(x => new SessionLabel(
+                            x.GetProperty("text").GetString() ?? string.Empty,
+                            x.TryGetProperty("is_active", out var act) && act.ValueKind == JsonValueKind.True))
+                        .ToList()
+                    : [];
+                summaries.Add(new SessionListItem(id, title, updated, IsPrivate: isPrivate, FolderId: folderId, AgentName: agent, Labels: labels));
             }
         }
         return summaries;

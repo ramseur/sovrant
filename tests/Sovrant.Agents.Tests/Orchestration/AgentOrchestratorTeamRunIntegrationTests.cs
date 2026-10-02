@@ -208,6 +208,52 @@ public sealed class AgentOrchestratorTeamRunIntegrationTests
         Assert.Equal(SwarmTaskStatus.Blocked, planTasks[0].Status);
     }
 
+    [Theory]
+    [InlineData(true)]   // launched from a chat turn (TeamRun tool): TurnContext supplies the conversation
+    [InlineData(false)]  // launched with an explicit SessionId (e.g. a caller that knows its conversation)
+    public async Task Run_RecordsTheConversationThatLaunchedIt(bool fromTurnContext)
+    {
+        var registry = new FakeTeamRegistry();
+        var team = new TeamInfo(
+            Id: $"team-link-{fromTurnContext}", WorkspaceId: "ws-1", ProjectId: null, Name: "link-team",
+            Description: null, Origin: "user", CreatedBy: "alice", CreatedAt: DateTimeOffset.UtcNow)
+        {
+            RunMode = TeamRunMode.Parallel,
+            FileLocksEnabled = true,
+            DecompositionMode = TeamDecompositionMode.Off,
+        };
+        registry.CreateTeam(team);
+        var locks = new FileLockManager();
+        locks.TryAcquire("notes.md", "external-holder"); // every task blocks fast — no agent runs
+
+        var runs = new CapturingAgentRunStore();
+        var orchestrator = new AgentOrchestrator(
+            BuildRealSwarmOrchestrator(registry, locks), new UnreachableDecomposer(), registry, runs,
+            new PassingQualityGate(), new SwarmConfig { Enabled = true }, NullLogger<AgentOrchestrator>.Instance);
+
+        var request = new EnsembleRunRequest
+        {
+            Goal = "write notes",
+            TeamId = team.Id,
+            WorkspaceId = "ws-1",
+            UserId = "alice",
+            SessionId = fromTurnContext ? null : "chat-explicit",
+            Plan = [new SwarmTaskNode { Id = "t1", Description = "writer", Wave = 0, FilesToModify = { "notes.md" } }],
+        };
+
+        if (fromTurnContext)
+        {
+            using (Sovrant.Runtime.Conversation.TurnContext.Begin("chat-from-turn", "alice"))
+                await orchestrator.RunAsync(request);
+        }
+        else
+        {
+            await orchestrator.RunAsync(request);
+        }
+
+        Assert.Equal(fromTurnContext ? "chat-from-turn" : "chat-explicit", runs.Created.Single().SessionId);
+    }
+
     // ── Helpers ─────────────────────────────────────────────────────────
 
     private static SwarmOrchestrator BuildRealSwarmOrchestrator(
@@ -266,6 +312,29 @@ public sealed class AgentOrchestratorTeamRunIntegrationTests
     {
         public Task<QualityVerdict> ReviewAsync(string swarmId, string originalPrompt, string combinedOutput, CancellationToken ct = default) =>
             Task.FromResult(new QualityVerdict(10, "pass", "ok"));
+    }
+
+    private sealed class CapturingAgentRunStore : IAgentRunStore
+    {
+        public List<AgentRunRecord> Created { get; } = [];
+
+        public Task<AgentRunRecord> CreateAsync(AgentRunRecord run, CancellationToken ct = default)
+        {
+            Created.Add(run);
+            return Task.FromResult(run);
+        }
+
+        public Task<AgentRunRecord?> GetAsync(string runId, CancellationToken ct = default) =>
+            Task.FromResult(Created.FirstOrDefault(r => r.RunId == runId));
+
+        public Task UpdateStatusAsync(string runId, string status, int inputTokens = 0, int outputTokens = 0, decimal? costUsd = null, CancellationToken ct = default) =>
+            Task.CompletedTask;
+
+        public Task<IReadOnlyList<AgentRunRecord>> ListAsync(AgentRunFilter? filter = null, int limit = 50, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<AgentRunRecord>>(Created);
+
+        public Task UpdatePrivacyAsync(string runId, string ownerUserId, bool isPrivate, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 
     private sealed class NoOpAgentRunStore : IAgentRunStore

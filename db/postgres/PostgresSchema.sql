@@ -792,6 +792,32 @@ CREATE INDEX IF NOT EXISTS ix_instincts_owner         ON instincts(owner_user_id
 
 ALTER TABLE public.users DROP COLUMN IF EXISTS username;
 
+-- ── V048 Conversation folders (Phase 133) ────────────────────────────────────
+-- Mirrors V048__session_folders.sql. Per-user adjacency-list folder tree; the
+-- service layer enforces depth (5), no cycles, and delete-moves-contents-up, so
+-- parent_folder_id deliberately has no ON DELETE CASCADE. Sibling names are
+-- unique ignoring case (lower(name) here; COLLATE NOCASE on SQLite).
+
+CREATE TABLE IF NOT EXISTS session_folders (
+    folder_id        TEXT PRIMARY KEY,
+    owner_user_id    TEXT NOT NULL,
+    parent_folder_id TEXT REFERENCES session_folders(folder_id),
+    name             TEXT NOT NULL,
+    sort_order       INTEGER NOT NULL DEFAULT 0,
+    created_at       TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')),
+    updated_at       TEXT NOT NULL DEFAULT (to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
+);
+
+CREATE INDEX IF NOT EXISTS ix_session_folders_tree ON session_folders(owner_user_id, parent_folder_id);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_session_folders_sibling
+    ON session_folders(owner_user_id, COALESCE(parent_folder_id, ''), lower(name));
+
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS folder_id TEXT REFERENCES session_folders(folder_id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS ix_sessions_folder ON sessions(user_id, folder_id);
+
+ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS session_id TEXT;
+CREATE INDEX IF NOT EXISTS ix_agent_runs_session ON agent_runs(session_id);
+
 -- ── Schema version tracking ───────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS sovrant_schema_version (
@@ -802,5 +828,5 @@ CREATE TABLE IF NOT EXISTS sovrant_schema_version (
 );
 
 INSERT INTO sovrant_schema_version (id, version)
-VALUES (1, 43)
+VALUES (1, 48)
 ON CONFLICT (id) DO UPDATE SET version = EXCLUDED.version, applied_at = EXCLUDED.applied_at;

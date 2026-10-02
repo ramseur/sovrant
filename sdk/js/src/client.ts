@@ -56,6 +56,9 @@ import type {
   SessionConfigUpdate,
   SessionDetail,
   SessionListResponse,
+  SessionFolder,
+  CreateSessionFolderRequest,
+  UpdateSessionFolderRequest,
   SkillDetail,
   SkillSummary,
   SovrantClientOptions,
@@ -332,6 +335,45 @@ export class SovrantClient {
       `/v1/sessions/${encodeURIComponent(sessionId)}`,
       { method: "DELETE" }
     );
+  }
+
+  // ── Conversation folders (Phase 133) ─────────────────────────────────
+
+  /** List the caller's whole folder tree (folders are private to their owner). */
+  async listSessionFolders(): Promise<{ folders: SessionFolder[] }> {
+    const res = await this.fetchWithRetry("/v1/session-folders");
+    return (await res.json()) as { folders: SessionFolder[] };
+  }
+
+  /** Create a folder; pass `parent_folder_id` to nest it (max 5 levels). */
+  async createSessionFolder(request: CreateSessionFolderRequest): Promise<SessionFolder> {
+    const res = await this.fetchWithRetry("/v1/session-folders", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as SessionFolder;
+  }
+
+  /** Rename and/or move a folder. `parent_folder_id: null` moves it to the top level. */
+  async updateSessionFolder(folderId: string, request: UpdateSessionFolderRequest): Promise<SessionFolder> {
+    const res = await this.fetchWithRetry(`/v1/session-folders/${encodeURIComponent(folderId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as SessionFolder;
+  }
+
+  /** Delete a folder. Its conversations and subfolders move up to its parent — nothing else is deleted. */
+  async deleteSessionFolder(folderId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/session-folders/${encodeURIComponent(folderId)}`, { method: "DELETE" });
+  }
+
+  /** File a conversation into a folder, or pass `null` to unfile it. */
+  async moveSessionToFolder(sessionId: string, folderId: string | null): Promise<void> {
+    await this.fetchWithRetry(`/v1/sessions/${encodeURIComponent(sessionId)}/folder`, {
+      method: "PUT",
+      body: JSON.stringify({ folder_id: folderId }),
+    });
   }
 
   /** Get session-level config overrides (model, permission mode). */

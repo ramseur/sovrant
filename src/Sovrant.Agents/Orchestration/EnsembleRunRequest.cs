@@ -37,6 +37,13 @@ public sealed class EnsembleRunRequest
     /// <summary>Parent run ID for sub-spawns (swarm wave step, mission sub-step).</summary>
     public string? ParentRunId { get; init; }
 
+    /// <summary>
+    /// Phase 133 — the conversation that launched this run. When null, the
+    /// orchestrator falls back to the current chat turn (if any), so runs
+    /// started from a chat via the TeamRun tool are linked automatically.
+    /// </summary>
+    public string? SessionId { get; init; }
+
     // ── Feature flags (opt-in heavy machinery) ──────────────────────────
 
     /// <summary>Whether to auto-decompose the goal into a DAG via <c>LlmSwarmDecomposer</c>.

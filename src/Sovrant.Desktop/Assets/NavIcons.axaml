@@ -24,4 +24,11 @@
     <!-- Privacy lock/unlock — used wherever a row toggles between private and public. -->
     <StreamGeometry x:Key="IconLock">M3,11 L21,11 L21,22 L3,22 Z M7,11 L7,7 A5,5 0 0 1 17,7 L17,11</StreamGeometry>
     <StreamGeometry x:Key="IconUnlock">M3,11 L21,11 L21,22 L3,22 Z M7,11 L7,7 A5,5 0 0 1 16.9,6</StreamGeometry>
+    <!-- Phase 133 — conversation folders (same paths as docs/design: I.folder, I.folderPlus, I.dots, I.pencil, I.trash) -->
+    <StreamGeometry x:Key="IconFolder">M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z</StreamGeometry>
+    <StreamGeometry x:Key="IconFolderPlus">M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z M12 11 L12 17 M9 14 L15 14</StreamGeometry>
+    <StreamGeometry x:Key="IconDots">M4 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M11 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M18 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0</StreamGeometry>
+    <StreamGeometry x:Key="IconPencil">M12 20 L21 20 M16.5 3.5 a2.1 2.1 0 0 1 3 3 L7 19 L3 20 L4 16 Z</StreamGeometry>
+    <StreamGeometry x:Key="IconTrash">M3 6 L21 6 M8 6 L8 4 L16 4 L16 6 M19 6 L18 20 L6 20 L5 6</StreamGeometry>
+    <StreamGeometry x:Key="IconChevronRight">M9 18 L15 12 L9 6</StreamGeometry>
 </ResourceDictionary>

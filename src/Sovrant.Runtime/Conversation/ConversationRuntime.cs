@@ -246,6 +246,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             ? Knowledge.AttributionScope.Begin(_sessionId, turnIndex, _attributionStore)
             : null;
 
+        // Phase 133 — lets tools that start runs (TeamRun, Swarm) record which
+        // conversation launched them, for the sidebar's derived labels.
+        using var turnContextScope = TurnContext.Begin(_sessionId, _ownerUserId);
+
         var turnTimeoutSeconds = int.TryParse(
             Environment.GetEnvironmentVariable("SOVRANT_TURN_TIMEOUT_SECONDS"), out var tts) && tts > 0 ? tts : 300;
         var originalCt = ct;

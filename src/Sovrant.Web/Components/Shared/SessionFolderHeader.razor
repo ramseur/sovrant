@@ -1,0 +1,92 @@
+@using Sovrant.Runtime.Session
+@using Sovrant.Web.Services
+@inject IServiceProvider Services
+@inject ActiveContextService ActiveContext
+@implements IDisposable
+
+@* Phase 133 — top of an open conversation: where it's filed, what it's linked
+   to (derived labels), and a Move button so it can be filed from inside it. *@
+
+<div class="sf-chead">
+    <span class="sf-crumb">
+        <span class="sf-ico">@FolderIcons.Folder</span>
+        @if (_path.Count == 0)
+        {
+            <span>Unfiled</span>
+        }
+        @foreach (var name in _path)
+        {
+            <span>@name</span>
+            <span class="sf-crumb-sep">@FolderIcons.Chevron</span>
+        }
+        @if (_path.Count == 0)
+        {
+            <span class="sf-crumb-sep">@FolderIcons.Chevron</span>
+        }
+        <span class="sf-crumb-title">@_title</span>
+    </span>
+    @foreach (var label in _labels)
+    {
+        <span class="sf-badge @(label.IsActive ? "active" : "")">@label.Text</span>
+    }
+    <span class="sf-sp"></span>
+    <button class="sf-ghost-btn" @onclick="OpenMove">@FolderIcons.Folder Move</button>
+</div>
+
+<SessionMoveDialog @ref="_move" />
+
+@code {
+    [Parameter, EditorRequired] public string SessionId { get; set; } = string.Empty;
+
+    private SessionMoveDialog? _move;
+    private IReadOnlyList<string> _path = [];
+    private IReadOnlyList<SessionLabel> _labels = [];
+    private string _title = SessionFolderTree.UntitledText;
+    private string? _folderId;
+    private string? _loadedFor;
+
+    private static string Me => Sovrant.Web.Program.SovrantUserId;
+
+    protected override void OnInitialized() => ActiveContext.OnDataChanged += OnDataChanged;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedFor != SessionId)
+            await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loadedFor = SessionId;
+        try
+        {
+            var snapshot = await SessionSidebarService.From(Services).LoadAsync(Me);
+            var item = snapshot.Sessions.FirstOrDefault(s => s.SessionId == SessionId);
+            _folderId = item?.FolderId;
+            _title = item is null ? SessionFolderTree.UntitledText : SessionFolderTree.DisplayTitle(item);
+            _labels = item?.Labels ?? [];
+            var path = SessionFolderTree.PathOf(snapshot.Folders, _folderId);
+            _path = string.IsNullOrEmpty(path) ? [] : path.Split(" › ");
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The header is informational; a load failure leaves it showing "Unfiled".
+            _path = [];
+            _labels = [];
+        }
+    }
+
+    private async Task OpenMove()
+    {
+        if (_move is not null)
+            await _move.OpenForSessionAsync(SessionId, _title, _folderId);
+    }
+
+    private void OnDataChanged() => InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => ActiveContext.OnDataChanged -= OnDataChanged;
+}

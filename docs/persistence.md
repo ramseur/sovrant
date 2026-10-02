@@ -1,6 +1,6 @@
 # Sovrant — Persistence Layer
 
-**Phases 32–42.5, 51, 52, 55, 57, 78, 85, 87, 88, 90, 93, 98, 108–116, 123–126** | **Last updated:** 2026-10-02 | **Current schema:** V047
+**Phases 32–42.5, 51, 52, 55, 57, 78, 85, 87, 88, 90, 93, 98, 108–116, 123–126** | **Last updated:** 2026-10-02 | **Current schema:** V048
 
 This document describes how Sovrant stores durable operational data. All persistent state (sessions, memory, audit, credentials, token usage, workspaces, projects, users, knowledge, hooks, MCP/LSP config) is managed by a relational database. Three deployment modes are supported:
 
@@ -112,8 +112,9 @@ Migrations are embedded SQL resources named `V{NNN}__{description}.sql` inside t
 | V045 | `V045__seed_builtin_tool_guides.sql` | Seed data only — built-in tool guides for `CodeCreate` / `CodeCreateMulti` (Phase 128D) |
 | V046 | `V046__seed_code_validate_tool_guide.sql` | Seed data only — tool guide for `CodeValidateTool` (Phase 128E) |
 | V047 | `V047__rename_missions_to_workflows.sql` | Renames `missions` → `workflows`, `mission_events` → `workflow_events`, `mission_scratchpad` → `workflow_scratchpad` (plus indexes and the `mission_id` → `workflow_id` FK column) via `ALTER TABLE ... RENAME` — no data loss, one-way (Phase 129) |
+| V048 | `V048__session_folders.sql` | `session_folders` (per-user adjacency-list folder tree: `parent_folder_id` NULL = top level, no cascade; sibling names unique ignoring case via an expression index); adds `sessions.folder_id` (`ON DELETE SET NULL`) and `agent_runs.session_id` (the conversation a run was launched from) (Phase 133) |
 
-V008, V009, V022, V035, V037, V044–V046 ship no new tables — they are data backfills or seed inserts. V014–V016, V023–V025, V027–V031, V034, V036, V040–V043 add only columns to existing tables. V047 only renames existing tables and columns.
+V008, V009, V022, V035, V037, V044–V046 ship no new tables — they are data backfills or seed inserts. V014–V016, V023–V025, V027–V031, V034, V036, V040–V043 add only columns to existing tables. V047 only renames existing tables and columns. V048 adds one table and two columns.
 
 Migrations are idempotent — running `InitializeAsync` multiple times is safe. The runner skips already-applied versions and records the SHA-256 checksum of each script in `schema_version.checksum`. Checksum drift is enforced: if a previously-applied `V00X__*.sql` file has been edited in place, `InitializeAsync` throws `MigrationDriftException` on the next boot. Legacy rows with `checksum = NULL` are tolerated so pre-42.5 installs upgrade cleanly.
 

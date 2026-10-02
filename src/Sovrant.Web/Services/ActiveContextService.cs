@@ -46,6 +46,21 @@ public sealed class ActiveContextService
     /// </summary>
     public string? PendingResumeSessionId { get; set; }
 
+    /// <summary>
+    /// Phase 133 — the conversation open in the Chat page, so the sidebar can
+    /// highlight it and the chat header can show where it's filed.
+    /// </summary>
+    public string? CurrentSessionId { get; private set; }
+
+    /// <summary>Called by the Chat page whenever it switches conversation.</summary>
+    public void SetCurrentSession(string? sessionId)
+    {
+        if (string.Equals(CurrentSessionId, sessionId, StringComparison.Ordinal))
+            return;
+        CurrentSessionId = sessionId;
+        OnChanged?.Invoke();
+    }
+
     public void SetWorkspace(string id, string name, string? role = null)
     {
         WorkspaceId = id;

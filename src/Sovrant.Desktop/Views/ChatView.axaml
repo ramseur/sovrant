@@ -4,11 +4,56 @@
              xmlns:conv="using:Sovrant.Desktop.Converters"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
              xmlns:knowledge="using:Sovrant.Runtime.Knowledge"
+             xmlns:session="using:Sovrant.Runtime.Session"
              x:Class="Sovrant.Desktop.Views.ChatView"
              x:DataType="vm:ChatViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
     <DockPanel>
+        <!-- Phase 133 — top: where this conversation is filed, its links, and Move -->
+        <Border DockPanel.Dock="Top" IsVisible="{Binding HasMessages}"
+                MinHeight="44" Padding="16,6"
+                BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SurfaceBorder}">
+            <DockPanel DataContext="{Binding $parent[Window].((vm:MainViewModel)DataContext).Sidebar}"
+                       x:DataType="vm:SidebarViewModel">
+                <Button DockPanel.Dock="Right" Background="Transparent" CornerRadius="8" Padding="10,5"
+                        Command="{Binding MoveCurrentSessionCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <Path Data="{StaticResource IconFolder}" Width="14" Height="14" Stretch="Uniform"
+                              Stroke="{DynamicResource TextSecondary}" StrokeThickness="2" Fill="Transparent"
+                              StrokeLineCap="Round" StrokeJoin="Round" VerticalAlignment="Center" />
+                        <TextBlock Text="Move" FontSize="12.5" Foreground="{DynamicResource TextSecondary}" />
+                    </StackPanel>
+                </Button>
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Path Data="{StaticResource IconFolder}" Width="13" Height="13" Stretch="Uniform"
+                          Stroke="{DynamicResource TextMuted}" StrokeThickness="2" Fill="Transparent"
+                          StrokeLineCap="Round" StrokeJoin="Round" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding CurrentPath}" FontSize="12.5" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+                    <Path Data="{StaticResource IconChevronRight}" Width="11" Height="11" Stretch="Uniform"
+                          Stroke="{DynamicResource TextMuted}" StrokeThickness="2.4" Fill="Transparent"
+                          StrokeLineCap="Round" StrokeJoin="Round" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding CurrentTitle}" FontSize="12.5" FontWeight="SemiBold" MaxWidth="360"
+                               Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    <ItemsControl ItemsSource="{Binding CurrentLabels}" VerticalAlignment="Center" Margin="6,0,0,0">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="session:SessionLabel">
+                                <Border CornerRadius="999" Padding="8,2" Background="{DynamicResource BrandPrimarySoft}">
+                                    <TextBlock Text="{Binding Text}" FontSize="11" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource BrandPrimary}" />
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
         <!-- Bottom: Input bar -->
         <Border DockPanel.Dock="Bottom"
                 Padding="48,12"

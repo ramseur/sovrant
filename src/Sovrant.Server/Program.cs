@@ -260,6 +260,7 @@ ConfigRoutes.Map(app);
 StatusRoutes.Map(app);
 ModelsRoutes.Map(app);
 SessionRoutes.Map(app);
+SessionFolderRoutes.Map(app);
 UsageRoutes.Map(app);
 WebhookRoutes.Map(app);
 McpAuthRoutes.Map(app);

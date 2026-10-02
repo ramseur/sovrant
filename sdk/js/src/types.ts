@@ -184,8 +184,55 @@ export interface SessionMessage {
 }
 
 /** Response from GET /v1/sessions. */
+/** Phase 133 — a label derived from a conversation's live links, e.g. "Agent · researcher". */
+export interface SessionLabel {
+  text: string;
+  /** True for something running right now (e.g. a workflow in progress). */
+  is_active: boolean;
+}
+
+/** One row of GET /v1/sessions. Fields after `id` were added in Phase 133; older servers omit them. */
+export interface SessionSummary {
+  id: string;
+  session_id?: string;
+  title?: string | null;
+  updated_at?: string;
+  /** The conversation folder this session is filed in; null when unfiled. */
+  folder_id?: string | null;
+  agent_name?: string | null;
+  is_private?: boolean;
+  labels?: SessionLabel[];
+}
+
 export interface SessionListResponse {
-  sessions: { id: string }[];
+  sessions: SessionSummary[];
+}
+
+/** Phase 133 — a conversation folder. Folders are per user and nest up to 5 levels. */
+export interface SessionFolder {
+  folder_id: string;
+  /** null for a top-level folder. */
+  parent_folder_id: string | null;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Request body for POST /v1/session-folders. */
+export interface CreateSessionFolderRequest {
+  name: string;
+  /** Omit or null for a top-level folder. */
+  parent_folder_id?: string | null;
+}
+
+/**
+ * Request body for PATCH /v1/session-folders/:id. Include `parent_folder_id`
+ * only to move the folder — `null` moves it to the top level.
+ */
+export interface UpdateSessionFolderRequest {
+  name?: string;
+  parent_folder_id?: string | null;
 }
 
 /** Session config from GET /v1/sessions/:id/config. */

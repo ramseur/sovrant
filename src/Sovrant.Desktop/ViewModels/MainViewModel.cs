@@ -338,7 +338,19 @@ public partial class MainViewModel : ViewModelBase
     {
         var chat = _services.GetRequiredService<ChatViewModel>();
         chat.TurnCompleted += () => _ = Sidebar.RefreshSessionsCommand.ExecuteAsync(null);
+        // Phase 133 — keep the sidebar's open-conversation highlight and the chat header in sync.
+        chat.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ChatViewModel.SessionId) && ReferenceEquals(CurrentPage, chat))
+                Sidebar.CurrentSessionId = chat.SessionId;
+        };
         return chat;
+    }
+
+    partial void OnCurrentPageChanged(ViewModelBase value)
+    {
+        if (value is ChatViewModel chat)
+            Sidebar.CurrentSessionId = chat.SessionId;
     }
 
     private AgentsViewModel GetOrCreateAgentsViewModel()
