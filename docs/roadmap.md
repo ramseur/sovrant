@@ -237,6 +237,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Built |
 | Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Built |
 | Ollama only when active on your workspace — an admin-added Ollama provider enabled for the active workspace is the only way Sovrant contacts Ollama (`OLLAMA_BASE_URL`, documented in `.env.example`, only sets its default address); no default `localhost:11434`, no pings/cost-pick/fallback otherwise; pin by the profile's provider kind instead of "base URL is localhost" (fixes LM Studio and other local endpoints being sent to Ollama's port) | Phase 138 | Built |
+| Friendly MCP connection errors — classify failures (DNS, refused/timeout, 401/403 credentials, TLS) into one plain sentence with what to do; "Unavailable" badge + Retry in Integrations and a warning in the top-bar Integrations menu; one-line log entries instead of stack traces; automatic background retry (≈10 s, 1 min, 5 min) for network failures, none for credential errors | Phase 139 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12736,3 +12737,42 @@ Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted th
   - Api: router has no `ollama`; the pin message; the pin helper (primary wins over a cheaper secondary; no-op when empty); no `OllamaBaseUrl` default; pre-fill from the environment variable; local-provider check. 9 tests.
   - Runtime: guard switch-off, switch-back-on, keyless re-activation, no-op cases, and a turn that fails with the reason and never reaches the provider. 7 tests.
   - Full suite: 2,395 passed, 3 skipped.
+
+## Phase 139 — Friendly MCP Connection Errors
+
+**Status:** Planned (2026-10-05) — plan agreed; design mock next (the Integrations badge and the top-bar warning), then code.
+
+### Why
+
+On 2026-10-05 Desktop started during a brief DNS hiccup. `McpToolRegistrar.RegisterAllAsync` couldn't reach the workspace's `pixellab` MCP server (`api.pixellab.ai`, "No such host is known"), and the console printed **two full stack traces** for one non-fatal, expected condition: the MCP library's own "fail" entry, then Sovrant's warning repeating it. It read like a crash, and the user's first guess was a bad API key. A key problem looks different: the connection succeeds and the server answers 401/403. Worse, startup tries each server **once**, so its tools stay missing for the whole session unless the user restarts or reconnects it by hand in Integrations.
+
+### Decisions (confirmed 2026-10-05)
+
+| Question | Decision |
+|---|---|
+| Wording | One helper classifies a connection failure into a plain sentence plus what to do: **DNS** → "Couldn't reach api.pixellab.ai — check your internet connection. Retrying automatically."; **refused / timeout** → "PixelLab isn't responding (timed out). Retrying automatically."; **401 / 403** → "PixelLab rejected the credentials — update the key in Integrations."; **TLS** → "Secure connection to PixelLab failed (certificate problem)."; anything else → "Couldn't connect to PixelLab: <short message>." Full detail stays in the log file only |
+| Where it shows | **Integrations (Web + Desktop):** the server row shows an "Unavailable" badge with the reason and a **Retry** button. **Top-bar Integrations menu:** an unavailable server shows a small `warning` icon, with the reason on hover. **Console / log:** one line per failure, no stack trace (the MCP library's connection-error log is turned down; the full exception goes to the file at debug level) |
+| Retry | Network-type failures (DNS, refused, timeout, TLS) retry in the background with backoff (≈10 s, 1 min, 5 min). On success the server's tools register and the badge clears; the session never waits on it. **No** automatic retry for credential errors, since retrying can't fix them |
+| In chat | Not repeated in chat: the badge and top-bar warning are enough |
+
+### What ships
+1. `McpConnectionError` classifier (Runtime): exception → kind + friendly sentence + whether to retry.
+2. `McpToolRegistrar`:
+   - Records per-server status (connected / unavailable + reason).
+   - Schedules the backoff retries.
+   - Exposes status for the UIs.
+   - Logs connection failures as one line.
+3. Integrations (Web + Desktop): status badge, reason and Retry. Top-bar Integrations menu: warning icon and tooltip.
+4. Logging: the MCP client's connection-failure category is turned down.
+5. Design mock: an unavailable server row in Integrations and the top-bar menu warning.
+
+### Non-goals
+- Changing MCP authentication or OAuth flows.
+- Health-checking servers that connected fine (only failed connections are retried).
+
+### Acceptance criteria
+- [ ] Mock updated on both surfaces; parity diff still chrome-only
+- [ ] Each failure kind maps to its sentence (unit tests); credential errors never auto-retry
+- [ ] A server unreachable at startup reconnects on its own once reachable, and its tools appear without a restart
+- [ ] Console shows one line per failed connection, no stack traces
+- [ ] Integrations shows Unavailable + reason + Retry; the top-bar menu shows the warning (Web + Desktop)
