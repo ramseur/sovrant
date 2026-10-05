@@ -12780,7 +12780,7 @@ On 2026-10-05 Desktop started during a brief DNS hiccup. `McpToolRegistrar.Regis
 
 ## Phase 140 — Welcome & First-Run Onboarding
 
-**Status:** Planned (2026-10-05) — plan agreed; design mock next, then code.
+**Status:** Planned (2026-10-05) — plan agreed; design mock done (`docs/design/web.html` / `desktop.html`: Login states, the new Welcome screen with Admin / Member, Chat → Welcome); code next.
 
 ### Why
 
@@ -12827,7 +12827,7 @@ Rahul Singh's fork (PR #31) attempted parts of this. **Issue #27 (login onboardi
 - **Phase 138:** "provider connected" / "providers enabled for a workspace" read the same profile and workspace state the guard uses.
 
 ### Acceptance criteria
-- [ ] Mock: first-run login, Welcome page (admin + member), new chat welcome on both surfaces; parity diff chrome-only; logged in `docs/design/README.md`
+- [x] Mock: first-run login, Welcome page (admin + member), new chat welcome on both surfaces; parity diff chrome-only; logged in `docs/design/README.md`
 - [ ] Empty server → the login screen offers "Create administrator account" and explains the admin role; approval note shown when required
 - [ ] Every user sees the Welcome page once after first sign-in; it's role-aware; "Show welcome" reopens it
 - [ ] Checklist items tick from real state (no hard-coded ticks)

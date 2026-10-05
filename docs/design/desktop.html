@@ -304,6 +304,66 @@
   .strip.run .cnt::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warn,#F5A623);margin-right:7px;vertical-align:1px}
   .cbox.busy .ta{color:var(--t3);font-style:italic}
   .send.stop svg{width:14px;height:14px}
+  /* Phase 140 — first-run login, Welcome page, bigger chat welcome */
+  .linfo{font-size:12.5px;line-height:1.5;color:var(--t1);background:var(--brand-soft);border:1px solid color-mix(in srgb,var(--brand) 35%,transparent);border-radius:9px;padding:10px 12px}
+  .linfo b{font-weight:600}
+  .lnote{font-size:12px;color:var(--t2);text-align:center;margin-top:-6px}
+  .lok{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,transparent);border:1px solid color-mix(in srgb,var(--ok) 35%,transparent);border-radius:9px;padding:10px 12px}
+  .lok svg{width:15px;height:15px;flex-shrink:0;margin-top:1px}
+  .lbusy{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;color:var(--t2)}
+  .spin{width:14px;height:14px;border-radius:50%;border:2px solid var(--border);border-top-color:var(--brand);animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .lbtn[disabled]{opacity:.6;cursor:default;filter:none}
+  .li[disabled]{opacity:.7}
+  .wpage{flex:1;overflow:auto;background:var(--bg)}
+  .wwrap{max-width:1120px;margin:0 auto;padding:46px 32px 36px;display:flex;flex-direction:column;gap:26px}
+  .whead{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px}
+  .whead .eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--brand)}
+  .whead h1{margin:0;font-size:32px;font-weight:700;letter-spacing:-.02em}
+  .whead p{margin:0;max-width:640px;font-size:16px;line-height:1.55;color:var(--t2)}
+  .wgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .wb{display:flex;flex-direction:column;gap:8px;padding:16px;border:1px solid var(--border);border-radius:12px;background:var(--card);transition:border-color .12s,background .12s;cursor:pointer}
+  .wb:hover{border-color:var(--brand);background:var(--brand-soft)}
+  .wb .wi{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;background:var(--brand-soft);color:var(--brand)}
+  .wb .wi svg{width:18px;height:18px}
+  .wb b{font-size:14px;font-weight:600}
+  .wb span{font-size:12.5px;line-height:1.5;color:var(--t2)}
+  .wb .go{margin-top:auto;padding-top:4px;font-size:12px;font-weight:600;color:var(--brand)}
+  .wcheck{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:18px 20px;display:flex;flex-direction:column;gap:10px}
+  .wcheck .hd{display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .wcheck h3{margin:0;font-size:15px;font-weight:600}
+  .wcheck .pg{font-size:12px;color:var(--t2)}
+  .wbar{height:6px;border-radius:999px;background:var(--border);overflow:hidden;margin-bottom:4px}
+  .wbar i{display:block;height:100%;background:var(--brand);border-radius:999px}
+  .wli{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--border);font-size:13px}
+  .wli .ck{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--t3);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:#fff}
+  .wli.done .ck{background:var(--ok);border-color:var(--ok)}
+  .wli .ck svg{width:12px;height:12px}
+  .wli .tx{flex:1;font-weight:500}
+  .wli.done .tx{color:var(--t2);font-weight:400}
+  .wli .sub2{display:block;font-size:11.5px;font-weight:400;color:var(--t3)}
+  .wli .act{font-size:12px;font-weight:600;color:var(--brand);white-space:nowrap;cursor:pointer}
+  .wli .okl{font-size:12px;color:var(--ok);white-space:nowrap}
+  .wfoot{display:flex;align-items:center;justify-content:center;gap:18px;flex-wrap:wrap}
+  .wfoot .lbtn{width:auto;padding:0 28px}
+  .wfoot .skip{font-size:13px;color:var(--t2);cursor:pointer}
+  .wfoot .hint{width:100%;text-align:center;font-size:12px;color:var(--t3)}
+  .welcome{overflow:auto;padding:32px 28px;gap:10px;justify-content:safe center}
+  .welcome .wm{width:72px;height:72px;border-radius:20px;background:var(--brand-soft);box-shadow:0 6px 24px -8px color-mix(in srgb,var(--brand) 60%,transparent);margin-bottom:10px}
+  .welcome .wm svg{width:38px;height:38px}
+  .welcome h3{font-size:28px;font-weight:700;letter-spacing:-.02em}
+  .welcome p{font-size:15px;max-width:560px;text-align:center;line-height:1.55;margin:0 0 16px}
+  .sugg{grid-template-columns:repeat(3,1fr);max-width:920px;gap:10px}
+  .sg{padding:14px 15px;font-size:13px}
+  .wcaps{width:100%;max-width:920px;margin-top:20px;display:flex;flex-direction:column;gap:10px}
+  .wcaps .lab{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);display:flex;justify-content:space-between;align-items:center}
+  .wcaps .lab a{text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--brand);cursor:pointer}
+  .wcaps .row{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+  .wc{display:flex;flex-direction:column;gap:4px;padding:10px 11px;border:1px solid var(--border);border-radius:10px;cursor:pointer}
+  .wc:hover{border-color:var(--brand);background:var(--brand-soft)}
+  .wc svg{width:16px;height:16px;color:var(--brand)}
+  .wc b{font-size:12.5px;font-weight:600}
+  .wc span{font-size:11.5px;color:var(--t3);line-height:1.35}
 
   /* pattern: ENTRY (login) */
   .entry{flex:1;display:flex;align-items:center;justify-content:center;padding:34px 20px;background:var(--bg)}
@@ -393,7 +453,7 @@
           <tr><td class="n">Overview</td><td class="num">2</td><td>Dashboard, Command Center — a row of stat tiles over an activity table. Identical structure; Dashboard is scoped to you, Command Center to everyone.</td></tr>
           <tr><td class="n">Settings</td><td class="num">4</td><td>Settings, Governance, Trust Boundary, Diagnostics — sectioned cards of labelled rows, each row a control with a description.</td></tr>
           <tr><td class="n">Conversation</td><td class="num">1</td><td>Chat — genuinely its own shape: welcome state, message thread, collapsed work strips, composer.</td></tr>
-          <tr><td class="n">Entry</td><td class="num">1</td><td>Login — the only screen with no rail.</td></tr>
+          <tr><td class="n">Entry</td><td class="num">2</td><td>Login and Welcome — the screens with no rail. Welcome is a one-time, full-window takeover after a user's first sign-in (Phase 140).</td></tr>
         </table>
       </div>
 
@@ -559,7 +619,9 @@ const ADMIN_GROUPS = {command:'Overview',users:'Access',governance:'Safety',diag
 
 const S = {
   login:{g:null,p:'Entry',t:'Login',url:'/login',
-    note:'The only screen with no rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary).'},
+    note:'No rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary). Phase 140: toggle Sign in / First run (no accounts yet → create the administrator) / Approval / Working.'},
+  welcome:{g:null,p:'Entry',t:'Welcome',url:'/welcome',
+    note:'Phase 140 — shown once to every user after their first sign-in (after provider setup on first run). Full window, no rail, role-aware: toggle Admin / Member. Checklist ticks come from real state. Reopen from Dashboard → Show welcome, or the chat welcome strip.'},
   dashboard:{g:'dashboard',p:'Overview',t:'Dashboard',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
     stats:[['My workflows',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
     note:'Scoped to you. Command Center is the same pattern scoped to everyone — one design, two data sources.'},
@@ -662,7 +724,7 @@ let navOpen=null, railFlyout=false;
 
 function buildIndex(){
   const el=document.getElementById('index');
-  const groups=[['Entry',['login']],['Overview',['dashboard','command']],['Conversation',['chat']],
+  const groups=[['Entry',['login','welcome']],['Overview',['dashboard','command']],['Conversation',['chat']],
     ['Knowledge',['artifacts','templates','documents','memory','skills','tools']],
     ['Agents',['agentlib','orchestration','workflows']],['Projects',['projects']],
     ['Admin',['users','workspaces','providers','governance','trust','diagnostics','platformint','systemint']],
@@ -680,6 +742,9 @@ function toggleFlyout(){ railFlyout=!railFlyout; document.getElementById('flyBtn
 function toggleRail(){ railOpen=!railOpen; document.getElementById('railBtn').classList.toggle('on',railOpen);
   document.getElementById('railBtn').textContent = railOpen?'Collapse rail':'Expand rail'; render(); }
 function setChatState(v){ chatState=v; render(); }
+let loginState='signin', welcomeRole='admin';
+function setLoginState(v){ loginState=v; render(); }
+function setWelcomeRole(v){ welcomeRole=v; render(); }
 function setOrchView(v){ orchView=v; render(); }
 
 function railHTML(s){
@@ -740,6 +805,7 @@ function flyoutHTML(s, idx){
 
 function phHTML(s){
   const acts=(s.acts||[]).map(([t,pri])=>`<button class="btn${pri?' pri':''}">${pri?sv(I.plus,2.4):''}${t}</button>`).join('')
+    + (cur==='dashboard'?`<button class="btn ghost" onclick="go('welcome')">Show welcome</button>`:'')
     + `<button class="btn ghost">${sv(I.refresh,2)}Refresh</button>`;
   return `<div class="ph"><div><h2>${s.t}</h2>${s.sub?`<div class="sub">${s.sub}</div>`:''}</div><div class="acts">${acts}</div></div>`;
 }
@@ -869,17 +935,24 @@ function workflowDetailHTML(sel){
 }
 
 function welcomeHTML(){
-  const sugg=[[I.agents,2,'Create a custom agent with tools for web research and summarization'],
-    [I.proj,2,'Create a team that researches a topic and produces a structured report'],
-    [I.box,1.8,'Build a best-practice swarm that parallelizes tasks across agents'],
-    [I.refresh,2,'Set up a workflow that monitors a project and sends daily updates'],
-    [I.chev,2,'Orchestrate a multi-agent pipeline for code review and testing'],
-    [I.clip,2,'Connect an MCP server and create an agent that uses its tools']];
+  /* Phase 140 — the empty chat fills the main area: larger mark and title (Rahul's #28 polish),
+     a wider suggestion grid, and a compact "What Sovrant can do" strip linking to each area. */
+  const sugg=[[ICONS.agents,'Create a custom agent with tools for web research and summarization'],
+    [ICONS.team,'Create a team that researches a topic and produces a structured report'],
+    [ICONS.swarm,'Build a best-practice swarm that parallelizes tasks across agents'],
+    [ICONS.workflow,'Set up a workflow that monitors a project and sends daily updates'],
+    [ICONS.orchestration,'Orchestrate a multi-agent pipeline for code review and testing'],
+    [ICONS.integrations,'Connect an MCP server and create an agent that uses its tools']];
+  const caps=[['agents','Agents','Your own assistants'],['team','Teams & Swarms','Agents working together'],
+    ['workflow','Workflows','Planned, scheduled work'],['knowledge','Knowledge','Skills, memory, docs'],
+    ['integrations','Integrations','MCP tools and platforms'],['trust','Trust Boundary','Redaction and controls']];
   return `<div class="welcome">
     <div class="wm">${sv(I.chat,1.7)}</div>
     <h3>What are you working on?</h3>
-    <p>Create agents, build teams, and orchestrate workflows to automate your work.</p>
-    <div class="sugg">${sugg.map(([icon,w,t])=>`<div class="sg">${sv(icon,w)}<span>${t}</span></div>`).join('')}</div>
+    <p>Chat with any model, or put agents, teams and workflows to work. Pick a starting point, or just type below.</p>
+    <div class="sugg">${sugg.map(([icon,t])=>`<div class="sg">${sv(icon,2)}<span>${t}</span></div>`).join('')}</div>
+    <div class="wcaps"><div class="lab"><span>What Sovrant can do</span><a onclick="go('welcome')">Show welcome →</a></div>
+      <div class="row">${caps.map(([ic,t,d])=>`<div class="wc">${sv(ICONS[ic])}<b>${t}</b><span>${d}</span></div>`).join('')}</div></div>
   </div>`;
 }
 
@@ -990,13 +1063,65 @@ function chatHTML(s){
 }
 
 function entryHTML(){
-  return `<div class="entry"><div class="lcard">
-    <div class="lhead"><div class="lw">Sovrant</div><div class="ls">Sign in to continue.</div></div>
-    <div class="fld"><label>Email</label><input class="li" placeholder="you@example.com"></div>
-    <div class="fld"><label>Password</label><input class="li" type="password" placeholder="Password"></div>
-    <button class="lbtn">Sign in</button>
-    <div class="lrule">Don't have an account?</div>
-    <button class="lbtn sec">Create account</button>
+  /* Phase 140 — first-run admin sign-up (from Rahul Singh's issue #27). States: signin (normal),
+     firstrun (no accounts yet), approval (just registered, approval required), working (creating). */
+  const st=loginState, first=st==='firstrun'||st==='working', working=st==='working';
+  const head=first
+    ? `<div class="lhead"><div class="lw">Sovrant</div><div class="ls">Welcome! Let's set up your server.</div></div>
+       <div class="linfo"><b>First-time setup</b> — no accounts exist yet. The first account you create becomes the <b>administrator</b>, with full control over registration, approvals, providers and workspaces.</div>`
+    : `<div class="lhead"><div class="lw">Sovrant</div><div class="ls">Sign in to continue.</div></div>`;
+  const ok=st==='approval'?`<div class="lok">${sv(ICONS.done,2)}<span>Account created. An administrator must approve it before you can sign in.</span></div>`:'';
+  const dis=working?' disabled':'';
+  const fields=`<div class="fld"><label>Email</label><input class="li" placeholder="you@example.com"${working?' value="alex@example.com"':''}${dis}></div>
+    <div class="fld"><label>Password</label><input class="li" type="password" placeholder="${first?'Choose a password':'Password'}"${working?' value="password123"':''}${dis}></div>`;
+  const actions=first
+    ? `<button class="lbtn"${dis}>Create administrator account</button>${working?`<div class="lbusy"><span class="spin"></span>Creating your administrator account…</div>`:''}`
+    : `<button class="lbtn">Sign in</button>
+       <div class="lrule">Don't have an account?</div>
+       <button class="lbtn sec">Create account</button>${st==='approval'?`<div class="lnote">New accounts need administrator approval before first sign-in.</div>`:''}`;
+  return `<div class="entry"><div class="lcard">${head}${ok}${fields}${actions}</div></div>`;
+}
+
+/* Phase 140 — "Welcome to Sovrant": once per user after first sign-in (and after provider setup on
+   first run). Full window, role-aware. Checklist ticks come from real state in the app. */
+function welcomePageHTML(){
+  const admin=welcomeRole==='admin';
+  const areas=[
+    ['chat','Chat with any model','Use OpenAI, Anthropic, OpenRouter or a local model, and switch any time. Keys stay encrypted on your server.','Start a chat'],
+    ['agents','Agents','Build assistants with their own instructions, tools and knowledge.','Open Agents'],
+    ['team','Teams & Swarms','Put agents to work together: in sequence, in parallel, or as a swarm.','Open Orchestration'],
+    ['workflow','Workflows','Plan multi-step work, review the plan, then let it run on a schedule.','Open Workflows'],
+    ['knowledge','Knowledge','Skills, code templates, memory and documents your agents draw on.','Open Knowledge'],
+    ['integrations','Integrations','Connect MCP servers and platforms so agents can work in your tools.','Open Integrations'],
+    admin?['trust','Trust Boundary & Governance','Redact sensitive data before it leaves, and decide which tools agents may use.','Open Trust Boundary']
+         :['private','Private by default','Your conversations stay yours unless you share them, and sensitive data is redacted before it reaches a model.','How privacy works'],
+    admin?['workspace','Workspaces & admin','Choose which providers, integrations and people each workspace gets.','Open Workspaces']
+         :['projects','Projects','Keep the files and conversations for a piece of work together.','Open Projects'],
+  ];
+  const tasks=admin?[
+      [true,'Connect a model provider','OpenRouter connected',''],
+      [false,'Enable providers for a workspace','Admins choose what each workspace can use','Open Workspaces'],
+      [false,'Invite your team','Add people and set their roles','Open Users'],
+      [false,'Connect an integration','GitHub, Slack, databases and more','Open Integrations'],
+      [false,'Create your first agent','Give it instructions, tools and knowledge','Create agent'],
+    ]:[
+      [true,'Pick a model','gemma-4-31b-it via OpenRouter',''],
+      [false,'Start your first conversation','Ask anything, or try a suggestion','Start chatting'],
+      [false,'Try an agent','Your workspace has 3 agents ready','Browse agents'],
+      [false,'Explore Knowledge','Skills and templates your agents use','Open Knowledge'],
+    ];
+  const done=tasks.filter(t=>t[0]).length;
+  return `<div class="wpage"><div class="wwrap">
+    <div class="whead"><span class="eyebrow">Sovrant</span>
+      <h1>Welcome to Sovrant, ${admin?'Alex':'Sam'}</h1>
+      <p>Your private AI workspace. Bring any model, keep your data, and stay in control of what your agents can do.</p></div>
+    <div class="wgrid">${areas.map(([ic,t,d,go])=>`<div class="wb"><div class="wi">${sv(ICONS[ic])}</div><b>${t}</b><span>${d}</span><div class="go">${go} →</div></div>`).join('')}</div>
+    <div class="wcheck"><div class="hd"><h3>${admin?'Get started: set up your server':'Get started'}</h3><span class="pg">${done} of ${tasks.length} done</span></div>
+      <div class="wbar"><i style="width:${Math.round(done/tasks.length*100)}%"></i></div>
+      ${tasks.map(([d,t,sub,act])=>`<div class="wli${d?' done':''}"><span class="ck">${d?sv(ICONS.allow,3):''}</span><span class="tx">${t}<span class="sub2">${sub}</span></span>${d?'<span class="okl">Done</span>':`<span class="act">${act} →</span>`}</div>`).join('')}
+    </div>
+    <div class="wfoot"><button class="lbtn" onclick="go('chat')">Start chatting</button><span class="skip" onclick="go('dashboard')">Skip for now</span>
+      <div class="hint">Reopen any time from Dashboard → Show welcome.</div></div>
   </div></div>`;
 }
 
@@ -1019,9 +1144,15 @@ function render(){
   } else if(cur==='orchestration'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${orchView==='team'?' on':''}" onclick="setOrchView('team')">Team</button><button class="cbtn${orchView==='defaults'?' on':''}" onclick="setOrchView('defaults')">Defaults</button>`;
+  } else if(cur==='login'){
+    ct.style.display='flex';
+    ct.innerHTML=[['signin','Sign in'],['firstrun','First run'],['approval','Approval'],['working','Working']].map(([k,t])=>`<button class="cbtn${loginState===k?' on':''}" onclick="setLoginState('${k}')">${t}</button>`).join('');
+  } else if(cur==='welcome'){
+    ct.style.display='flex';
+    ct.innerHTML=[['admin','Admin'],['member','Member']].map(([k,t])=>`<button class="cbtn${welcomeRole===k?' on':''}" onclick="setWelcomeRole('${k}')">${t}</button>`).join('');
   } else { ct.style.display='none'; }
   let inner='';
-  if(s.p==='Entry') inner=entryHTML();
+  if(s.p==='Entry') inner=cur==='welcome'?welcomePageHTML():entryHTML();
   else if(s.p==='Browse') inner=browseHTML(s);
   else if(s.p==='Overview') inner=overviewHTML(s);
   else if(s.p==='Settings') inner=settingsHTML(s);

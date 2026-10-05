@@ -296,6 +296,42 @@ Roadmap Phase 137. The Thread state already had right-aligned brand bubbles, fla
 - **Wide viewport:** the composer box is exactly 760px, with equal margins.
 - **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines.
 
+## Welcome & first-run onboarding (2026-10-05, design-only)
+
+Roadmap Phase 140. It takes Rahul Singh's first-run login (his issue #27) and his welcome polish (#28) further: one first-run journey, and a welcome that uses the whole window.
+
+**Login — four states** (*Sign in / First run / Approval / Working* toggles on the Login screen):
+- **First run:** no accounts exist yet. The subtitle reads "Welcome! Let's set up your server". A brand-tinted note explains that the first account becomes the **administrator** (registration, approvals, providers, workspaces). The password placeholder is "Choose a password", and the only button is **Create administrator account**.
+- **Working:** the fields and button are disabled, with a spinner and "Creating your administrator account…".
+- **Approval:** success shown in the success style, not the error style ("Account created. An administrator must approve it…"), plus the "New accounts need administrator approval" note under Create account.
+- **Rule kept:** wordmark only, no logo mark.
+
+**Welcome page — new screen** (index → Entry → Welcome; *Admin / Member* toggles). It's a full-window, one-time takeover after a user's first sign-in, with no rail; on first run it comes after provider setup.
+- **Header:** a "SOVRANT" eyebrow, "Welcome to Sovrant, <name>" (32px), and the tagline *"Your private AI workspace. Bring any model, keep your data, and stay in control of what your agents can do."*
+- **Info bubbles:** a 4×2 grid, each with an icon tile, title, two-line description and an "Open … →" link. The areas are Chat with any model · Agents · Teams & Swarms · Workflows · Knowledge · Integrations · Trust Boundary & Governance · Workspaces & admin. **For members** the last two become *Private by default* and *Projects*.
+- **Get started checklist:** a progress bar, "n of m done", rows with a check circle, a subtitle and an action link.
+  - *Admin:* connect a provider ✓ · enable providers for a workspace · invite your team · connect an integration · create your first agent.
+  - *Member:* pick a model ✓ · first conversation · try an agent · explore Knowledge.
+  - Ticks come from real state in the app; the mock shows one done.
+- **Footer:** **Start chatting** (primary), "Skip for now", and "Reopen any time from Dashboard → Show welcome". The Dashboard header gains a **Show welcome** button.
+
+**Chat welcome — bigger** (Chat → *Welcome*):
+- **Header:** 72px mark tile with a soft brand glow, 28px title, and a new subtitle ("Chat with any model, or put agents, teams and workflows to work…").
+- **Suggestions:** a 3-column grid, up to 920px wide, with the Phase 136 icon names (team, swarm, workflow, orchestration, integrations).
+- **Capabilities strip:** a "What Sovrant can do" strip of six cards (Agents · Teams & Swarms · Workflows · Knowledge · Integrations · Trust Boundary) with a **Show welcome →** link.
+- **Short windows:** the area scrolls (`justify-content: safe center`), so the mark is never clipped; on a maximized window it fills the main area.
+
+**Patterns table:** Entry is now *Login and Welcome*, 2 screens.
+
+**To check at build time:** the member bubble *Private by default* claims conversations are private unless shared, and that sensitive data is redacted before reaching a model. Confirm both against the real defaults (session privacy, Trust Boundary sanitizer) before shipping that copy.
+
+**Verified:** rendered in headless Edge, on both mocks:
+- **Login:** all four states (buttons, notes, spinner).
+- **Welcome:** admin and member pages (8 bubbles; 5 / 4 checklist rows; no empty icons).
+- **Chat welcome:** 6 suggestions and 6 capability cards; checked at the default and maximized sizes.
+- **Dashboard:** the Show welcome button.
+- **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.
