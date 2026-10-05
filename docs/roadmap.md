@@ -233,6 +233,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
 | Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — Postgres check moved to Phase 134 |
 | Postgres / Supabase backend audit — real Postgres test target (skipped when unavailable), store-by-store parity with the SQLite suites, schema diff V001–V048 vs `PostgresSchema.sql`, split-backend query audit, SQLite→Postgres migrator check; closes Phase 133's open Postgres criterion | Phase 134 | Planned |
+| App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12432,3 +12433,55 @@ The Postgres/Supabase backend replaces a subset of stores (sessions, credentials
 
 - **Phase 40C** built the backend; **Phase 127** (Supabase RLS) builds on it — this audit should land first or alongside.
 - **Phase 133** left one acceptance criterion open ("same behavior on the SQLite and Postgres folder stores") — closed by this phase.
+
+---
+
+## Phase 135 — App Sidebar: Collapsible Nav Groups + Always-Visible Conversations
+
+**Status:** Planned (2026-10-05) — approach agreed; design mock done (`docs/design/web.html` / `desktop.html`, *Collapse rail* / *Flyout* toggles); awaiting review before code.
+
+### Why
+
+Phase 133 put conversation folders in the rail panel, but that panel only shows them while the **Chat** group is selected — every other group uses the same panel for its sub-pages (Knowledge's 6, Agents' 3, Admin's 9). Folders should be reachable from anywhere, the way ChatGPT, Claude, Linear, Notion, and VS Code keep their item lists in the sidebar on every page. That means the sub-page list has to move out of the shared panel.
+
+### Decisions (confirmed 2026-10-05)
+
+| Question | Decision |
+|---|---|
+| Where sub-pages go | **Inline, collapsible groups** in the rail (chevron; sub-pages indented under their group) — the pattern Linear, Notion, and VS Code use |
+| Groups open at once | **One at a time** (accordion); the current page's group opens automatically |
+| Conversations section | **Always visible, on every page** — pinned below the nav, own scroll |
+| When the open group is long (rail overflow) | **Option 2:** the nav never scrolls on its own — it takes the height its open group needs; Conversations fill the rest with their own scroll, down to a 160px minimum; the expanded nav uses compact rows (36px groups, 30px sub-pages) so even a fully open Admin section plus Conversations fits a maximized 1080p window with nothing scrolling except the conversation list; only on a window too short for even that does the rail's middle scroll as one (the account footer stays pinned). The pattern Slack, Linear, and Notion use. Rejected: a capped, separately scrolling nav (two stacked scrollbars, hides part of the open group); a single whole-rail scroll like ChatGPT (folders get pushed off-screen); a draggable divider (kept as a possible follow-up) |
+| Collapsed (icon-only) rail | **Flyout** listing a group's sub-pages on hover or click/Enter/Space (Esc closes) — the pattern GitLab, Jira, and Azure DevOps use; never hover-only |
+| Rejected | Hover flyouts everywhere (poor discoverability, touch, and keyboard support); sub-pages as page-header tabs (splits navigation across two places, rewrites every page header) |
+
+### What ships
+
+**Expanded rail (top to bottom)**
+- Nav groups. Dashboard, Chat, and Projects stay plain links. Knowledge, Agents, and Admin become collapsible sections: a chevron, and when open, their sub-pages indented beneath (Admin keeps its Overview / Access / Safety / System labels). Opening one section closes any other.
+- A divider, then the **Conversations** section, filling the remaining height (at least 160px) with its own scrollbar — the nav above it never scrolls on its own; only on a very short window does the rail's middle scroll as one: search, New folder, FOLDERS tree, UNFILED — everything Phase 133 shipped (⋯ menus, Move dialog, drag and drop, derived labels) unchanged.
+- The Chat page no longer needs its own rail panel.
+
+**Collapsed rail (icons only)**
+- Hover, click, or Enter/Space on a group icon opens a flyout with that group's sub-pages; Esc or moving away closes it.
+- Conversations are hidden while collapsed. The Chat icon's flyout shows the 5 most recent conversations plus "Show all" (expands the rail).
+
+**Accessibility**
+- Section headers are buttons with `aria-expanded`; flyouts are `role="menu"` with arrow-key navigation and focus return on close (Desktop: equivalent keyboard handling).
+
+### Non-goals
+- Reordering nav groups or pinning favourites.
+- A resizable split between nav and conversations (possible follow-up if the fixed split proves cramped).
+- Any change to Phase 133's folder behaviour.
+
+### Relationship to other phases
+- **Phase 133** — the conversation tree moves from the Chat-only panel to a permanent rail section; no behaviour change.
+- **Left-nav redesign (design README, commit `7970ca3`)** — keeps its rail, icons, accent bar, and Admin grouping; only the sub-nav placement changes.
+
+### Acceptance criteria
+- [x] Design mock updated on both `web.html` and `desktop.html` (expanded with one open group, collapsed with a flyout, conversations visible on a non-Chat page), parity diff still chrome-only, logged in `docs/design/README.md`
+- [ ] Every sub-page reachable from both the expanded rail (inline) and the collapsed rail (flyout)
+- [ ] Only one nav group open at a time; the current page's group opens automatically
+- [ ] Conversations section visible on every page in the expanded rail, with its own scroll; all Phase 133 interactions still work there
+- [ ] Flyouts open by keyboard and close on Esc; no hover-only paths
+- [ ] Web + Desktop parity

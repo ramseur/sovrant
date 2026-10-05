@@ -200,6 +200,42 @@ Not modeled, deliberately (same reasoning as Orchestration's inline forms): the 
 - **Dragging / Refused drop:** the target outline and drag preview render beside the right row.
 - **Parity:** `web.html`/`desktop.html` diff is still 49 lines, all chrome, with line endings ignored. `desktop.html` is CRLF and `web.html` is LF; that was already the case before this pass.
 
+## App sidebar: collapsible groups + always-visible conversations (2026-10-05, design-only)
+
+Roadmap Phase 135. The rail's shared panel used to show either the selected group's sub-pages or, for Chat only, the conversation tree — so folders vanished whenever you left Chat. Sub-pages now live inline in the nav, and Conversations is pinned below it on every screen. Same rail, icons, accent bar, and Admin grouping as the left-nav redesign; only where sub-pages sit changes. No new pattern.
+
+**Expanded rail** (`railHTML`):
+- **Plain links:** Dashboard, Chat and Projects.
+- **Collapsible sections:** Knowledge, Agents and Admin each have a chevron (`aria-expanded`). When open, their sub-pages are indented beneath, in 30px rows with a 44px left pad. Admin keeps its Overview / Access / Safety / System labels.
+- **One group open at a time.** By default it's the current page's group (`navOpen === null`). Clicking another header swaps which one is open, and clicking the open one closes it.
+- **No nav scrollbar (option 2, chosen 2026-10-05):** the nav takes exactly the height its open group needs.
+- **Conversations section:** below a divider, with a "Conversations" heading, search, New folder, and the Phase 133 tree (FOLDERS / UNFILED). It fills the rest of the rail with its own scroll, down to a 160px minimum.
+- **Compact rows:** the expanded nav uses 36px group rows and 30px sub-page rows (Admin's labels tightened), so a fully open Admin plus Conversations fits a maximized 1080p window with no rail scroll. Measured: the rail never overflows at that size, and Conversations get 204px with Admin open, 384px with Knowledge, 480px with Agents and 576px with Chat or Dashboard.
+- **Short windows:** only when even 160px won't fit does the rail's middle (`.railbody`) scroll as one; the account footer stays pinned. The current page scrolls into view after each render.
+- **Earlier version:** this replaced a first pass that capped the nav at 52% and scrolled it separately, which meant two stacked scrollbars and hid part of the open group.
+- **Highlighting:** the open conversation is highlighted only on the Chat screen.
+- **Unchanged:** the folder ⋯ menu, drag-and-drop and Move dialog states all still work from the new location.
+
+**Collapsed rail** (new *Flyout* toggle beside *Collapse rail*; turning it on collapses the rail):
+- **Flyout:** an icon-only rail opens a flyout (`flyoutHTML`, `role="menu"`) beside the group's icon, listing that group's sub-pages with the current one highlighted. In the real app it opens on hover *or* click/Enter/Space and closes on Esc — never hover-only.
+- **Chat icon:** its flyout lists the 5 most recent conversations, then "Show all conversations", which expands the rail.
+- **Conversations while collapsed:** hidden.
+
+**New mock toggle:** *Maximized* makes the app frame 1,040px tall, roughly a maximized 1080p window, instead of the usual 700px, so the option 2 layout can be checked at full size.
+
+**New CSS:** `.railbody`, `.nav .gchev`, `.sub.in`, `.sgl.in`, `.cvhead`, `.nav.flyopen`, `.flyout` (+ `.fh/.fsep/.fall`). All of them use existing tokens. Row heights are 32px and 34px, both on the documented scale.
+
+**Not modeled:**
+- **Real interaction behaviour:** hover timing and keyboard navigation inside a flyout.
+- **Width-based fallbacks:** narrow-window behaviour.
+
+**Verified:** rendered in headless Edge.
+- **Knowledge / Skills, expanded:** the section is open with Skills highlighted, and Conversations sits below.
+- **Admin / Users, expanded:** checked at the 700px frame, where the rail middle scrolls, and with *Maximized*, where all of Admin is shown with no nav scroll and Conversations get the remaining space.
+- **Knowledge / Skills, maximized:** Conversations get most of the rail.
+- **Collapsed with flyout:** checked on both Skills and Chat.
+- **Parity:** `web.html`/`desktop.html` diff is still 49 chrome-only lines, with line endings ignored.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.
