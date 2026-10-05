@@ -26,7 +26,7 @@ public sealed class ToolCountCapTests
 {
     private const string ToolLikeMessage = "list files in the current directory for me";
 
-    private sealed class CapturingProvider : ILlmProvider
+    internal sealed class CapturingProvider : ILlmProvider
     {
         public string Name => "fake";
         public Uri BaseUrl => new("http://localhost");
@@ -58,7 +58,7 @@ public sealed class ToolCountCapTests
         }
     }
 
-    private sealed class FakeRouter : ISmartRouter
+    internal sealed class FakeRouter : ISmartRouter
     {
         public CapturingProvider Provider { get; } = new();
         public bool IntentRoutingEnabled { get; set; }
@@ -74,13 +74,13 @@ public sealed class ToolCountCapTests
             => Task.FromResult(new RoutingDecision(Provider, null, null, null));
     }
 
-    private sealed class StubToolExecutor : IToolExecutor
+    internal sealed class StubToolExecutor : IToolExecutor
     {
         public Task<ToolExecutionResult> ExecuteAsync(string toolName, JsonElement input, CancellationToken ct = default)
             => Task.FromResult(new ToolExecutionResult(true, "[]"));
     }
 
-    private sealed class InMemorySessionStore : ISessionStore
+    internal sealed class InMemorySessionStore : ISessionStore
     {
         public Task AppendAsync(string sessionId, SessionEntry entry, string? ownerUserId = null, CancellationToken ct = default)
             => Task.CompletedTask;

@@ -141,6 +141,10 @@ public sealed class SmartRouter : ISmartRouter, IAsyncDisposable, IDisposable
     {
         if (providerName is not null)
         {
+            if (!_providersByName.ContainsKey(providerName) && string.Equals(providerName, "ollama", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    "Ollama isn't enabled for this workspace. An admin can add an Ollama provider (Admin → Providers) " +
+                    "and enable it for the workspace; Sovrant then reaches Ollama through that provider's base URL.");
             if (!_providersByName.ContainsKey(providerName))
                 throw new InvalidOperationException(
                     $"Provider '{providerName}' is not configured. " +

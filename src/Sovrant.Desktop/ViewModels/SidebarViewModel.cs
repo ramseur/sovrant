@@ -468,6 +468,22 @@ public partial class SidebarViewModel : ViewModelBase
         var savedModel = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Model)
             .ConfigureAwait(false);
 
+        // Phase 138: a saved profile that isn't enabled for this workspace is switched off for
+        // the running process (so it's never contacted here); it comes back on when available.
+        var available = string.IsNullOrEmpty(savedProfileId)
+            ? null
+            : entries.FirstOrDefault(p => p.ProfileId == savedProfileId);
+        await Sovrant.Runtime.Providers.ActiveProviderGuard.ReconcileAsync(
+            _config, savedProfileId,
+            available is null ? null : Sovrant.Runtime.Providers.ActiveProviderGuard.AvailableProfile.From(available.CredentialId, available.BaseUrl, available.MaxTokens),
+            savedModel, _credentials,
+            (key, url) =>
+            {
+                if (_authProvider is null) return;
+                _authProvider.ApiKey = key;
+                _authProvider.BaseUrl = url;
+            }).ConfigureAwait(false);
+
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             ProviderProfiles.Clear();

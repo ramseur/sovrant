@@ -24,8 +24,8 @@
         </div>
 
         <div class="form-field">
-            <label>API Key</label>
-            <input type="password" @bind="_apiKey" placeholder="sk-..." autocomplete="off" data-lpignore="true" data-1p-ignore />
+            <label>API Key @(Sovrant.Api.Config.CredentialConfig.IsLocalProvider(_provider) ? "(optional)" : "")</label>
+            <input type="password" @bind="_apiKey" placeholder="@(Sovrant.Api.Config.CredentialConfig.IsLocalProvider(_provider) ? "Not required for local providers" : "sk-...")" autocomplete="off" data-lpignore="true" data-1p-ignore />
         </div>
 
         <div class="form-field">
@@ -71,7 +71,7 @@
         ["Groq"] = "https://api.groq.com/openai/v1",
         ["Mistral"] = "https://api.mistral.ai/v1",
         ["Together AI"] = "https://api.together.xyz/v1",
-        ["Ollama"] = "http://localhost:11434/v1",
+        ["Ollama"] = Sovrant.Api.Config.CredentialConfig.OllamaPrefillBaseUrl(),
         ["LM Studio"] = "http://localhost:1234/v1",
         ["Google"] = "https://generativelanguage.googleapis.com/v1beta/openai",
         ["Azure OpenAI"] = "",
@@ -80,7 +80,8 @@
 
     protected override void OnInitialized()
     {
-        if (!string.IsNullOrWhiteSpace(Config.ApiKey))
+        // Already set up: a key, or a keyless local provider's base URL (Phase 138).
+        if (!string.IsNullOrWhiteSpace(Config.ApiKey) || Config.BaseUrl is not null)
         {
             Nav.NavigateTo("/");
             return;
@@ -95,7 +96,11 @@
 
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(_apiKey)) { _status = "API key is required."; return; }
+        if (string.IsNullOrWhiteSpace(_apiKey) && !Sovrant.Api.Config.CredentialConfig.IsLocalProvider(_provider))
+        {
+            _status = "API key is required.";
+            return;
+        }
         _saving = true;
         _status = string.Empty;
         try
@@ -107,8 +112,12 @@
             var credentialId = $"provider.{profileId}.api_key";
             var userId = Sovrant.Web.Program.SovrantUserId;
 
-            await Credentials.StoreAsync(credentialId, trimmedKey);
-            await Credentials.StoreAsync(CredentialKeys.LlmApiKey, trimmedKey);
+            // Local providers (Ollama, LM Studio) may have no key; store one only when given.
+            if (trimmedKey.Length > 0)
+            {
+                await Credentials.StoreAsync(credentialId, trimmedKey);
+                await Credentials.StoreAsync(CredentialKeys.LlmApiKey, trimmedKey);
+            }
 
             var now = DateTimeOffset.UtcNow;
             var profile = new ProviderProfile(

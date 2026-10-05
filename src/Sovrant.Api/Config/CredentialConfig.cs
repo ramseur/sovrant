@@ -28,9 +28,28 @@ public sealed class CredentialConfig
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "String form used throughout for trailing-slash normalisation and HttpClient.BaseAddress construction.")]
     public string ProviderBaseUrl { get; init; } = string.Empty;
 
-    /// <summary>Ollama base URL (OLLAMA_BASE_URL env var — local service endpoint, not a secret).</summary>
+    /// <summary>
+    /// Ollama address from <c>OLLAMA_BASE_URL</c> (shell or <c>.env</c>) or <c>Llm:OllamaBaseUrl</c>;
+    /// <see langword="null"/> when unset. Phase 138: this only pre-fills the base URL of a new
+    /// Ollama provider profile. On its own it never makes Sovrant contact Ollama; that needs an
+    /// Ollama profile enabled for the workspace.
+    /// </summary>
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1056:URI-like properties should not be strings", Justification = "String form used throughout for trailing-slash normalisation and HttpClient.BaseAddress construction.")]
-    public string OllamaBaseUrl { get; init; } = "http://localhost:11434/v1/";
+    public string? OllamaBaseUrl { get; init; }
+
+    /// <summary>
+    /// The address an admin's new Ollama provider is pre-filled with: <c>OLLAMA_BASE_URL</c> (shell
+    /// or <c>.env</c>) when set, else Ollama's standard local address. Only text in a form field;
+    /// it never makes Sovrant contact Ollama (Phase 138).
+    /// </summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1055:URI-like return values should not be strings", Justification = "Pre-fills a text field and is stored as a string on the profile.")]
+    public static string OllamaPrefillBaseUrl() =>
+        (Environment.GetEnvironmentVariable("OLLAMA_BASE_URL") is { Length: > 0 } configured
+            ? configured
+            : "http://localhost:11434/v1").Trim().TrimEnd('/');
+
+    /// <summary>Providers that run locally and need no API key.</summary>
+    public static bool IsLocalProvider(string? providerKind) => providerKind is "Ollama" or "LM Studio";
 
     /// <summary>Brave Search API key — always empty; credential store only.</summary>
     public string BraveApiKey { get; init; } = string.Empty;
@@ -62,10 +81,13 @@ public sealed class CredentialConfig
         if (!string.IsNullOrWhiteSpace(providerBaseUrl) && !providerBaseUrl.EndsWith('/'))
             providerBaseUrl += "/";
 
+        // Phase 138: no default. An unset address means "no Ollama pre-fill", never "contact localhost:11434".
         var ollamaUrl = Environment.GetEnvironmentVariable("OLLAMA_BASE_URL")
-            ?? configuration["Llm:OllamaBaseUrl"]
-            ?? "http://localhost:11434/v1";
-        if (!ollamaUrl.EndsWith('/')) ollamaUrl += "/";
+            ?? configuration["Llm:OllamaBaseUrl"];
+        if (string.IsNullOrWhiteSpace(ollamaUrl))
+            ollamaUrl = null;
+        else if (!ollamaUrl.EndsWith('/'))
+            ollamaUrl += "/";
 
         return new CredentialConfig
         {

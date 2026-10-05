@@ -408,6 +408,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 Stream = true,   // runtime always uses streaming internally
             };
 
+            // Phase 138: no provider is active (e.g. the saved one isn't enabled for this
+            // workspace). Say so instead of sending the request to any endpoint.
+            if (_config.InactiveProviderReason is { } inactiveReason)
+            {
+                yield return new RuntimeEvent.RuntimeError(inactiveReason);
+                yield break;
+            }
+
             // RouteAsync can throw if all providers are unhealthy.
             // Catch outside yield (yield-in-try/catch is not permitted in iterators).
             Sovrant.Api.Providers.ILlmProvider? provider = null;
@@ -1555,10 +1563,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     /// </summary>
     private static string FriendlyProviderName(Sovrant.Api.Providers.ILlmProvider provider)
     {
-        // Named providers (e.g. OllamaProvider) may use localhost, so check the provider
-        // name first to avoid misidentifying them as generic "Local".
-        if (string.Equals(provider.Name, "ollama", StringComparison.OrdinalIgnoreCase)) return "Ollama";
         var host = provider.BaseUrl.Host;
+        // Local endpoints are reached through the primary provider at the profile's URL (Phase 138);
+        // Ollama's and LM Studio's standard ports identify them.
+        if (provider.BaseUrl.IsLoopback && provider.BaseUrl.Port == 11434) return "Ollama";
+        if (provider.BaseUrl.IsLoopback && provider.BaseUrl.Port == 1234) return "LM Studio";
         if (host.Contains("openrouter", StringComparison.OrdinalIgnoreCase)) return "OpenRouter";
         if (host.Contains("openai", StringComparison.OrdinalIgnoreCase)) return "OpenAI";
         if (host.Contains("anthropic", StringComparison.OrdinalIgnoreCase)) return "Anthropic";

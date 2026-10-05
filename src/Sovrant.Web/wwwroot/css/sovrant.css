@@ -4222,3 +4222,4 @@ svg.icon-brand { color: #FF9800; fill: currentColor; }
 .composer-send:hover:not(:disabled) { filter: brightness(1.08); }
 .composer-send:disabled { opacity: .45; cursor: default; }
 .composer-send:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }
+.active-done, .active-failed { margin-right: 6px; vertical-align: -2px; }

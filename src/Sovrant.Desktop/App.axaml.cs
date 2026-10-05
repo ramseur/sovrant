@@ -282,7 +282,8 @@ public partial class App : Application
 
         // ── API key / setup wizard ────────────────────────────────────────────
         // Skip setup wizard in remote mode — the server handles LLM credentials.
-        if (!isRemote && string.IsNullOrWhiteSpace(config.ApiKey))
+        // "Set up" = a key, or a keyless local provider's base URL (Phase 138).
+        if (!isRemote && string.IsNullOrWhiteSpace(config.ApiKey) && config.BaseUrl is null)
         {
             await RunSetupWizardAsync(desktop, _serviceProvider).ConfigureAwait(true);
             // Wizard hot-swapped config; refresh sidebar so it shows the new provider
@@ -293,22 +294,18 @@ public partial class App : Application
             mutableAuth.BaseUrl = config.BaseUrl;
         }
 
-        // Refresh the auth provider's key and base URL (local mode only).
-        if (!isRemote && !string.IsNullOrWhiteSpace(config.ApiKey))
+        // Refresh the auth provider's key and base URL (local mode only). The base URL is applied
+        // even without a key: local providers (LM Studio, Ollama) need none (Phase 138).
+        if (!isRemote)
         {
-            mutableAuth.ApiKey = config.ApiKey!;
+            if (!string.IsNullOrWhiteSpace(config.ApiKey))
+                mutableAuth.ApiKey = config.ApiKey!;
             mutableAuth.BaseUrl = config.BaseUrl;
 
-            // Pin the SmartRouter to the provider matching config.BaseUrl so Ollama
-            // (cost=0) never silently wins over a configured cloud provider.
+            // Every profile is served by the router's primary provider at its own base URL.
             var router = _serviceProvider.GetService<Sovrant.Api.Routing.ISmartRouter>();
             if (router is not null)
-            {
-                bool isLocal = config.BaseUrl is not null &&
-                               (config.BaseUrl.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-                                config.BaseUrl.Host == "127.0.0.1");
-                await router.PinProviderAsync(isLocal ? "ollama" : "openai-compat").ConfigureAwait(true);
-            }
+                await Sovrant.Api.Routing.ActiveProfileRouting.PinActiveProfileAsync(router).ConfigureAwait(true);
         }
 
         // ── 401 monitoring in remote mode ─────────────────────────────────────

@@ -236,7 +236,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Built |
 | Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Built |
 | Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Built |
-| Ollama only when active on your workspace — an admin-added Ollama provider enabled for the active workspace is the only way Sovrant contacts Ollama (`OLLAMA_BASE_URL`, documented in `.env.example`, only sets its default address); no default `localhost:11434`, no pings/cost-pick/fallback otherwise; pin by the profile's provider kind instead of "base URL is localhost" (fixes LM Studio and other local endpoints being sent to Ollama's port) | Phase 138 | Planned |
+| Ollama only when active on your workspace — an admin-added Ollama provider enabled for the active workspace is the only way Sovrant contacts Ollama (`OLLAMA_BASE_URL`, documented in `.env.example`, only sets its default address); no default `localhost:11434`, no pings/cost-pick/fallback otherwise; pin by the profile's provider kind instead of "base URL is localhost" (fixes LM Studio and other local endpoints being sent to Ollama's port) | Phase 138 | Built |
 
 ### v1.0 release polish ✅
 
@@ -12654,7 +12654,7 @@ Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted th
 
 ## Phase 138 — Ollama Only When Active on Your Workspace
 
-**Status:** Planned (2026-10-05) — root cause found, plan agreed; code next (no design work beyond allowing an empty API key for local providers in setup).
+**Status:** Built (2026-10-05) — Web and Desktop. Verified live with nothing listening on Ollama's port: a profile not enabled for the workspace is blocked with a clear message, the same LM Studio profile once enabled reaches `localhost:1234`, and neither app's log mentions 11434.
 
 ### Why
 
@@ -12699,10 +12699,40 @@ Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted th
 - Live streaming of reply text (separate finding from Phase 137).
 
 ### Acceptance criteria
-- [ ] With no Ollama profile enabled for the active workspace, even if `OLLAMA_BASE_URL` is set: no request to Ollama at startup, during chat, on failure, or from Diagnostics (verified with nothing listening on 11434)
-- [ ] An LM Studio / custom localhost profile is sent to its own base URL
-- [ ] An Ollama profile enabled for the workspace is sent to that profile's URL; switching to a workspace without it stops all Ollama traffic
-- [ ] `OLLAMA_BASE_URL` set → a newly added Ollama provider defaults to that address; on its own it enables nothing
-- [ ] Pinning `ollama` while it isn't enabled for the workspace returns a clear error (CLI, server)
-- [ ] Empty API key accepted for local providers in setup (Web + Desktop)
-- [ ] Router / gate / pin-helper tests; live re-run with the local fake model; `.env.example` and CHANGELOG updated
+- [x] With no Ollama profile enabled for the active workspace, even if `OLLAMA_BASE_URL` is set: no request to Ollama at startup, during chat, on failure, or from Diagnostics (verified with nothing listening on 11434)
+- [x] An LM Studio / custom localhost profile is sent to its own base URL
+- [x] An Ollama profile enabled for the workspace is sent to that profile's URL; switching to a workspace without it stops all Ollama traffic
+- [x] `OLLAMA_BASE_URL` set → a newly added Ollama provider defaults to that address; on its own it enables nothing
+- [x] Pinning `ollama` while it isn't enabled for the workspace returns a clear error (CLI, server)
+- [x] Empty API key accepted for local providers in setup (Web + Desktop)
+- [x] Router / gate / pin-helper tests; live re-run with the local fake model; `.env.example` and CHANGELOG updated
+
+### Build notes (2026-10-05)
+
+- **No always-on Ollama:**
+  - `OllamaProvider` is **deleted**. It was the OpenAI-compatible provider minus the auth header, and `OpenAiCompatProvider` already omits that header when the key is empty.
+  - The router registers only the primary provider (`openai-compat`, or `openai-responses` with native web search), plus `provider-api` when configured. Nothing pings, picks or falls back to Ollama.
+  - Every profile, cloud or local, is served by the primary provider at its own base URL.
+- **Pin by profile, not by URL:**
+  - `ActiveProfileRouting.PinActiveProfileAsync` replaces the three "localhost means ollama" copies (Runtime `ApplyUserPreferencesAsync`, Desktop `App.axaml.cs`, Desktop `SettingsViewModel`).
+  - The old hard-coded `"openai-compat"` pin would have thrown with native web search on; the helper pins whichever provider is primary.
+  - Pinning `ollama` (CLI `/provider`, server config) now fails with "Ollama isn't enabled for this workspace…".
+- **Workspace guard:**
+  - Runtime `ActiveProviderGuard.ReconcileAsync` runs whenever Web's top bar or Desktop's sidebar loads the active workspace's profiles, which happens at startup and on every workspace switch.
+  - A saved profile that isn't enabled there is switched off for the process (`SovrantConfig.DeactivateProvider`), and turns fail with a clear `InactiveProviderReason` instead of reaching any endpoint.
+  - It's switched back on when available. Activating any profile clears the reason, and saved preferences are never changed.
+  - **Behaviour change:** before, a saved provider that wasn't enabled for the workspace still answered chats through stale config, even though the picker said "Select a provider".
+- **Config:**
+  - `CredentialConfig.OllamaBaseUrl` has no default.
+  - `OLLAMA_BASE_URL` (shell or `.env`) only pre-fills a new Ollama provider (`CredentialConfig.OllamaPrefillBaseUrl`, used by Web setup, Admin Providers and Desktop Settings).
+  - `.env.example` has a "Local models (opt-in)" block.
+- **Keyless local providers:**
+  - Web first-run setup and the Desktop setup wizard accept an empty key for Ollama and LM Studio ("API Key (optional)"), and store a credential only when one is given.
+  - "Already set up" now means a key **or** a base URL, so a keyless local install isn't sent back to setup.
+  - Desktop startup now applies the profile's base URL even without a key, where before keyless setups fell back to the default OpenAI URL.
+- **Labels:** replies show "Ollama" or "LM Studio" from the loopback port (11434 / 1234) instead of the deleted provider's name.
+- **Sanitization:** the trust boundary's `ExemptProviders` list is stored and editable but **not enforced anywhere** in Runtime, so this phase changes no sanitization behaviour. Worth a follow-up, or removing the setting.
+- **Tests:**
+  - Api: router has no `ollama`; the pin message; the pin helper (primary wins over a cheaper secondary; no-op when empty); no `OllamaBaseUrl` default; pre-fill from the environment variable; local-provider check. 9 tests.
+  - Runtime: guard switch-off, switch-back-on, keyless re-activation, no-op cases, and a turn that fails with the reason and never reaches the provider. 7 tests.
+  - Full suite: 2,395 passed, 3 skipped.

@@ -69,7 +69,8 @@ public partial class SetupWizardViewModel : ViewModelBase
         _profileStore = profileStore;
         _credentials = credentials;
         _authProvider = authProvider;
-        _isVisible = string.IsNullOrWhiteSpace(config.ApiKey);
+        // Set up already: a key, or a keyless local provider's base URL (Phase 138).
+        _isVisible = string.IsNullOrWhiteSpace(config.ApiKey) && config.BaseUrl is null;
 
         // Set initial provider.
         SelectedProvider = "OpenAI";
@@ -78,7 +79,14 @@ public partial class SetupWizardViewModel : ViewModelBase
     partial void OnSelectedProviderChanged(string value)
     {
         BaseUrl = ProviderBaseUrls.GetValueOrDefault(value, string.Empty);
+        OnPropertyChanged(nameof(ApiKeyLabel));
+        OnPropertyChanged(nameof(ApiKeyWatermark));
     }
+
+    /// <summary>Phase 138 — local providers (Ollama, LM Studio) need no key.</summary>
+    public string ApiKeyLabel => Sovrant.Api.Config.CredentialConfig.IsLocalProvider(SelectedProvider) ? "API Key (optional)" : "API Key";
+
+    public string ApiKeyWatermark => Sovrant.Api.Config.CredentialConfig.IsLocalProvider(SelectedProvider) ? "Not required for local providers" : "sk-...";
 
     [RelayCommand]
     private void ChooseLocal()
@@ -144,7 +152,7 @@ public partial class SetupWizardViewModel : ViewModelBase
     [RelayCommand]
     private async Task SaveAndStartAsync()
     {
-        if (string.IsNullOrWhiteSpace(ApiKey))
+        if (string.IsNullOrWhiteSpace(ApiKey) && !Sovrant.Api.Config.CredentialConfig.IsLocalProvider(SelectedProvider))
         {
             StatusMessage = "Please enter an API key.";
             return;
@@ -155,17 +163,21 @@ public partial class SetupWizardViewModel : ViewModelBase
 
         try
         {
-            var trimmedKey = new string(ApiKey.Where(c => c < 128).ToArray()).Trim();
+            var trimmedKey = new string((ApiKey ?? string.Empty).Where(c => c < 128).ToArray()).Trim();
             var trimmedBase = (BaseUrl ?? string.Empty).Trim();
 
             var profileId = MakeProfileId(SelectedProvider, SelectedProvider);
             var credentialId = $"provider.{profileId}.api_key";
 
             // Encrypted credentials first so the profile row's reference is valid the moment it's inserted.
-            await _credentials.StoreAsync(credentialId, trimmedKey);
-            // Mirror to the global key so MutableApiKeyAuthProvider's lookup
-            // (CredentialKeys.LlmApiKey) resolves on the very next request.
-            await _credentials.StoreAsync(CredentialKeys.LlmApiKey, trimmedKey);
+            // Local providers (Ollama, LM Studio) may have no key; store one only when given.
+            if (trimmedKey.Length > 0)
+            {
+                await _credentials.StoreAsync(credentialId, trimmedKey);
+                // Mirror to the global key so MutableApiKeyAuthProvider's lookup
+                // (CredentialKeys.LlmApiKey) resolves on the very next request.
+                await _credentials.StoreAsync(CredentialKeys.LlmApiKey, trimmedKey);
+            }
 
             var now = DateTimeOffset.UtcNow;
             var runtimeProfile = new RuntimeProfile(

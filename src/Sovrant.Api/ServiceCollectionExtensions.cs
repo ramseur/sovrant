@@ -29,7 +29,6 @@ public static class ServiceCollectionExtensions
         var baseUrl = credentials.LlmBaseUrl;
         var providerApiUrl = credentials.ProviderBaseUrl;
         var hasProviderApi = credentials.HasProviderApi;
-        var ollamaUrl = credentials.OllamaBaseUrl;
 
         // Web search backend selection (Phase 70). Registered as singleton so providers
         // and the WebSearchTool can consult the same resolved value. Until PR 3 lands,
@@ -80,7 +79,6 @@ public static class ServiceCollectionExtensions
         else
             services.AddHttpClient<OpenAiCompatProvider>(c => c.BaseAddress = new Uri(baseUrl));
 
-        services.AddHttpClient<OllamaProvider>(c => c.BaseAddress = new Uri(ollamaUrl));
         if (hasProviderApi)
         {
             // Bucket-C: x-api-key is now resolved per-request inside BuildRequestAsync via
@@ -105,14 +103,15 @@ public static class ServiceCollectionExtensions
             ILlmProvider primaryProvider = webSearchEnabled
                 ? sp.GetRequiredService<OpenAiResponsesProvider>()
                 : sp.GetRequiredService<OpenAiCompatProvider>();
-            var ollamaProv = sp.GetRequiredService<OllamaProvider>();
             var logger = sp.GetRequiredService<ILogger<SmartRouter>>();
             var pingClient = sp.GetRequiredService<IHttpClientFactory>().CreateClient("SmartRouterPing");
 
+            // Phase 138: the primary OpenAI-compatible provider serves every provider profile,
+            // cloud or local (LM Studio, Ollama, Custom), at the active profile's base URL, so no
+            // separate always-on Ollama provider is registered, pinged, or used as a fallback.
             var providers = new List<ProviderInfo>
             {
                 new(primaryProvider, "models", 0.002),
-                new(ollamaProv, "models", 0.0),
             };
 
             // Only add ProviderApiProvider when explicitly configured.

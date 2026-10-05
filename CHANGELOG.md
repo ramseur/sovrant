@@ -19,6 +19,12 @@ Versions correspond to tags on the `development` branch.
 
 ### Changed
 
+- **Ollama only when active on your workspace (Phase 138)** — Sovrant no longer reaches out to `localhost:11434` on every install (the source of "Ollama is being called although it isn't configured").
+  - **When Ollama is used:** only when an admin adds an Ollama provider and enables it for the workspace. `OLLAMA_BASE_URL` (shell or `.env`, see `.env.example`) now only pre-fills that provider's address.
+  - **Every profile uses its own URL**, cloud or local. LM Studio and other local endpoints are no longer sent to Ollama's port.
+  - **Workspace switches apply immediately:** a saved provider that isn't enabled for the current workspace is switched off, with a clear message, until it is.
+  - **No key needed for local providers:** first-run setup accepts an empty API key for Ollama and LM Studio.
+  - **Removed:** the always-registered `OllamaProvider`.
 - **Chat bubbles + icon Send/Stop (Phase 137)** — on Web and Desktop:
   - User messages are right-aligned brand bubbles with an initials avatar.
   - Assistant replies are flat, beside a neutral avatar tile, with one muted model · elapsed · Copy line.

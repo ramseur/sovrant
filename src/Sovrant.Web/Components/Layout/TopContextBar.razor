@@ -242,6 +242,9 @@
     }
 
     private List<TreeGroup> _treeGroups = [];
+
+    // True once the active workspace's provider profiles loaded successfully (Phase 138 guard).
+    private bool _profilesLoaded;
     private List<(string Name, string Icon)> _unconfiguredProviders = [];
 
     // Phase 136: Lucide has no brand logos, so each provider shows its category icon
@@ -407,6 +410,18 @@
             ? _providerProfiles.FirstOrDefault(p => p.ProfileId == savedProfileId)
             : null;
 
+        // Phase 138: a saved profile that isn't enabled for this workspace is switched off for
+        // the running process (so it's never contacted here); it comes back on when it's
+        // available again. Only once the workspace's profiles actually loaded.
+        if (_profilesLoaded)
+        {
+            await Sovrant.Runtime.Providers.ActiveProviderGuard.ReconcileAsync(
+                Config, savedProfileId,
+                matched is null ? null : Sovrant.Runtime.Providers.ActiveProviderGuard.AvailableProfile.From(matched.CredentialId, matched.BaseUrl, matched.MaxTokens),
+                savedModel, Credentials,
+                (key, url) => { AuthProvider.ApiKey = key; AuthProvider.BaseUrl = url; });
+        }
+
         if (matched is null)
         {
             _currentModel = "No model";
@@ -431,6 +446,7 @@
     {
         _providerProfiles = [];
         _treeGroups = [];
+        _profilesLoaded = false;
         try
         {
             var rows = await ProfileStore.ListUserAndWorkspaceAsync(
@@ -449,6 +465,7 @@
                     IsWorkspaceProfile: row.IsAdminManaged));
             }
             _providerProfiles = list;
+            _profilesLoaded = true;
             BuildTreeGroups();
         }
         catch { /* best effort */ }

@@ -50,7 +50,7 @@ public partial class SettingsViewModel : ViewModelBase
         ["Groq"] = "https://api.groq.com/openai/v1",
         ["Mistral"] = "https://api.mistral.ai/v1",
         ["Together AI"] = "https://api.together.xyz/v1",
-        ["Ollama"] = "http://localhost:11434/v1",
+        ["Ollama"] = Sovrant.Api.Config.CredentialConfig.OllamaPrefillBaseUrl(),
         ["LM Studio"] = "http://localhost:1234/v1",
         ["Google"] = "https://generativelanguage.googleapis.com/v1beta/openai",
         ["Azure OpenAI"] = "", // user must fill in their own endpoint
@@ -683,15 +683,10 @@ public partial class SettingsViewModel : ViewModelBase
                 _authProvider.BaseUrl = null;
             }
 
-            // Pin the router to the provider matching the configured base URL so that
-            // OllamaProvider (cost=0) doesn't silently win over a cloud provider.
+            // Every profile (cloud or local) is served by the router's primary provider at its
+            // own base URL (Phase 138), never Ollama by guesswork.
             if (_router is not null)
-            {
-                bool isLocal = _config.BaseUrl is not null &&
-                               (_config.BaseUrl.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-                                _config.BaseUrl.Host == "127.0.0.1");
-                await _router.PinProviderAsync(isLocal ? "ollama" : "openai-compat").ConfigureAwait(false);
-            }
+                await Sovrant.Api.Routing.ActiveProfileRouting.PinActiveProfileAsync(_router).ConfigureAwait(false);
 
             // Update sidebar display immediately.
             _sidebar.CurrentModel = SidebarViewModel.ShortenModelName(ModelName);
