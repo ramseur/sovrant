@@ -234,6 +234,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — Postgres check moved to Phase 134 |
 | Postgres / Supabase backend audit — real Postgres test target (skipped when unavailable), store-by-store parity with the SQLite suites, schema diff V001–V048 vs `PostgresSchema.sql`, split-backend query audit, SQLite→Postgres migrator check; closes Phase 133's open Postgres criterion | Phase 134 | Planned |
 | App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Built |
+| Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12492,3 +12493,62 @@ Phase 133 put conversation folders in the rail panel, but that panel only shows 
 - **Desktop:** `AppNavViewModel` mirrors the Web model and feeds two `ItemsControl`s in `MainWindow.axaml`: expanded rows, and collapsed icons with an attached `Flyout`. `MainWindow.axaml.cs` sizes the rail grid so the nav never scrolls and Conversations keep at least 160px. `SidebarViewModel.RecentConversations` feeds Chat's flyout. The four `*PanelView` files were removed, and `SidebarView` lost its own "CHAT" heading.
 - **Verified:** Web, live (groups render, the current page's group opens, one group at a time, sub-page navigation, Admin section labels, no rail scroll at 1080p with Admin open and Conversations ≥ 160px, flyouts on click, Esc closes, Chat flyout with 5 recent + Show all). Desktop, live on a real database (expanded groups, open/close, navigation keeps the group open with the page highlighted, Conversations on non-Chat pages). Full suite 2,343 passed, 3 skipped.
 - **Not done:** arrow-key navigation inside flyouts (Tab works); a resizable nav/conversations split (non-goal).
+
+## Phase 136 — Lucide Icons Everywhere
+
+**Status:** Planned (2026-10-05) — approach agreed; package compatibility checked; design mock pass next, then code.
+
+### Why
+
+Rahul Singh's fork (PR #31, commits `9aaac88` / `3cd4f5c`) migrated the UI's emoji to Lucide icons through a small `SovrantIcon` name map on each surface, then dropped it when merging our left-nav design pass. The idea still holds. Today the app has three icon sources:
+- **Emoji and symbol characters:** about 84 occurrences in 21 files. The biggest are the top bar (Web and Desktop), Desktop chat, `IntegrationCatalog`, `SidebarViewModel`, and the lock/privacy converters.
+- **Inline SVG strings on Web:** about 43, in 19 files (`AppNavModel`, `FolderIcons`, page headers and empty states).
+- **Desktop geometries:** 18 in `NavIcons.axaml`, plus a few inline `Path` data strings.
+
+The hand-copied icons are already Lucide-style, but each one is maintained by hand on each surface. One shared vocabulary removes the emoji, makes Web and Desktop parity mechanical, and gives us about 1,800 icons without copying paths.
+
+### Decisions (confirmed 2026-10-05)
+
+| Question | Decision |
+|---|---|
+| Icon set | **Lucide** (ISC licence), the style our hand-copied icons already follow |
+| Desktop package | **`Lucide.Avalonia` 0.2.25** (MIT, 1,866 icons). Built against Avalonia 11.3.17, but verified on our Avalonia 12.0.4: a headless render on 2026-10-05 drew the icon correctly and it scales with `Size`. Rejected: `LucideAvalonia` 1.6.2 (crashes on Avalonia 12 with `MissingMethodException`) and `IconPacks.Avalonia.Lucide` 2.0.0 (loads but renders nothing) |
+| Web package | **`Blazicons.Lucide` 3.0.8** (MIT, targets net10.0, depends only on `Blazicons` 4.0.21, which is also MIT). Licence confirmed on GitHub, since the NuGet package declares none |
+| API | A **`SovrantIcon`** on each surface that takes a semantic name ("agent", "workflow", "lock", "folder", …) and maps it to a Lucide icon. Call sites name the meaning, not the glyph, so swapping a glyph is a one-line change. The names are shared, and a test keeps both maps in sync |
+| Existing hand-copied icons | **In scope (step 3):** `AppNavModel`'s SVG strings, `FolderIcons`, every inline `<svg>` in Web pages, `NavIcons.axaml`, and Desktop's inline `Path` data all move onto `SovrantIcon` |
+| Fallback | If either package becomes unusable (an Avalonia 12.x break, abandonment), vendor the Lucide SVGs into a generated icon map behind the same `SovrantIcon` API. Call sites don't change |
+
+### What ships
+
+1. **`SovrantIcon`:**
+   - **Web:** a Razor component (`Components/Shared/SovrantIcon.razor`) wrapping `Blazicon`.
+   - **Desktop:** a control (`Controls/SovrantIcon.cs`) deriving from `LucideIcon`, with an `IconName` property (Rahul's version renamed the property to avoid clashing with `LucideIcon.Kind`).
+   - **Shared behaviour:** size, stroke width and colour come from the call site or the theme tokens (`currentColor` / `Foreground`). The default stroke is 1.9 so icons match the current nav.
+2. **Emoji replaced:**
+   - **Where:** every emoji or symbol character used as UI chrome on Web and Desktop.
+   - **Lock/privacy:** `BoolToLockIconConverter` / `BoolToPrivacyLabelConverter` return icon names instead of 🔒/🔓, and all their call sites change together.
+   - **Catalog icons:** `IntegrationCatalog` icon fields become icon names.
+   - **Left alone:** emoji that are content rather than chrome (user text, model output).
+3. **Hand-copied icons moved onto the map:** `AppNavModel.IconSvg` becomes an icon name, `FolderIcons` and `NavIcons.axaml` are deleted once unused, and inline page SVGs become `<SovrantIcon Name="…" />`.
+4. **Tests:**
+   - Every name in the shared list resolves on both surfaces, with no fallback icon.
+   - A headless Avalonia render test draws a `SovrantIcon` and asserts non-empty pixels. It guards against a future Avalonia 12.x breaking the 11-built Desktop package.
+5. **Design mocks:** `web.html` / `desktop.html` swap any remaining emoji for the matching Lucide icon (both mocks already use Lucide-style strokes), and the parity diff stays chrome-only.
+
+### Non-goals
+- Changing which icon represents what, beyond replacing emoji. The existing nav icons map to their closest Lucide equivalents, and any visible change is called out in the mock pass.
+- Icon animation, or icon-only buttons without accessible labels (every icon-only button keeps a `title` / `ToolTip.Tip` and an `aria-label`).
+- The app's logo and favicon (the bolt), which stay as they are.
+
+### Relationship to other phases
+- **Phase 135 (app sidebar):** `AppNavModel` / `AppNavViewModel` icons move onto `SovrantIcon`; the layout doesn't change.
+- **Phase 133 (conversation folders):** `FolderIcons` (folder, folder-plus, dots, pencil, trash, chevron) moves onto `SovrantIcon`.
+- **Left-nav redesign (design README):** this finishes the "known remaining emoji" item logged there.
+
+### Acceptance criteria
+- [ ] Design mocks updated on both surfaces (no emoji as chrome), parity diff still chrome-only, logged in `docs/design/README.md`
+- [ ] `SovrantIcon` on Web and Desktop with one shared name list; a test proves every name resolves on both
+- [ ] No emoji used as UI chrome remains in `src/Sovrant.Web` or `src/Sovrant.Desktop`
+- [ ] `AppNavModel`, `FolderIcons`, inline page SVGs, `NavIcons.axaml` and Desktop inline `Path` icons all render through `SovrantIcon`; `FolderIcons` and `NavIcons.axaml` deleted
+- [ ] Headless Avalonia render test for `SovrantIcon` passes in CI
+- [ ] Web verified live in headless Edge, and Desktop verified live (nav, folders, top bar, chat, integrations)
