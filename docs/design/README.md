@@ -271,7 +271,7 @@ Roadmap Phase 136. The mocks already had no emoji, apart from one status dot, wh
 - **Screens:** Orchestration, Chat and the top bar on Skills.
 - **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines, with line endings ignored.
 
-## Chat bubbles + icon Send/Stop (2026-10-05, design-only)
+## Chat bubbles + icon Send/Stop (2026-10-05, shipped to code same day)
 
 Roadmap Phase 137. The Thread state already had right-aligned brand bubbles, flat assistant messages and an icon Send; this pass fills the gaps the real apps need before they adopt it.
 
@@ -308,6 +308,8 @@ Roadmap Phase 137. The Thread state already had right-aligned brand bubbles, fla
   Not forcing a mass rewrite to 3 exact values — every current height was visually tuned for its specific control, and normalizing ~15 CSS rules with no way to re-verify each one visually within this pass is a real regression risk for a cosmetic-only win. **Standard going forward: new controls should land on 28, 32, 34, 36, 40, or 44px** — one of the six values already in use — rather than introduce a 7th.
 
 ## Already shipped from this work
+
+- Chat bubbles + icon Send/Stop (Phase 137) on Web (`ChatMessage.razor`, `Chat.razor`) and Desktop (`ChatView.axaml`). Matches the Thread and Streaming states, including avatars, the meta line, the 760px column, and brand Stop in Send's spot. One known gap: the runtime still delivers reply text per model call rather than live (see roadmap Phase 137 build notes), so the streaming caret is rarely visible.
 
 - Lucide icons (Phase 136): `SovrantIcon` on Web (`Components/Shared/SovrantIcon.razor`, `Services/SovrantIcons`) and Desktop (`Controls/SovrantIcon`), sharing `Sovrant.Api.Ui.IconNames`. The mock's `VOCAB` grew to 62 names as the code turned up more hand-drawn icons and glyph characters (`team`, `brand`, `rail-collapse` / `rail-expand`, `stop`, `dropdown`, `back`, `sort-asc` / `sort-desc`). `Sovrant.Ui.Tests` keeps the mock, `IconNames` and the Desktop map in step.
 

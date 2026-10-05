@@ -4150,3 +4150,75 @@ svg[focusable="false"] { flex-shrink: 0; }
 svg.icon-brand { color: #FF9800; fill: currentColor; }
 .tcb-icon, .tool-icon, .doc-artifact-icon, .delete-modal-icon, .work-strip-warn-icon,
 .active-done, .active-failed, .suggestion-icon, .sys-int-icon { display: inline-flex; align-items: center; }
+
+/* ===== Chat bubbles + composer (Phase 137) — see docs/design/web.html, Chat → Thread / Streaming =====
+   Thread, bottom bar and composer share one centred column capped at 760px. */
+.chat-messages, .chat-bottom-bar, .chat-input-bar, .remember-form {
+    padding-inline: max(clamp(16px, 4vw, 48px), calc((100% - 760px) / 2));
+}
+.message.msg-user { display: flex; justify-content: flex-end; align-items: flex-start; gap: 11px; }
+.message.msg-assistant { display: flex; align-items: flex-start; gap: 11px; }
+.msg-assistant .msg-content { flex: 1; min-width: 0; color: var(--text-primary); line-height: 1.6; }
+.msg-assistant .msg-indent { margin-left: 0; }
+.message .msg-avatar { width: 28px; height: 28px; border-radius: 8px; font-size: 11px; font-weight: 700; }
+.message .msg-avatar svg { width: 14px; height: 14px; }
+.message .user-avatar-chat { background: linear-gradient(135deg, var(--brand-primary), #4a3789); color: #fff; }
+.user-bubble {
+    max-width: min(620px, 85%);
+    padding: 10px 14px;
+    border-radius: 12px 12px 4px 12px;
+    background: var(--brand-primary);
+    color: #fff;
+    font-size: 14px;
+    line-height: 1.55;
+}
+.msg-meta { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11.5px; color: var(--text-muted); }
+.msg-meta-act { background: none; border: none; padding: 0; font: inherit; color: var(--text-secondary); cursor: pointer; }
+.msg-meta-act:hover { color: var(--text-primary); }
+.stream-caret {
+    display: inline-block; width: 7px; height: 15px; margin-left: 2px; vertical-align: -2px;
+    background: var(--brand-primary); border-radius: 1px; animation: stream-caret-blink 1s steps(1) infinite;
+}
+@keyframes stream-caret-blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .stream-caret { animation: none; } }
+
+.composer-box {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px 8px;
+    border: 1px solid var(--input-border);
+    border-radius: 12px;
+    background: var(--input-bg);
+    transition: border-color .12s, box-shadow .12s;
+}
+.composer-box:focus-within { border-color: var(--brand-primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-primary) 22%, transparent); }
+.composer-box textarea {
+    width: 100%;
+    min-height: 22px;
+    max-height: 200px;
+    padding: 2px 2px;
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 14px;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    overflow-y: auto;
+}
+.composer-box textarea::placeholder { color: var(--text-muted); }
+.composer-box.busy textarea::placeholder { font-style: italic; }
+.composer-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.composer-send {
+    width: 32px; height: 32px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border: none; border-radius: 9px;
+    background: var(--brand-primary); color: #fff; cursor: pointer;
+    transition: filter .12s, opacity .12s;
+}
+.composer-send:hover:not(:disabled) { filter: brightness(1.08); }
+.composer-send:disabled { opacity: .45; cursor: default; }
+.composer-send:focus-visible { outline: 2px solid var(--brand-primary); outline-offset: 2px; }

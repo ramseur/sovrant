@@ -122,23 +122,32 @@
     }
 
     <!-- Input bar -->
+    @* Phase 137 — one composer box; the brand Send button becomes Stop in place while a
+       reply streams. The textarea is readonly (not disabled) while sending so it keeps
+       focus and Esc can stop the turn. *@
     <div class="chat-input-bar">
-        <div class="input-wrapper">
+        <div class="composer-box @(_isSending ? "busy" : "")">
             <textarea @ref="_inputRef"
                       @bind="_inputText"
                       @bind:event="oninput"
                       @onkeydown="HandleKeyDown"
-                      placeholder="Type a message or / for commands..."
-                      disabled="@_isSending"></textarea>
+                      placeholder="@(_isSending ? "Generating a reply…" : "Type a message or / for commands...")"
+                      readonly="@_isSending"></textarea>
+            <div class="composer-bar">
+                @if (_isSending)
+                {
+                    <button class="composer-send stop" title="Stop generating (Esc)" aria-label="Stop generating" @onclick="StopAsync">
+                        <SovrantIcon Name="@IconNames.Stop" Size="14" StrokeWidth="2.6" />
+                    </button>
+                }
+                else
+                {
+                    <button class="composer-send" title="Send message (Enter)" aria-label="Send message" @onclick="SendAsync" disabled="@(!CanSend)">
+                        <SovrantIcon Name="@IconNames.Send" Size="16" StrokeWidth="2" />
+                    </button>
+                }
+            </div>
         </div>
-        @if (_isSending)
-        {
-            <button class="btn-stop send-btn" @onclick="StopAsync">Stop</button>
-        }
-        else
-        {
-            <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
-        }
     </div>
 </div>
 

@@ -540,7 +540,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         UpdateCommandSuggestions(value);
     }
 
-    partial void OnIsSendingChanged(bool value) => SendCommand.NotifyCanExecuteChanged();
+    partial void OnIsSendingChanged(bool value)
+    {
+        SendCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(InputWatermark));
+    }
+
+    /// <summary>Phase 137 — the composer placeholder; says a reply is generating while sending.</summary>
+    public string InputWatermark => IsSending ? "Generating a reply…" : "Type a message or / for commands...";
 
     [RelayCommand]
     private void AcceptSuggestion(CommandSuggestion suggestion)

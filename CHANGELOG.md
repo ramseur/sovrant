@@ -19,6 +19,12 @@ Versions correspond to tags on the `development` branch.
 
 ### Changed
 
+- **Chat bubbles + icon Send/Stop (Phase 137)** — on Web and Desktop:
+  - User messages are right-aligned brand bubbles with an initials avatar.
+  - Assistant replies are flat, beside a neutral avatar tile, with one muted model · elapsed · Copy line.
+  - The thread and composer share a centred column, capped at 760px.
+  - The composer is one box with a brand icon Send button, which becomes Stop in the same spot while a reply is generating.
+  - Esc stops a reply on Web too: the textarea is now read-only rather than disabled while sending, so it keeps focus.
 - **Lucide icons everywhere (Phase 136)** — Web and Desktop share a single icon vocabulary (`Sovrant.Api.Ui.IconNames`, 62 names), drawn with Lucide: `Blazicons.Lucide` on Web, `Lucide.Avalonia` on Desktop.
   - **Emoji removed:** every emoji or symbol character used as UI chrome is gone: the top bar, tool approvals, document cards, sidebar status, integration and provider icons, and so on.
   - **Hand-copied icons replaced:** every hand-copied SVG and geometry icon now goes through `SovrantIcon`.

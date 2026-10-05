@@ -1,36 +1,20 @@
 @using Markdig
 @inject IJSRuntime JS
 
-<div class="message">
+@* Phase 137 — user messages are right-aligned brand bubbles with the initials avatar;
+   assistant messages are flat beside a neutral avatar tile, with one muted meta line. *@
+<div class="message @(Message.IsUser ? "msg-user" : "msg-assistant")">
     @if (Message.IsUser)
     {
-        <!-- User message: avatar + name row, then text -->
-        <div class="msg-row">
-            <div class="msg-avatar user-avatar-chat">@(Message.SenderLabel.Length > 0 ? Message.SenderLabel[..1].ToUpperInvariant() : "U")</div>
-            <span class="msg-sender">@Message.SenderLabel</span>
-        </div>
-        <div class="msg-body">
-            <div class="message-text">@Message.Text</div>
-        </div>
+        <div class="user-bubble message-text">@Message.Text</div>
+        <div class="msg-avatar user-avatar-chat" title="@Message.SenderLabel">@AvatarText.Initials(Message.SenderLabel)</div>
     }
     else
     {
-        <!-- Assistant message: avatar + name row, then content in card -->
-        <div class="msg-card">
-            <div class="msg-row">
-                <div class="msg-avatar sovrant-avatar">
-                    <SovrantIcon Name="@IconNames.Chat" />
-                </div>
-                <span class="msg-sender">@Message.SenderLabel</span>
-                @if (!string.IsNullOrEmpty(Message.ElapsedText))
-                {
-                    <span class="elapsed-text">@Message.ElapsedText</span>
-                }
-                @if (Message.IsComplete)
-                {
-                    <button class="btn-copy-message" @onclick="CopyMessageAsync">@_copyLabel</button>
-                }
-            </div>
+        <div class="msg-avatar sovrant-avatar" aria-hidden="true">
+            <SovrantIcon Name="@IconNames.Chat" />
+        </div>
+        <div class="msg-content">
 
             @if (!string.IsNullOrEmpty(Message.IntentNarration) && (Message.IsThinking || Message.IsExecutingTools))
             {
@@ -129,7 +113,7 @@
             @if (!Message.IsComplete && !string.IsNullOrEmpty(Message.Text))
             {
                 <div class="msg-indent">
-                    <div class="message-text streaming">@Message.Text</div>
+                    <div class="message-text streaming">@Message.Text<span class="stream-caret" aria-hidden="true"></span></div>
                 </div>
             }
 
@@ -154,6 +138,20 @@
                         <div class="error-detail">@Message.ErrorMessage</div>
                     </div>
                     <button class="btn-retry" @onclick="() => OnRetry.InvokeAsync()">Retry</button>
+                </div>
+            }
+
+            @if (Message.IsComplete)
+            {
+                <div class="msg-meta">
+                    <span>@Message.SenderLabel</span>
+                    @if (!string.IsNullOrEmpty(Message.ElapsedText))
+                    {
+                        <span aria-hidden="true">·</span>
+                        <span>@Message.ElapsedText</span>
+                    }
+                    <span aria-hidden="true">·</span>
+                    <button class="msg-meta-act" title="Copy reply" @onclick="CopyMessageAsync">@_copyLabel</button>
                 </div>
             }
         </div>

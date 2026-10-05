@@ -235,7 +235,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Postgres / Supabase backend audit — real Postgres test target (skipped when unavailable), store-by-store parity with the SQLite suites, schema diff V001–V048 vs `PostgresSchema.sql`, split-backend query audit, SQLite→Postgres migrator check; closes Phase 133's open Postgres criterion | Phase 134 | Planned |
 | App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Built |
 | Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Built |
-| Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Planned |
+| Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Built |
 
 ### v1.0 release polish ✅
 
@@ -12587,7 +12587,7 @@ The hand-copied icons are already Lucide-style, but each one is maintained by ha
 
 ## Phase 137 — Chat Bubbles + Icon Send/Stop
 
-**Status:** Planned (2026-10-05) — approach agreed; design mock done (Chat → *Thread* / *Streaming* in `docs/design/web.html` / `desktop.html`); code next.
+**Status:** Built (2026-10-05) — Web and Desktop. Verified live against an isolated database with a local fake streaming model (no external model calls): Web 15/16 headless-Edge checks (the streaming caret could not be observed, see build notes); Desktop by screen capture (bubbles, Stop, Esc, meta line, focus ring).
 
 ### Why
 
@@ -12629,7 +12629,24 @@ Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted th
 
 ### Acceptance criteria
 - [x] Mock: *Streaming* state added on both surfaces; parity diff still chrome-only; logged in `docs/design/README.md`
-- [ ] User messages render as right-aligned brand bubbles with the initials avatar; assistant messages flat beside the avatar tile, with the muted meta line
-- [ ] Thread and composer centred at ≤760px on wide windows; full width on narrow ones
-- [ ] Send is an icon button, disabled when empty; Stop replaces it in place while streaming; Esc stops; both buttons labelled for screen readers
-- [ ] Web + Desktop parity; Web verified live in headless Edge (smoke tests use `:free` models only), Desktop verified live
+- [x] User messages render as right-aligned brand bubbles with the initials avatar; assistant messages flat beside the avatar tile, with the muted meta line
+- [x] Thread and composer centred at ≤760px on wide windows; full width on narrow ones
+- [x] Send is an icon button, disabled when empty; Stop replaces it in place while streaming; Esc stops; both buttons labelled for screen readers
+- [x] Web + Desktop parity; Web verified live in headless Edge, Desktop verified live (a local fake model instead of a `:free` model, so no external calls at all)
+
+### Build notes (2026-10-05)
+
+- **Web:**
+  - `ChatMessage.razor`: user messages are a `.user-bubble` plus initials avatar. Assistant messages are an avatar tile plus `.msg-content`, with no card. The name, elapsed time and Copy controls move to a `.msg-meta` line, shown once the reply completes, and streaming text ends in a `.stream-caret`.
+  - `Chat.razor`: one `.composer-box` with a 32px `.composer-send` that shows `send`, or `stop` while sending. Both have `aria-label` and `title`.
+  - CSS: `.chat-messages`, the bottom bar, the composer and the remember form share `padding-inline: max(…, calc((100% - 760px) / 2))`.
+- **Desktop (`ChatView.axaml`):**
+  - User bubble in a `Grid`, with a gradient initials avatar.
+  - Assistant messages: avatar tile plus content `StackPanel`. All 12 hard-coded `Margin="42,…"` indents are gone. The meta line uses the `metaact` Copy button.
+  - Composer: a `Border.composer` capped at `MaxWidth=760`, holding a borderless `TextBox.composer-input` and the `composer-send` Send/Stop pair. `ChatViewModel.InputWatermark` switches to "Generating a reply…" while sending.
+  - The focus ring comes from the `Border.composer` style, because a locally set `BorderBrush` would override `:focus-within`.
+- **Esc to stop:** Web's Esc handler already existed but couldn't fire, because the textarea was `disabled` while sending, so it lost focus. It's now `readonly`. Desktop's handler already worked.
+- **Shared:** `Sovrant.Api.Ui.AvatarText.Initials` gives both surfaces the same up-to-two initials ("eric.ramseur@x" → "ER", "nav-test" → "NT"). Covered by 10 cases in `Sovrant.Ui.Tests` (now 30 tests). Full suite: 2,379 passed, 3 skipped.
+- **Found while verifying (pre-existing, not fixed here):**
+  1. **Reply text doesn't stream live.** `ConversationRuntime.AttemptCollectAsync` collects a model call's `TextChunk` events into a `List` and returns them only once the provider stream ends. So text appears all at once per model call, on both surfaces, and the streaming caret is barely visible. Candidate follow-up.
+  2. **A model id without "/" goes to Ollama** (`localhost:11434`) even when the active profile is LM Studio (`localhost:1234`). It looks like the router picks the provider from the model name, not the active profile. This is likely related to the "Ollama is being called although it isn't configured" symptom the design mock already quotes.

@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Api.Ui;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Knowledge;
 
@@ -117,10 +118,8 @@ public partial class MessageViewModel : ViewModelBase
     [ObservableProperty]
     private string? _userDisplayName;
 
-    /// <summary>Single uppercase letter for the user avatar bubble.</summary>
-    public string UserInitial => string.IsNullOrEmpty(UserDisplayName)
-        ? "U"
-        : UserDisplayName[..1].ToUpperInvariant();
+    /// <summary>Up to two initials for the user avatar (Phase 137; same rule as Web).</summary>
+    public string UserInitial => AvatarText.Initials(UserDisplayName ?? SenderLabel);
 
     /// <summary>
     /// Display label for the message sender. Shows "Provider / model" for assistant

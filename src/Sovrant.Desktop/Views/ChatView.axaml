@@ -10,6 +10,70 @@
              x:DataType="vm:ChatViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
+    <!-- Phase 137 — composer box, icon Send/Stop, user bubble (docs/design/desktop.html, Chat). -->
+    <UserControl.Styles>
+        <Style Selector="Border.composer">
+            <Setter Property="BorderBrush" Value="{DynamicResource InputBorder}" />
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="BorderBrush" Duration="0:0:0.12" />
+                </Transitions>
+            </Setter>
+        </Style>
+        <Style Selector="Border.composer:focus-within">
+            <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimary}" />
+        </Style>
+        <Style Selector="TextBox.composer-input /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.composer-input:focus /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="TextBox.composer-input:pointerover /template/ Border#PART_BorderElement">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+        </Style>
+        <Style Selector="Button.composer-send">
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Background" Value="{DynamicResource BrandPrimary}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.composer-send:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BrandPrimary}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Opacity" Value="0.9" />
+        </Style>
+        <Style Selector="Button.composer-send:pressed /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BrandPrimary}" />
+            <Setter Property="Foreground" Value="White" />
+        </Style>
+        <Style Selector="Button.composer-send:disabled /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BrandPrimary}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Opacity" Value="0.45" />
+        </Style>
+        <Style Selector="Button.metaact">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FontSize" Value="11.5" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.metaact:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+    </UserControl.Styles>
+
     <DockPanel>
         <!-- Phase 133 — top: where this conversation is filed, its links, and Move -->
         <Border DockPanel.Dock="Top" IsVisible="{Binding HasMessages}"
@@ -54,96 +118,90 @@
 
         <!-- Bottom: Input bar -->
         <Border DockPanel.Dock="Bottom"
-                Padding="48,12"
+                Padding="22,12,22,14"
                 BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource SurfaceBorder}">
-            <DockPanel>
-                <!-- Send button — visible when idle -->
-                <Button DockPanel.Dock="Right"
-                        Content="Send"
-                        Command="{Binding SendCommand}"
-                        Padding="16,10"
-                        Margin="8,0,0,0"
-                        Background="{DynamicResource BrandPrimary}"
-                        Foreground="White"
-                        CornerRadius="8"
-                        FontWeight="SemiBold"
-                        VerticalAlignment="Center"
-                        IsVisible="{Binding !IsSending}" />
-                <!-- Stop button — visible while sending -->
-                <Button DockPanel.Dock="Right"
-                        Command="{Binding StopCommand}"
-                        Padding="16,10"
-                        Margin="8,0,0,0"
-                        Background="{DynamicResource StatusFail}"
-                        Foreground="White"
-                        CornerRadius="8"
-                        FontWeight="SemiBold"
-                        VerticalAlignment="Center"
-                        IsVisible="{Binding IsSending}">
-                    <StackPanel Orientation="Horizontal" Spacing="6">
-                        <Border Width="10" Height="10" CornerRadius="2"
-                                Background="White" VerticalAlignment="Center" />
-                        <TextBlock Text="Stop" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
-                <Grid>
-                    <TextBox x:Name="InputBox"
-                             Text="{Binding InputText}"
-                             Watermark="Type a message or / for commands..."
-                             AcceptsReturn="True"
-                             TextWrapping="Wrap"
-                             MinHeight="60"
-                             MaxHeight="300"
-                             Padding="12,10"
-                             CornerRadius="8"
-                             Background="{DynamicResource InputBackground}"
-                             BorderBrush="{DynamicResource InputBorder}" />
-                    <!-- Command suggestions popup above input (rendered after TextBox for z-order) -->
-                    <Border VerticalAlignment="Bottom"
-                            Margin="0,0,0,44"
-                            CornerRadius="8"
-                            Background="{DynamicResource SurfaceCard}"
-                            BorderBrush="{DynamicResource SurfaceBorder}"
-                            BorderThickness="1"
-                            Padding="4"
-                            IsVisible="{Binding ShowCommandSuggestions}"
-                            MaxHeight="260"
-                            ZIndex="10">
-                        <ScrollViewer VerticalScrollBarVisibility="Auto">
-                            <ItemsControl ItemsSource="{Binding CommandSuggestions}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate DataType="vm:CommandSuggestion">
-                                        <Button Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).AcceptSuggestionCommand}"
-                                                CommandParameter="{Binding}"
-                                                HorizontalAlignment="Stretch"
-                                                HorizontalContentAlignment="Stretch"
-                                                Padding="10,6"
-                                                Margin="0,1"
-                                                Background="Transparent"
-                                                BorderThickness="0"
-                                                CornerRadius="4"
-                                                Cursor="Hand">
-                                            <DockPanel>
-                                                <TextBlock DockPanel.Dock="Left"
-                                                           Text="{Binding Display}"
-                                                           FontSize="13"
-                                                           FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource BrandPrimary}"
-                                                           MinWidth="120" />
-                                                <TextBlock Text="{Binding Description}"
-                                                           FontSize="12"
-                                                           Foreground="{DynamicResource TextSecondary}"
-                                                           TextTrimming="CharacterEllipsis" />
-                                            </DockPanel>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
-                    </Border>
-                </Grid>
-            </DockPanel>
+            <!-- Phase 137 — one composer box, centred at 760px; the brand Send button becomes
+                 Stop in place while a reply streams (Esc also stops: ChatView.axaml.cs). -->
+            <!-- BorderBrush comes from the Border.composer style (not set here) so :focus-within can override it. -->
+            <Border Classes="composer" MaxWidth="760" HorizontalAlignment="Stretch"
+                    CornerRadius="12" BorderThickness="1" Padding="12,8,8,8"
+                    Background="{DynamicResource InputBackground}">
+                <DockPanel>
+                    <Panel DockPanel.Dock="Bottom" HorizontalAlignment="Right">
+                        <Button Classes="composer-send"
+                                Command="{Binding SendCommand}"
+                                IsVisible="{Binding !IsSending}"
+                                ToolTip.Tip="Send message (Enter)"
+                                AutomationProperties.Name="Send message">
+                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Send}" Size="16" StrokeWidth="2" />
+                        </Button>
+                        <Button Classes="composer-send"
+                                Command="{Binding StopCommand}"
+                                IsVisible="{Binding IsSending}"
+                                ToolTip.Tip="Stop generating (Esc)"
+                                AutomationProperties.Name="Stop generating">
+                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Stop}" Size="14" StrokeWidth="2.6" />
+                        </Button>
+                    </Panel>
+                    <Grid>
+                            <TextBox x:Name="InputBox"
+                                     Text="{Binding InputText}"
+                                     Watermark="{Binding InputWatermark}"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     Classes="composer-input"
+                                     MinHeight="44"
+                                     MaxHeight="300"
+                                     Padding="2,2"
+                                     Background="Transparent"
+                                     BorderThickness="0" />
+                            <!-- Command suggestions popup above input (rendered after TextBox for z-order) -->
+                            <Border VerticalAlignment="Bottom"
+                                    Margin="0,0,0,44"
+                                    CornerRadius="8"
+                                    Background="{DynamicResource SurfaceCard}"
+                                    BorderBrush="{DynamicResource SurfaceBorder}"
+                                    BorderThickness="1"
+                                    Padding="4"
+                                    IsVisible="{Binding ShowCommandSuggestions}"
+                                    MaxHeight="260"
+                                    ZIndex="10">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <ItemsControl ItemsSource="{Binding CommandSuggestions}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate DataType="vm:CommandSuggestion">
+                                                <Button Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).AcceptSuggestionCommand}"
+                                                        CommandParameter="{Binding}"
+                                                        HorizontalAlignment="Stretch"
+                                                        HorizontalContentAlignment="Stretch"
+                                                        Padding="10,6"
+                                                        Margin="0,1"
+                                                        Background="Transparent"
+                                                        BorderThickness="0"
+                                                        CornerRadius="4"
+                                                        Cursor="Hand">
+                                                    <DockPanel>
+                                                        <TextBlock DockPanel.Dock="Left"
+                                                                   Text="{Binding Display}"
+                                                                   FontSize="13"
+                                                                   FontWeight="SemiBold"
+                                                                   Foreground="{DynamicResource BrandPrimary}"
+                                                                   MinWidth="120" />
+                                                        <TextBlock Text="{Binding Description}"
+                                                                   FontSize="12"
+                                                                   Foreground="{DynamicResource TextSecondary}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </DockPanel>
+                                                </Button>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </ScrollViewer>
+                            </Border>
+                        </Grid>
+                </DockPanel>
+            </Border>
         </Border>
 
         <!-- Remember panel — slides in above bottom bar when IsRememberOpen -->
@@ -382,7 +440,8 @@
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <ItemsControl ItemsSource="{Binding Messages}"
-                              Margin="48,16"
+                              Margin="22,16"
+                              MaxWidth="760"
                               HorizontalAlignment="Stretch">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:MessageViewModel">
@@ -395,74 +454,51 @@
                                 </Border.ContextMenu>
                                 <StackPanel>
                                     <!-- === User message layout === -->
-                                    <StackPanel IsVisible="{Binding IsUser}" Spacing="6">
-                                        <!-- Avatar + "You" label row -->
-                                        <StackPanel Orientation="Horizontal" Spacing="10">
-                                            <Border Width="32" Height="32" CornerRadius="16"
-                                                    Background="{DynamicResource BrandPrimary}">
-                                                <TextBlock Text="{Binding UserInitial}" FontSize="13" FontWeight="SemiBold"
-                                                           Foreground="White"
-                                                           HorizontalAlignment="Center"
-                                                           VerticalAlignment="Center" />
-                                            </Border>
-                                            <TextBlock Text="{Binding SenderLabel}" FontSize="14" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource TextPrimary}"
-                                                       VerticalAlignment="Center" />
-                                        </StackPanel>
-                                        <!-- Message text (no card background) -->
-                                        <SelectableTextBlock Text="{Binding Text}"
-                                                             TextWrapping="Wrap"
-                                                             FontSize="14"
-                                                             Foreground="{DynamicResource TextPrimary}"
-                                                             Margin="42,0,0,0" />
-                                    </StackPanel>
+                                    <!-- Phase 137 — right-aligned brand bubble + initials avatar -->
+                                    <Grid IsVisible="{Binding IsUser}" ColumnDefinitions="*,Auto">
+                                        <Border Grid.Column="0" HorizontalAlignment="Right" MaxWidth="620"
+                                                CornerRadius="12,12,4,12" Padding="14,10"
+                                                Background="{DynamicResource BrandPrimary}">
+                                            <SelectableTextBlock Text="{Binding Text}"
+                                                                 TextWrapping="Wrap"
+                                                                 FontSize="14"
+                                                                 LineHeight="21"
+                                                                 Foreground="White" />
+                                        </Border>
+                                        <Border Grid.Column="1" Width="28" Height="28" CornerRadius="8" Margin="11,0,0,0"
+                                                VerticalAlignment="Top" ToolTip.Tip="{Binding SenderLabel}">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+                                                    <GradientStop Offset="0" Color="#6D52C6" />
+                                                    <GradientStop Offset="1" Color="#4A3789" />
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <TextBlock Text="{Binding UserInitial}" FontSize="11" FontWeight="Bold"
+                                                       Foreground="White"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                    </Grid>
 
                                     <!-- === Sovrant (assistant) message layout === -->
-                                    <Border IsVisible="{Binding !IsUser}"
-                                            Padding="0,12"
-                                            CornerRadius="12"
-                                            Background="{DynamicResource AssistantMessageBackground}">
-                                        <StackPanel Spacing="6">
-                                            <!-- Icon + sender label + elapsed + action summary -->
-                                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                                <Border Width="32" Height="32" CornerRadius="8"
-                                                        Background="{DynamicResource SurfaceBorder}">
-                                                    <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Chat}" Size="15"
-                                                          Foreground="{DynamicResource TextSecondary}"
-                                                          HorizontalAlignment="Center"
-                                                          VerticalAlignment="Center" />
-                                                </Border>
-                                                <TextBlock Text="{Binding SenderLabel}" FontSize="14" FontWeight="SemiBold"
-                                                           Foreground="{DynamicResource TextPrimary}"
-                                                           VerticalAlignment="Center" />
-                                                <TextBlock Text="{Binding ElapsedText}" FontSize="11"
-                                                           Foreground="{DynamicResource TextMuted}"
-                                                           VerticalAlignment="Center" Margin="8,0,0,0"
-                                                           IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-                                                <Button Content="Copy"
-                                                        FontSize="10"
-                                                        Padding="8,2"
-                                                        CornerRadius="4"
-                                                        Background="Transparent"
-                                                        BorderBrush="{DynamicResource SurfaceBorder}"
-                                                        BorderThickness="1"
-                                                        Foreground="{DynamicResource TextMuted}"
-                                                        VerticalAlignment="Center"
-                                                        Margin="8,0,0,0"
-                                                        Click="OnCopyMessageButtonClick"
-                                                        IsVisible="{Binding IsComplete}" />
-                                            </StackPanel>
-
+                                    <Border IsVisible="{Binding !IsUser}" Padding="0,2">
+                                        <Grid ColumnDefinitions="Auto,*">
+                                            <Border Grid.Column="0" Width="28" Height="28" CornerRadius="8" Margin="0,0,11,0"
+                                                    VerticalAlignment="Top" Background="{DynamicResource SurfaceBorder}">
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Chat}" Size="14"
+                                                      Foreground="{DynamicResource TextSecondary}"
+                                                      HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Spacing="6">
                                             <!-- Intent narration — what the system thinks the user wants -->
                                             <TextBlock Text="{Binding IntentNarration}"
                                                        FontSize="12" FontStyle="Italic"
                                                        Foreground="{DynamicResource TextSecondary}"
-                                                       Margin="42,0,0,0"
+                                                       Margin="0,0,0,0"
                                                        IsVisible="{Binding IntentNarration, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
 
                                             <!-- Thinking indicator -->
                                             <StackPanel Orientation="Horizontal" Spacing="8"
-                                                        Margin="42,4,0,0"
+                                                        Margin="0,4,0,0"
                                                         IsVisible="{Binding IsThinking}">
                                                 <Border Width="8" Height="8" CornerRadius="4"
                                                         Background="{DynamicResource BrandPrimary}">
@@ -494,7 +530,7 @@
                                             </StackPanel>
 
                                             <!-- Step progress bar — visible during plan execution -->
-                                            <Border Margin="42,4,0,0"
+                                            <Border Margin="0,4,0,0"
                                                     Padding="10,6"
                                                     CornerRadius="6"
                                                     Background="{DynamicResource SurfaceCard}"
@@ -511,18 +547,18 @@
                                                                  TextWrapping="Wrap"
                                                                  FontSize="14"
                                                                  Foreground="{DynamicResource TextPrimary}"
-                                                                 Margin="42,0,0,0"
+                                                                 Margin="0,0,0,0"
                                                                  IsVisible="{Binding IsStreaming}" />
 
                                             <!-- Markdown rendered after response completes -->
                                             <ctrl:SafeMarkdownPresenter Markdown="{Binding SafeMarkdown}"
-                                                                        Margin="42,0,0,0"
+                                                                        Margin="0,0,0,0"
                                                                         IsVisible="{Binding IsComplete}" />
 
                                             <!-- Phase 126 #4 — answer-first: thin divider between the completed
                                                  answer and the (now-subordinate) work strip / pending tools below. -->
                                             <Border Height="1"
-                                                    Margin="42,10,0,10"
+                                                    Margin="0,10,0,10"
                                                     Background="{DynamicResource SurfaceBorder}"
                                                     Opacity="0.6"
                                                     IsVisible="{Binding ShowWorkSeparator}" />
@@ -530,7 +566,7 @@
                                             <!-- Auto-saved artifacts (from large text blocks) -->
                                             <ItemsControl ItemsSource="{Binding StandaloneArtifacts}"
                                                           IsVisible="{Binding HasStandaloneArtifacts}"
-                                                          Margin="42,4,0,0">
+                                                          Margin="0,4,0,0">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="vm:DocumentArtifactViewModel">
                                                         <Border Margin="0,3"
@@ -592,7 +628,7 @@
                                             </ItemsControl>
 
                                             <!-- Phase 116 H — Sources / provenance -->
-                                            <StackPanel Margin="42,6,0,2"
+                                            <StackPanel Margin="0,6,0,2"
                                                         IsVisible="{Binding HasSources}"
                                                         Spacing="4">
                                                 <TextBlock Text="SOURCES"
@@ -632,7 +668,7 @@
                                             </StackPanel>
 
                                             <!-- Error banner with retry -->
-                                            <Border Margin="42,6,0,0"
+                                            <Border Margin="0,6,0,0"
                                                     Padding="12,10"
                                                     CornerRadius="8"
                                                     Background="#2D1A1A"
@@ -666,7 +702,7 @@
 
                                             <!-- Pending tool confirmations — always visible, never collapsed into the strip -->
                                             <ItemsControl ItemsSource="{Binding ToolUses}"
-                                                          Margin="42,2,0,0"
+                                                          Margin="0,2,0,0"
                                                           IsVisible="{Binding ToolUses.Count}">
                                                 <ItemsControl.ItemTemplate>
                                                     <DataTemplate DataType="vm:ToolUseViewModel">
@@ -751,7 +787,7 @@
                                             </ItemsControl>
 
                                             <!-- Work strip (Phase 126) — collapsed summary of completed/running tool calls -->
-                                            <StackPanel Margin="42,2,0,0" IsVisible="{Binding HasWorkStrip}">
+                                            <StackPanel Margin="0,2,0,0" IsVisible="{Binding HasWorkStrip}">
                                                 <!-- Mid-turn animated indicator -->
                                                 <Border Padding="10,6"
                                                         CornerRadius="6"
@@ -950,7 +986,22 @@
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
                                             </StackPanel>
+                                            <!-- Phase 137 — one muted meta line: model · elapsed · Copy -->
+                                            <StackPanel Orientation="Horizontal" Spacing="6" Margin="0,2,0,0"
+                                                        IsVisible="{Binding IsComplete}">
+                                                <TextBlock Text="{Binding SenderLabel}" FontSize="11.5"
+                                                           Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                                <TextBlock Text="·" FontSize="11.5" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
+                                                           IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                <TextBlock Text="{Binding ElapsedText}" FontSize="11.5"
+                                                           Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
+                                                           IsVisible="{Binding ElapsedText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                                <TextBlock Text="·" FontSize="11.5" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                                <Button Classes="metaact" Content="Copy" ToolTip.Tip="Copy reply"
+                                                        VerticalAlignment="Center" Click="OnCopyMessageButtonClick" />
+                                            </StackPanel>
                                         </StackPanel>
+                                        </Grid>
                                     </Border>
                                 </StackPanel>
                             </Border>
