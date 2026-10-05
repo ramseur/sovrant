@@ -3995,3 +3995,147 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 }
 .sf-ghost-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 .sf-ghost-btn svg { width: 14px; height: 14px; }
+
+/* ===== App sidebar (Phase 135) — see docs/design/web.html =====
+   Expanded: collapsible nav groups (one open at a time) above an always-visible
+   Conversations area. The nav never scrolls on its own; Conversations fill the
+   rest (min 160px) with their own scroll; only a very short window scrolls the
+   middle (.rail-body) as one. Compact rows (36px groups, 30px pages) let a fully
+   open Admin plus Conversations fit a maximized 1080p window. */
+.rail-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+.app-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 10px;
+    flex-shrink: 0;
+}
+.app-nav .rail-icon { height: 36px; }
+.app-nav-chev { margin-left: auto; display: flex; color: var(--text-muted); }
+.app-nav-chev svg { width: 13px; height: 13px; transition: transform .12s; }
+.app-nav-chev.open svg { transform: rotate(90deg); }
+.app-nav-section {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 5px 10px 2px 44px;
+    flex-shrink: 0;
+}
+.app-nav-item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    height: 30px;
+    padding: 0 10px 0 44px;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 12.5px;
+    text-align: left;
+    flex-shrink: 0;
+}
+.app-nav-item:hover { background: var(--surface-hover); color: var(--text-primary); }
+.app-nav-item.active {
+    background: color-mix(in srgb, var(--brand-primary) 16%, transparent);
+    color: var(--brand-primary);
+    font-weight: 600;
+}
+.app-nav-item.active::before {
+    content: "";
+    position: absolute;
+    left: -10px;
+    top: 5px;
+    bottom: 5px;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: var(--brand-primary);
+}
+.rail-conversations {
+    flex: 1 1 auto;
+    min-height: 160px;
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--surface-border);
+}
+.rail-section-label {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 10px 14px 0 21px;
+    flex-shrink: 0;
+}
+.rail-conversations .sidebar {
+    flex: 1;
+    min-height: 0;
+    height: auto;
+    width: 100%;
+    min-width: 0;
+    border-right: none;
+    background: transparent;
+}
+.rail-conversations .sidebar-scroll { min-height: 0; padding-top: 6px; }
+
+/* Collapsed rail: flyouts beside the icons (hover, click, or Enter/Space; Esc closes). */
+.rail-icon-wrap { position: relative; }
+.rail-icon.flyopen { background: var(--surface-hover); color: var(--text-primary); }
+.rail-flyout {
+    position: absolute;
+    left: calc(100% - 2px);
+    top: 0;
+    z-index: 60;
+    width: 236px;
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--surface-card);
+    border: 1px solid var(--surface-border);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .25);
+}
+.rail-flyout-head {
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 6px 10px 4px;
+}
+.rail-flyout-section {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .07em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 6px 10px 2px;
+}
+.rail-flyout-item {
+    display: flex;
+    align-items: center;
+    height: 32px;
+    padding: 0 10px;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 12.5px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.rail-flyout-item:hover { background: var(--surface-hover); }
+.rail-flyout-item.active { color: var(--brand-primary); background: color-mix(in srgb, var(--brand-primary) 16%, transparent); font-weight: 600; }
+.rail-flyout-sep { height: 1px; background: var(--surface-border); margin: 4px 2px; }
+.rail-flyout-all { color: var(--brand-primary); font-weight: 600; }
+.rail-flyout-empty { font-size: 12px; color: var(--text-muted); padding: 6px 10px; }

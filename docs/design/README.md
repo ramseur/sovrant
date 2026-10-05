@@ -200,7 +200,7 @@ Not modeled, deliberately (same reasoning as Orchestration's inline forms): the 
 - **Dragging / Refused drop:** the target outline and drag preview render beside the right row.
 - **Parity:** `web.html`/`desktop.html` diff is still 49 lines, all chrome, with line endings ignored. `desktop.html` is CRLF and `web.html` is LF; that was already the case before this pass.
 
-## App sidebar: collapsible groups + always-visible conversations (2026-10-05, design-only)
+## App sidebar: collapsible groups + always-visible conversations (2026-10-05, shipped to code same day)
 
 Roadmap Phase 135. The rail's shared panel used to show either the selected group's sub-pages or, for Chat only, the conversation tree — so folders vanished whenever you left Chat. Sub-pages now live inline in the nav, and Conversations is pinned below it on every screen. Same rail, icons, accent bar, and Admin grouping as the left-nav redesign; only where sub-pages sit changes. No new pattern.
 
@@ -248,6 +248,8 @@ Roadmap Phase 135. The rail's shared panel used to show either the selected grou
   Not forcing a mass rewrite to 3 exact values — every current height was visually tuned for its specific control, and normalizing ~15 CSS rules with no way to re-verify each one visually within this pass is a real regression risk for a cosmetic-only win. **Standard going forward: new controls should land on 28, 32, 34, 36, 40, or 44px** — one of the six values already in use — rather than introduce a 7th.
 
 ## Already shipped from this work
+
+- The app sidebar (Phase 135): collapsible nav groups plus an always-visible Conversations section in the expanded rail, and flyouts in the collapsed rail, on Web (`AppNav.razor`, `RailNav.razor`, `AppNavModel`) and Desktop (`AppNavViewModel`, `MainWindow.axaml`). It matches the mock's option 2 sizing and compact rows.
 
 - The left-nav redesign (commit `7970ca3`): collapsible rail, real line icons replacing emoji, left accent bar for the active item, Admin's nine destinations grouped under Overview / Access / Safety / System.
 - Web's `.rail-icon` dropped 42px → 40px to match Desktop, closing the one real parity gap.

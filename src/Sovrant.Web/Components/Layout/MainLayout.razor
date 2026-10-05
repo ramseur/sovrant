@@ -21,28 +21,25 @@
                 </svg>
             }
         </button>
-        <RailNav Selected="@_selectedGroup" OnSelect="OnGroupSelected" />
-
-        <div class="rail-secondary-body">
-            @switch (_selectedGroup)
-            {
-                case "chat":
+        @if (_collapsed)
+        {
+            @* Phase 135 — collapsed rail: icons with keyboard-accessible flyouts. *@
+            <RailNav OnExpand="() => _collapsed = false" />
+        }
+        else
+        {
+            @* Phase 135 — expanded rail: collapsible nav groups, then Conversations
+               on every page. The nav never scrolls on its own; Conversations fill the
+               rest (min 160px) with their own scroll; only a very short window scrolls
+               this middle area as one. *@
+            <div class="rail-body">
+                <AppNav />
+                <div class="rail-conversations">
+                    <div class="rail-section-label">Conversations</div>
                     <Sidebar OnNavigate="Navigate" />
-                    break;
-                case "knowledge":
-                    <KnowledgePanel OnNavigate="Navigate" />
-                    break;
-                case "agents":
-                    <AgentsPanel OnNavigate="Navigate" />
-                    break;
-                case "workspace":
-                    <WorkspacePanel OnNavigate="Navigate" />
-                    break;
-                case "admin":
-                    <AdminPanel OnNavigate="Navigate" />
-                    break;
-            }
-        </div>
+                </div>
+            </div>
+        }
 
         <div class="rail-footer">
             <button class="rail-footer-user" title="Settings"
@@ -75,7 +72,6 @@
     [Inject] private Sovrant.Web.Services.ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
 
-    private string _selectedGroup = "chat";
     private bool _collapsed;
     private CommandPalette? _palette;
     private DotNetObjectReference<MainLayout>? _dotNetRef;
@@ -94,27 +90,6 @@
     {
         if (!Session.IsAuthenticated)
             Nav.NavigateTo("/login", forceLoad: false);
-    }
-
-    private void OnGroupSelected(string group)
-    {
-        _selectedGroup = group;
-        // Clicking a top-level icon should land on the first sub-nav item so the
-        // main content is never blank. Chat starts a fresh session; we both
-        // navigate (covers "currently on /settings") AND fire a reset (covers
-        // "already on /" where Blazor reuses the component instance).
-        var url = group switch
-        {
-            "chat" => "/",
-            "knowledge" => "/artifacts",
-            "agents" => "/agents",
-            "workspace" => "/projects",
-            "dashboard" => "/dashboard",
-            "admin" => "/command",
-            _ => null,
-        };
-        if (group == "chat") ActiveContext.StartNewSession();
-        if (url is not null) Nav.NavigateTo(url, forceLoad: false);
     }
 
     private void Navigate(string url)

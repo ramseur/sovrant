@@ -28,6 +28,9 @@ public partial class SidebarViewModel
     public ObservableCollection<SessionTreeRowViewModel> UnfiledRows { get; } = [];
     public ObservableCollection<SessionTreeRowViewModel> SearchRows { get; } = [];
 
+    /// <summary>Phase 135 — the 5 most recent conversations, for the collapsed rail's Chat flyout.</summary>
+    public ObservableCollection<SessionTreeRowViewModel> RecentConversations { get; } = [];
+
     /// <summary>Move picker + name prompt, rendered as a window-wide overlay by MainWindow.</summary>
     public SessionFolderDialogViewModel FolderDialog { get; } = new();
 
@@ -157,6 +160,9 @@ public partial class SidebarViewModel
         Fill(FolderRows, IsSearching ? [] : SessionFolderTree.FolderRows(_folders, _sessionItems, _expanded));
         Fill(UnfiledRows, IsSearching ? [] : SessionFolderTree.UnfiledRows(_folders, _sessionItems));
         Fill(SearchRows, IsSearching ? SessionFolderTree.SearchRows(_folders, _sessionItems, SearchText) : []);
+        Fill(RecentConversations, _sessionItems.OrderByDescending(s => s.UpdatedAt).Take(5)
+            .Select(s => new SessionTreeRow(SessionTreeRowKind.Session, s.SessionId, SessionFolderTree.DisplayTitle(s), 0, s.FolderId))
+            .ToList());
         OnPropertyChanged(nameof(HasUnfiled));
         OnPropertyChanged(nameof(HasSearchRows));
     }

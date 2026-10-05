@@ -233,7 +233,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
 | Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — Postgres check moved to Phase 134 |
 | Postgres / Supabase backend audit — real Postgres test target (skipped when unavailable), store-by-store parity with the SQLite suites, schema diff V001–V048 vs `PostgresSchema.sql`, split-backend query audit, SQLite→Postgres migrator check; closes Phase 133's open Postgres criterion | Phase 134 | Planned |
-| App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Planned |
+| App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Built |
 
 ### v1.0 release polish ✅
 
@@ -12438,7 +12438,7 @@ The Postgres/Supabase backend replaces a subset of stores (sessions, credentials
 
 ## Phase 135 — App Sidebar: Collapsible Nav Groups + Always-Visible Conversations
 
-**Status:** Planned (2026-10-05) — approach agreed; design mock done (`docs/design/web.html` / `desktop.html`, *Collapse rail* / *Flyout* toggles); awaiting review before code.
+**Status:** Built (2026-10-05) — Web and Desktop. Web verified live in headless Edge (14/14 checks against an isolated DB); Desktop's expanded rail verified live on a real database; Desktop's collapsed-rail flyouts still need a hand check. Design mock: `docs/design/web.html` / `desktop.html`.
 
 ### Why
 
@@ -12480,8 +12480,15 @@ Phase 133 put conversation folders in the rail panel, but that panel only shows 
 
 ### Acceptance criteria
 - [x] Design mock updated on both `web.html` and `desktop.html` (expanded with one open group, collapsed with a flyout, conversations visible on a non-Chat page), parity diff still chrome-only, logged in `docs/design/README.md`
-- [ ] Every sub-page reachable from both the expanded rail (inline) and the collapsed rail (flyout)
-- [ ] Only one nav group open at a time; the current page's group opens automatically
-- [ ] Conversations section visible on every page in the expanded rail, with its own scroll; all Phase 133 interactions still work there
-- [ ] Flyouts open by keyboard and close on Esc; no hover-only paths
-- [ ] Web + Desktop parity
+- [x] Every sub-page reachable from both the expanded rail (inline) and the collapsed rail (flyout)
+- [x] Only one nav group open at a time; the current page's group opens automatically
+- [x] Conversations section visible on every page in the expanded rail, with its own scroll; all Phase 133 interactions still work there
+- [x] Flyouts open by keyboard and close on Esc; no hover-only paths (Web verified; Desktop uses Avalonia `Flyout` light-dismiss, pending a hand check)
+- [x] Web + Desktop parity
+
+### Build notes (2026-10-05)
+
+- **Web:** a new `AppNavModel` holds the groups, pages and page → group lookup for both rails. `AppNav.razor` is the expanded nav, and `RailNav.razor` became the collapsed rail with flyouts. `MainLayout` renders `AppNav` + Conversations (`Sidebar`) when expanded and `RailNav` when collapsed. CSS lives in `sovrant.css` (`.rail-body`, `.app-nav*`, `.rail-conversations`, `.rail-flyout*`). `KnowledgePanel`, `AgentsPanel`, `AdminPanel` and `WorkspacePanel` were removed.
+- **Desktop:** `AppNavViewModel` mirrors the Web model and feeds two `ItemsControl`s in `MainWindow.axaml`: expanded rows, and collapsed icons with an attached `Flyout`. `MainWindow.axaml.cs` sizes the rail grid so the nav never scrolls and Conversations keep at least 160px. `SidebarViewModel.RecentConversations` feeds Chat's flyout. The four `*PanelView` files were removed, and `SidebarView` lost its own "CHAT" heading.
+- **Verified:** Web, live (groups render, the current page's group opens, one group at a time, sub-page navigation, Admin section labels, no rail scroll at 1080p with Admin open and Conversations ≥ 160px, flyouts on click, Esc closes, Chat flyout with 5 recent + Show all). Desktop, live on a real database (expanded groups, open/close, navigation keeps the group open with the page highlighted, Conversations on non-Chat pages). Full suite 2,343 passed, 3 skipped.
+- **Not done:** arrow-key navigation inside flyouts (Tab works); a resizable nav/conversations split (non-goal).

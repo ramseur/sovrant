@@ -91,7 +91,12 @@ public partial class MainViewModel : ViewModelBase
         sidebar.NavigationRequested += OnNavigationRequested;
         sidebar.SessionResumeRequested += OnSessionResumeRequested;
         commandPalette.CommandExecuted += OnCommandExecuted;
+
+        AppNav = new AppNavViewModel(this);
     }
+
+    /// <summary>Phase 135 — collapsible nav groups (expanded rail) and flyouts (collapsed rail).</summary>
+    public AppNavViewModel AppNav { get; }
 
     /// <summary>
     /// Bridge from the cockpit grid into the matching detail view. Sessions

@@ -1,0 +1,82 @@
+@*
+    Phase 135 — expanded rail nav. Dashboard / Chat / Projects are plain links;
+    Knowledge / Agents / Admin are collapsible sections with their pages inline.
+    One section is open at a time — by default the current page's group, so the
+    page you're on is always visible. Same model as RailNav's collapsed flyouts.
+*@
+@using Sovrant.Web.Services
+@inject NavigationManager Nav
+@inject WebSessionService Session
+@inject ActiveContextService ActiveContext
+@implements IDisposable
+
+<nav class="app-nav" aria-label="Main">
+    @foreach (var group in AppNavModel.Groups.Where(g => !g.AdminOnly || Session.IsAdmin))
+    {
+        var isOpen = group.IsCollapsible && group.Key == OpenKey;
+        var isCurrentGroup = group.Key == CurrentGroupKey;
+        if (group.IsCollapsible)
+        {
+            <button class="rail-icon app-nav-group @(isCurrentGroup && !isOpen ? "active" : "")"
+                    aria-expanded="@(isOpen ? "true" : "false")"
+                    @onclick="() => Toggle(group.Key)">
+                <span class="rail-icon-glyph">@((MarkupString)group.IconSvg)</span>
+                <span class="rail-label">@group.Label</span>
+                <span class="app-nav-chev @(isOpen ? "open" : "")" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </span>
+            </button>
+            @if (isOpen)
+            {
+                @foreach (var item in group.Items)
+                {
+                    @if (item.Section is not null)
+                    {
+                        <div class="app-nav-section">@item.Section</div>
+                    }
+                    <button class="app-nav-item @(AppNavModel.IsActive(item.Href, Path) ? "active" : "")"
+                            @onclick="() => Go(item.Href)">@item.Label</button>
+                }
+            }
+        }
+        else
+        {
+            <button class="rail-icon app-nav-group @(isCurrentGroup ? "active" : "")"
+                    @onclick="() => GoPlain(group)">
+                <span class="rail-icon-glyph">@((MarkupString)group.IconSvg)</span>
+                <span class="rail-label">@group.Label</span>
+            </button>
+        }
+    }
+</nav>
+
+@code {
+    // null = auto (the current page's group is open); "" = none open; otherwise a group key.
+    private string? _openOverride;
+
+    private string Path => "/" + Nav.ToBaseRelativePath(Nav.Uri);
+    private string? CurrentGroupKey => AppNavModel.GroupForPath(Path)?.Key;
+    private string? OpenKey => _openOverride is null ? CurrentGroupKey : (_openOverride.Length == 0 ? null : _openOverride);
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        _openOverride = null; // navigating opens the new page's group
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Toggle(string key) => _openOverride = OpenKey == key ? string.Empty : key;
+
+    private void Go(string href) => Nav.NavigateTo(href);
+
+    private void GoPlain(AppNavGroup group)
+    {
+        // Chat starts a fresh conversation, as the rail icon always has.
+        if (group.Key == "chat")
+            ActiveContext.StartNewSession();
+        Nav.NavigateTo(group.Href);
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}
