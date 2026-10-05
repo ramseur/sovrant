@@ -236,6 +236,41 @@ Roadmap Phase 135. The rail's shared panel used to show either the selected grou
 - **Collapsed with flyout:** checked on both Skills and Chat.
 - **Parity:** `web.html`/`desktop.html` diff is still 49 chrome-only lines, with line endings ignored.
 
+## Icon vocabulary: Lucide everywhere (2026-10-05, design-only)
+
+Roadmap Phase 136. The mocks already had no emoji, apart from one status dot, which stays because it's a text bullet. The emoji live in the real app (about 120 occurrences, counting HTML entities and `\u` escapes). So this pass defines the **vocabulary** that replaces them, and moves the mocks onto it.
+
+**Icon map:** the mock's `I` map (22 hand-copied SVGs) is replaced by `ICONS`, the 53 shared `SovrantIcon` names with the **exact Lucide markup** Web will render. That markup was extracted from `Blazicons.Lucide` 3.0.8 itself. `I` keeps its short keys as aliases, so no screen code changed.
+
+**Visible changes from swapping in real Lucide glyphs:**
+- **Book:** Knowledge's book becomes `BookOpen`.
+- **Chat bubble:** Chat's bubble becomes the current `MessageCircle`.
+- **Agents:** the hand-drawn robot becomes `Bot`.
+- **Projects:** becomes `FolderKanban`, so it no longer looks like a conversation folder.
+- **Team modes:** sequential and parallel become `ListOrdered` and `Columns3`.
+- **Shared glyphs:** send, attach, package, refresh and warning use Lucide's current paths.
+
+**New panel, "Icon vocabulary — Phase 136"** (below "The five patterns"):
+- **The names, by group:** every name grouped as Navigation, Actions, Objects and Status, with its glyph, the Lucide glyph behind it, and what it replaces.
+- **Sizes:** 14 inline, 16 buttons and rows, 19 nav, and 24+ for empty states.
+- **Accessibility:** every icon-only button keeps a label.
+
+**Top bar:** the context chips now show `workspace` / `projects` / `integrations` icons, in the spots where the app shows 🏢 📁 🔌 today.
+
+**Per-surface glyph names:** the Web and Desktop packages bundle different Lucide releases. Desktop's newer release renamed `Trash2` → `Trash` and `Building2` → `Building`. So the vocabulary stores a glyph per surface when the names differ: `delete` is `Trash2` on Web and `Trash` on Desktop, which is the same drawing, checked by rendering both. All 53 names were checked to exist in both packages (1,754 Web glyphs, 1,866 Desktop glyphs).
+
+**Brands: category icons (decided 2026-10-05).** Lucide ships no brand logos, but the app shows about 30 brands (model providers, integrations) as emoji. Each brand now shows the Lucide icon for its kind next to its name: `provider-cloud`, `provider-local`, or `integration-automation` / `platform` / `database` / `search` / `dxp`. This holds until official, licensed brand logos are added. Initials monograms were mocked and rejected, because brands collide: Slack, Stripe, Supabase, Snowflake and Sitecore would all be "S", and Groq and Google would both be "G". As more APIs and integrations arrive, collisions only increase.
+
+**Not modeled:**
+- **Real-app-only screens:** screens that exist only in the real app (setup wizard, tool-approval prompts, document cards, integration catalog). The panel's "replaces" column covers them.
+- **Out of scope:** the eval/verification report glyphs (✓ ✗ ⊘ in CLI and markdown output) and the OAuth callback pages. They're text output, not UI chrome.
+- **Dead code:** `GovernancePanel` (Web) and `GovernancePanelView` (Desktop) still hold emoji. They're unused, and will be deleted rather than migrated.
+
+**Verified:** rendered in headless Edge, on both mocks:
+- **Panel:** 53 vocabulary cells and 29 brand chips, with no empty glyphs. Both brand modes checked.
+- **Screens:** Orchestration, Chat and the top bar on Skills.
+- **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines, with line endings ignored.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.

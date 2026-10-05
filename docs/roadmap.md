@@ -12496,7 +12496,7 @@ Phase 133 put conversation folders in the rail panel, but that panel only shows 
 
 ## Phase 136 — Lucide Icons Everywhere
 
-**Status:** Planned (2026-10-05) — approach agreed; package compatibility checked; design mock pass next, then code.
+**Status:** Planned (2026-10-05) — approach agreed; package compatibility checked; design mock done (`docs/design/web.html` / `desktop.html`, *Icon vocabulary* panel); brand treatment decided (category icons); ready for code.
 
 ### Why
 
@@ -12516,6 +12516,8 @@ The hand-copied icons are already Lucide-style, but each one is maintained by ha
 | Web package | **`Blazicons.Lucide` 3.0.8** (MIT, targets net10.0, depends only on `Blazicons` 4.0.21, which is also MIT). Licence confirmed on GitHub, since the NuGet package declares none |
 | API | A **`SovrantIcon`** on each surface that takes a semantic name ("agent", "workflow", "lock", "folder", …) and maps it to a Lucide icon. Call sites name the meaning, not the glyph, so swapping a glyph is a one-line change. The names are shared, and a test keeps both maps in sync |
 | Existing hand-copied icons | **In scope (step 3):** `AppNavModel`'s SVG strings, `FolderIcons`, every inline `<svg>` in Web pages, `NavIcons.axaml`, and Desktop's inline `Path` data all move onto `SovrantIcon` |
+| Per-surface glyph names | The two packages bundle different Lucide releases (`Lucide.Avalonia`'s newer release renamed `Trash2` → `Trash`, `Building2` → `Building`), so each vocabulary entry stores its glyph per surface where the names differ; the name-resolution test also fails if a package update renames a glyph |
+| Brands | **Category icon** (decided 2026-10-05): Lucide ships no brand logos, so each of the ~30 provider and integration brands shows the Lucide icon for its kind (`provider-cloud`, `provider-local`, `integration-automation` / `platform` / `database` / `search` / `dxp`) next to its name, until official, licensed brand logos are added. Rejected: initials monograms, because brands collide (Slack / Stripe / Supabase / Snowflake / Sitecore → "S") and more integrations will only add collisions |
 | Fallback | If either package becomes unusable (an Avalonia 12.x break, abandonment), vendor the Lucide SVGs into a generated icon map behind the same `SovrantIcon` API. Call sites don't change |
 
 ### What ships
@@ -12539,6 +12541,7 @@ The hand-copied icons are already Lucide-style, but each one is maintained by ha
 - Changing which icon represents what, beyond replacing emoji. The existing nav icons map to their closest Lucide equivalents, and any visible change is called out in the mock pass.
 - Icon animation, or icon-only buttons without accessible labels (every icon-only button keeps a `title` / `ToolTip.Tip` and an `aria-label`).
 - The app's logo and favicon (the bolt), which stay as they are.
+- Official brand logos for providers and integrations: a follow-up that needs each brand's licensed logo assets and usage terms. Category icons stand in until then, and the per-brand icon field becomes the hook for a logo later.
 
 ### Relationship to other phases
 - **Phase 135 (app sidebar):** `AppNavModel` / `AppNavViewModel` icons move onto `SovrantIcon`; the layout doesn't change.
@@ -12546,7 +12549,7 @@ The hand-copied icons are already Lucide-style, but each one is maintained by ha
 - **Left-nav redesign (design README):** this finishes the "known remaining emoji" item logged there.
 
 ### Acceptance criteria
-- [ ] Design mocks updated on both surfaces (no emoji as chrome), parity diff still chrome-only, logged in `docs/design/README.md`
+- [x] Design mocks updated on both surfaces (no emoji as chrome), parity diff still chrome-only, logged in `docs/design/README.md`
 - [ ] `SovrantIcon` on Web and Desktop with one shared name list; a test proves every name resolves on both
 - [ ] No emoji used as UI chrome remains in `src/Sovrant.Web` or `src/Sovrant.Desktop`
 - [ ] `AppNavModel`, `FolderIcons`, inline page SVGs, `NavIcons.axaml` and Desktop inline `Path` icons all render through `SovrantIcon`; `FolderIcons` and `NavIcons.axaml` deleted
