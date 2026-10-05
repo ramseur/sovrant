@@ -238,6 +238,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Built |
 | Ollama only when active on your workspace — an admin-added Ollama provider enabled for the active workspace is the only way Sovrant contacts Ollama (`OLLAMA_BASE_URL`, documented in `.env.example`, only sets its default address); no default `localhost:11434`, no pings/cost-pick/fallback otherwise; pin by the profile's provider kind instead of "base URL is localhost" (fixes LM Studio and other local endpoints being sent to Ollama's port) | Phase 138 | Built |
 | Friendly MCP connection errors — classify failures (DNS, refused/timeout, 401/403 credentials, TLS) into one plain sentence with what to do; "Unavailable" badge + Retry in Integrations and a warning in the top-bar Integrations menu; one-line log entries instead of stack traces; automatic background retry (≈10 s, 1 min, 5 min) for network failures, none for credential errors | Phase 139 | Planned |
+| Welcome & first-run onboarding — first-run admin sign-up on the login screen; a full-window, role-aware "Welcome to Sovrant" page on every user's first sign-in (what Sovrant is, info bubbles for each area, a get-started checklist ticked from real state); a bigger chat welcome that uses the whole main area (Web + Desktop) | Phase 140 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12776,3 +12777,59 @@ On 2026-10-05 Desktop started during a brief DNS hiccup. `McpToolRegistrar.Regis
 - [ ] A server unreachable at startup reconnects on its own once reachable, and its tools appear without a restart
 - [ ] Console shows one line per failed connection, no stack traces
 - [ ] Integrations shows Unavailable + reason + Retry; the top-bar menu shows the warning (Web + Desktop)
+
+## Phase 140 — Welcome & First-Run Onboarding
+
+**Status:** Planned (2026-10-05) — plan agreed; design mock next, then code.
+
+### Why
+
+Sovrant's welcome is small. The empty chat shows a 44px mark, "What are you working on?", one line, and six suggestion cards about 560px wide, floating in the middle of the window, while comparable apps use the whole main area. A new user is never told what Sovrant is or what's behind the nav. The first run goes login → provider setup → straight to Command Center, with no "welcome, here's what you can do" moment, and the login screen never explains that the first account becomes the administrator.
+
+Rahul Singh's fork (PR #31) attempted parts of this. **Issue #27 (login onboarding):** a first-run "create administrator account" mode, an approval note, progress text and success styling. Never applied; the backend calls it needs (`IsFirstRunAsync`, `IsApprovalRequiredAsync`) already exist. **Issue #28 (hero):** a slightly larger logo with a glow and a bigger title; polish only, still the same small block. This phase takes #27's behaviour and #28's polish, and goes further.
+
+### Decisions (confirmed 2026-10-05)
+
+| Question | Decision |
+|---|---|
+| Scope | **One phase, one first-run journey:** first-run sign-up → provider setup (existing) → the Welcome page → the chat |
+| Who sees the Welcome page | **Every user, on their first sign-in, role-aware.** Admins get the server checklist; members get a "get going" checklist. Re-openable any time from Help / Dashboard ("Show welcome") |
+| Tagline | *"Your private AI workspace. Bring any model, keep your data, and stay in control of what your agents can do."* (Wording rule: "source-available", never "open source") |
+| Size | The Welcome page and the empty-chat welcome both use the **full main area**. No small centred card |
+| "Seen" state | Stored per user in the database (`user_preferences`), never on disk; `sovrant.config` stays the only on-disk config |
+
+### What ships
+1. **First-run sign-up (login screen, Web + Desktop).**
+   - **Empty server:** with no accounts yet, the screen reads "Welcome! Let's set up your server", explains that the first account becomes the **administrator**, and the primary button is "Create administrator account" (Enter creates it).
+   - **Otherwise:** normal sign-in; "Create account" appears only when registration is open, with "New accounts need administrator approval" when approval is required.
+   - **Feedback:** a progress line while working ("Creating your administrator account…"); success in the success style, not the error style.
+2. **"Welcome to Sovrant" page.** Full window, shown once per user after sign-in (and after provider setup on first run).
+   - **Header:** the Sovrant mark, "Welcome to Sovrant, <name>", and the tagline.
+   - **Info bubbles:** one per area, each with an icon (Phase 136 vocabulary), two lines on what it does, and a link to it. The areas are Chat with any model · Agents · Teams & Swarms · Workflows · Knowledge (skills, templates, memory, documents) · Integrations (MCP) · Trust Boundary & Governance · Workspaces & admin. Admin-only areas are hidden for members.
+   - **Get started checklist, ticked from real state:**
+     - *Admins:* provider connected · providers enabled for a workspace · team invited · an integration connected · first agent created.
+     - *Members:* a model selected · try an agent · first conversation · explore Knowledge.
+   - **Actions:** "Start chatting" (primary) and "Skip for now". Reopenable from Help / Dashboard.
+3. **Bigger chat welcome (every new chat).**
+   - **Layout:** the empty state fills the main area, with a larger mark and title (Rahul's #28 polish) and the suggestion cards in a wider grid.
+   - **Capabilities strip:** a compact "What Sovrant can do" strip repeats the info bubbles in short form, linking to each area.
+   - **Agent-scoped chats:** keep their "Chatting with <agent>" badge.
+4. **Design mock first** on `web.html` and `desktop.html`: the login first-run state, the Welcome page (admin and member variants), and the new chat welcome. Parity diff stays chrome-only.
+
+### Non-goals
+- A multi-step guided product tour with pointers and overlays.
+- Changing provider setup itself (Phase 138 already made local providers keyless).
+- Marketing or brand assets beyond the existing bolt mark.
+
+### Relationship to other phases
+- **Phase 136:** info bubbles and checklist use the shared icon vocabulary.
+- **Phase 137:** the chat welcome sits in the same centred column system, widened for the empty state.
+- **Phase 138:** "provider connected" / "providers enabled for a workspace" read the same profile and workspace state the guard uses.
+
+### Acceptance criteria
+- [ ] Mock: first-run login, Welcome page (admin + member), new chat welcome on both surfaces; parity diff chrome-only; logged in `docs/design/README.md`
+- [ ] Empty server → the login screen offers "Create administrator account" and explains the admin role; approval note shown when required
+- [ ] Every user sees the Welcome page once after first sign-in; it's role-aware; "Show welcome" reopens it
+- [ ] Checklist items tick from real state (no hard-coded ticks)
+- [ ] The empty-chat welcome fills the main area, with a wider suggestion grid and the capabilities strip
+- [ ] Web + Desktop parity; verified live (fresh isolated DB for first run, plus a member account)
