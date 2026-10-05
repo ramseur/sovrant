@@ -26,6 +26,10 @@ Versions correspond to tags on the `development` branch.
 
 ### Fixed
 
+- **Isolated agents erroring out when the child process exits early** — `ProcessAgent` closed the child's stdin outside the `IOException` guard, so a child that exited before reading its task (broken pipe) failed the whole agent run. The close is now inside the guard. (From Rahul Singh's fork, PR #8.)
+- **Eval code graders ran only the first word of their command on Linux/macOS** — `CodeGrader` passed `sh -c` a flat argument string that was split on whitespace; it now passes the command as a single `-c` argument. Windows was unaffected.
+- **Artifact file URIs on Linux/macOS** — `LocalArtifactStore` built `file:////home/...` URIs by string concatenation; it now uses `new Uri(path)`.
+- **LSP test** — the Windows-path `PathToUri` test is skipped on non-Windows hosts, where `C:\...` isn't a rooted path.
 - **Remote-mode session list read the wrong field** — `RemoteSessionStore.ListWithTitlesAsync` read `session_id` from `GET /v1/sessions`, which only returned `id`, so listing threw in remote mode. The endpoint now returns both and the client accepts either.
 - **Postgres session search** — `PostgresSessionStore.SearchAsync` selected three columns but the shared row reader read a fourth, so search failed on the Postgres backend.
 - **Swarm file locks never applied to `Write`/`Edit`** — `SwarmToolExecutor` keyed its write-tool map on `WriteFile`/`EditFile`, names no registered tool uses, so concurrent swarm workers could overwrite each other's files with no lock check (only the up-front `FilesToModify` declaration was enforced). Writes and edits now check and auto-acquire the lock under the real tool names. The executor also now honors `SwarmConfig.FileLocksEnabled` (previously it would have locked regardless). The working-directory guard still applies only to `NotebookEdit`, as before — `Write`/`Edit` legitimately target project folders outside the process's working directory; a real directory boundary for file tools is planned as Phase 124.

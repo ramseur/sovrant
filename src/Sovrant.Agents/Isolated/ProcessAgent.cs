@@ -72,9 +72,9 @@ public sealed partial class ProcessAgent : IAgent
             try
             {
                 await process.StandardInput.WriteLineAsync(taskJson.AsMemory(), ct).ConfigureAwait(false);
+                process.StandardInput.Close();
             }
             catch (IOException) { }
-            process.StandardInput.Close();
 
             // Read stdout and stderr concurrently.
             var stdoutTask = ReadStreamAsync(process.StandardOutput, ct);
