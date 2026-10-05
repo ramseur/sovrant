@@ -235,6 +235,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Postgres / Supabase backend audit — real Postgres test target (skipped when unavailable), store-by-store parity with the SQLite suites, schema diff V001–V048 vs `PostgresSchema.sql`, split-backend query audit, SQLite→Postgres migrator check; closes Phase 133's open Postgres criterion | Phase 134 | Planned |
 | App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Built |
 | Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Built |
+| Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12583,3 +12584,52 @@ The hand-copied icons are already Lucide-style, but each one is maintained by ha
   - A scan of Web and Desktop source fails on emoji, pictographic symbols, entities or escapes used as chrome. The only exception is the browser tab-title dot, which is plain text and marked `icon-scan:allow`.
   - Plus 6 catalog icon tests in Runtime. Full suite: 2,369 passed, 3 skipped.
 - **Known differences:** Desktop's `brand` mark is a stroked orange bolt, because `LucideIcon` draws strokes only. Web's is filled.
+
+## Phase 137 — Chat Bubbles + Icon Send/Stop
+
+**Status:** Planned (2026-10-05) — approach agreed; design mock next (the Chat thread is already mocked; the streaming/Stop state is not), then code.
+
+### Why
+
+The design mock's Chat thread (`docs/design/web.html` / `desktop.html`, Chat → *Thread*) has had right-aligned user bubbles, flat assistant messages, a centred column and an icon Send button since the left-nav design pass, but the real chats never shipped it. Today both apps:
+- put an avatar-and-name row on every message;
+- wrap assistant replies in a card;
+- let messages run the full content width;
+- use text "Send" / "Stop" buttons beside a bare textarea.
+
+Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted the same, but his merge dropped it. This phase brings Web and Desktop up to the mock.
+
+### Decisions (confirmed 2026-10-05)
+
+| Question | Decision |
+|---|---|
+| Avatars | **Keep them**, as the mock shows: initials avatar beside user bubbles (right), neutral chat-icon tile beside assistant messages (left). Rejected: Rahul's avatar-less bubbles |
+| User messages | Right-aligned bubble in the brand colour with white text, tail corner (12/12/4/12). The "You" name row goes, since the bubble already says who's speaking |
+| Assistant messages | Flat text, no card box. Today's sender name / model / elapsed time / copy actions become one small muted line. The work strip, tool approvals, document cards and markdown are unchanged |
+| Width | Thread and composer centred, capped at 760px (the mock's `.msg` max width) |
+| Composer | One rounded box (focus ring) holding the textarea and a bottom bar; Send is a 32px brand square with the `send` icon, disabled while the input is empty |
+| Stop | **Brand colour, same spot as Send**: while a reply streams, the button shows the `stop` icon. It never moves, and matches Claude.ai. Rejected: a neutral bordered Stop (ChatGPT-style) |
+| Keyboard | Enter sends, Shift+Enter new line (unchanged); **Esc stops** a streaming reply |
+
+### What ships
+1. **Design mock:** a *Streaming* toggle on the Chat screen shows the Stop state (the brand button with the `stop` icon, plus a streaming assistant message). Parity diff stays chrome-only.
+2. **Web:**
+   - `ChatMessage.razor`: user bubble + right avatar; flat assistant layout with the muted meta line.
+   - `Chat.razor`: composer box, icon Send/Stop with `aria-label` / `title` ("Send message (Enter)", "Stop generating (Esc)"), Esc handling.
+   - CSS for the 760px column.
+3. **Desktop:** the same in `ChatView.axaml`: message templates, composer, icon Send/Stop with tooltips and automation names, and Esc to stop.
+
+### Non-goals
+- New composer features. The mock's attach and "+" buttons aren't built today and stay out.
+- Changes to message content rendering, work strips, the tool-approval flow, or the welcome screen.
+
+### Relationship to other phases
+- **Phase 136:** uses the `send` / `stop` icons from the shared vocabulary.
+- **Phase 126 (work strips):** strips sit inside the flat assistant message unchanged.
+
+### Acceptance criteria
+- [ ] Mock: *Streaming* state added on both surfaces; parity diff still chrome-only; logged in `docs/design/README.md`
+- [ ] User messages render as right-aligned brand bubbles with the initials avatar; assistant messages flat beside the avatar tile, with the muted meta line
+- [ ] Thread and composer centred at ≤760px on wide windows; full width on narrow ones
+- [ ] Send is an icon button, disabled when empty; Stop replaces it in place while streaming; Esc stops; both buttons labelled for screen readers
+- [ ] Web + Desktop parity; Web verified live in headless Edge (smoke tests use `:free` models only), Desktop verified live
