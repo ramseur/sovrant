@@ -271,6 +271,31 @@ Roadmap Phase 136. The mocks already had no emoji, apart from one status dot, wh
 - **Screens:** Orchestration, Chat and the top bar on Skills.
 - **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines, with line endings ignored.
 
+## Chat bubbles + icon Send/Stop (2026-10-05, design-only)
+
+Roadmap Phase 137. The Thread state already had right-aligned brand bubbles, flat assistant messages and an icon Send; this pass fills the gaps the real apps need before they adopt it.
+
+**Streaming state:** a new *Streaming* toggle on the Chat screen.
+- A second exchange is mid-reply: a running work strip (amber dot), and the reply text ending in a blinking brand caret.
+- The composer input is disabled ("Generating a reply…").
+- **The brand Send button becomes Stop in the same spot:** the `stop` icon, `title`/`aria-label` "Stop generating (Esc)". Its neutral, ChatGPT-style alternative was rejected (see the roadmap).
+
+**Assistant meta line:** under each assistant reply, one small muted line, *model · elapsed · Copy*. It replaces the real apps' per-message name row.
+
+**Centred 760px column:**
+- `.msgs` and `.composer` use `padding-inline: max(22px, calc((100% - 760px) / 2))`, so the thread and the composer box share one centred column, capped at 760px.
+- Before, only each message was capped, so on wide windows user bubbles sat at the far right edge.
+- Send and Stop also gained their labels in the idle state ("Send message (Enter)").
+
+**Kept:** avatars on both sides (initials gradient for the user, a neutral chat-icon tile for the assistant).
+
+**Not built:** the composer's attach and "+" buttons stay in the mock but aren't part of Phase 137 (non-goal).
+
+**Verified:** rendered in headless Edge, on both mocks.
+- **Thread and Streaming:** the message column and composer box line up (727–1487px at the default frame). The Stop button, caret and meta line render.
+- **Wide viewport:** the composer box is exactly 760px, with equal margins.
+- **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.

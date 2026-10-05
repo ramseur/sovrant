@@ -296,6 +296,17 @@
   .ib:hover{background:var(--hover);color:var(--t1)} .ib svg{width:16px;height:16px}
   .send{width:32px;height:32px;border-radius:9px;border:none;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer}
   .send svg{width:16px;height:16px}
+  /* Phase 137 — centred 760px column, assistant meta line, streaming / Stop */
+  .msgs{padding-inline:max(22px, calc((100% - 760px) / 2))}
+  .composer{padding-inline:max(22px, calc((100% - 760px) / 2))}
+  .ameta{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11.5px;color:var(--t3)}
+  .ameta .act{color:var(--t2);cursor:pointer}
+  .ameta .act:hover{color:var(--t1)}
+  .caret{display:inline-block;width:7px;height:15px;margin-left:2px;vertical-align:-2px;background:var(--brand);border-radius:1px;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .strip.run .cnt::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--warn,#F5A623);margin-right:7px;vertical-align:1px}
+  .cbox.busy .ta{color:var(--t3);font-style:italic}
+  .send.stop svg{width:14px;height:14px}
 
   /* pattern: ENTRY (login) */
   .entry{flex:1;display:flex;align-items:center;justify-content:center;padding:34px 20px;background:var(--bg)}
@@ -963,11 +974,21 @@ function chatHTML(s){
       <div class="msg a"><div class="who">${sv(I.chat,2)}</div><div>
         <div class="strip"><span style="display:flex;color:var(--t3)">${sv(I.chev,2.4)}</span><span class="cnt">4 actions</span><span>· Read ×2 · Grep · Bash · 2.4s</span></div>
         <div class="bub">Your OpenRouter key is expired — the API returns <code>401 API key expired</code> on every request. Two other things surfaced in the log: Ollama is being called although it isn't configured, and a request was rejected for sending 144 tools against a 128 limit.</div>
+        <div class="ameta"><span>gemma-4-31b-it</span><span>·</span><span>6.2s</span><span>·</span><span class="act" title="Copy reply">Copy</span></div>
       </div></div>
+      ${chatState==='stream' ? `<div class="msg u"><div class="who">ER</div><div class="bub">Rotate the key and confirm chats work again.</div></div>
+      <div class="msg a"><div class="who">${sv(I.chat,2)}</div><div>
+        <div class="strip run"><span style="display:flex;color:var(--t3)">${sv(I.chev,2.4)}</span><span class="cnt">Running</span><span>· Bash · 1.1s</span></div>
+        <div class="bub">I'll open the provider settings, swap in the new key, and send a test message through OpenRouter<span class="caret"></span></div>
+      </div></div>` : ''}
     </div>
-    <div class="composer"><div class="cbox"><div class="ta">Type a message or / for commands…</div>
+    ${chatState==='stream'
+      ? `<div class="composer"><div class="cbox busy"><div class="ta">Generating a reply…</div>
       <div class="cbar"><button class="ib">${sv(I.clip,2)}</button><button class="ib">${sv(I.plus,2.2)}</button><span class="sp"></span>
-      <span style="font-size:11.5px;color:var(--t3)">gemma-4-31b-it</span><button class="send">${sv(I.send,2)}</button></div></div></div>
+      <span style="font-size:11.5px;color:var(--t3)">gemma-4-31b-it</span><button class="send stop" title="Stop generating (Esc)" aria-label="Stop generating">${sv(ICONS.stop,2.6)}</button></div></div></div>`
+      : `<div class="composer"><div class="cbox"><div class="ta">Type a message or / for commands…</div>
+      <div class="cbar"><button class="ib">${sv(I.clip,2)}</button><button class="ib">${sv(I.plus,2.2)}</button><span class="sp"></span>
+      <span style="font-size:11.5px;color:var(--t3)">gemma-4-31b-it</span><button class="send" title="Send message (Enter)" aria-label="Send message">${sv(I.send,2)}</button></div></div></div>`}
   </div>`;
 }
 
@@ -997,7 +1018,7 @@ function render(){
   const ct=document.getElementById('screenToggle');
   if(cur==='chat'){
     ct.style.display='flex';
-    ct.innerHTML=[['thread','Thread'],['welcome','Welcome'],['menu','Folder menu'],['move','Move dialog'],['drag','Dragging'],['dragno','Refused drop']].map(([k,t])=>`<button class="cbtn${chatState===k?' on':''}" onclick="setChatState('${k}')">${t}</button>`).join('');
+    ct.innerHTML=[['thread','Thread'],['stream','Streaming'],['welcome','Welcome'],['menu','Folder menu'],['move','Move dialog'],['drag','Dragging'],['dragno','Refused drop']].map(([k,t])=>`<button class="cbtn${chatState===k?' on':''}" onclick="setChatState('${k}')">${t}</button>`).join('');
   } else if(cur==='orchestration'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${orchView==='team'?' on':''}" onclick="setOrchView('team')">Team</button><button class="cbtn${orchView==='defaults'?' on':''}" onclick="setOrchView('defaults')">Defaults</button>`;

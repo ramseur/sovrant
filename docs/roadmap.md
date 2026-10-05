@@ -12587,7 +12587,7 @@ The hand-copied icons are already Lucide-style, but each one is maintained by ha
 
 ## Phase 137 — Chat Bubbles + Icon Send/Stop
 
-**Status:** Planned (2026-10-05) — approach agreed; design mock next (the Chat thread is already mocked; the streaming/Stop state is not), then code.
+**Status:** Planned (2026-10-05) — approach agreed; design mock done (Chat → *Thread* / *Streaming* in `docs/design/web.html` / `desktop.html`); code next.
 
 ### Why
 
@@ -12628,7 +12628,7 @@ Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted th
 - **Phase 126 (work strips):** strips sit inside the flat assistant message unchanged.
 
 ### Acceptance criteria
-- [ ] Mock: *Streaming* state added on both surfaces; parity diff still chrome-only; logged in `docs/design/README.md`
+- [x] Mock: *Streaming* state added on both surfaces; parity diff still chrome-only; logged in `docs/design/README.md`
 - [ ] User messages render as right-aligned brand bubbles with the initials avatar; assistant messages flat beside the avatar tile, with the muted meta line
 - [ ] Thread and composer centred at ≤760px on wide windows; full width on narrow ones
 - [ ] Send is an icon button, disabled when empty; Stop replaces it in place while streaming; Esc stops; both buttons labelled for screen readers
