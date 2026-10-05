@@ -104,6 +104,22 @@ public partial class SidebarViewModel
 
     // ── loading ─────────────────────────────────────────────────────────────
 
+    private DateTimeOffset _lastExternalRefresh = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// Reloads the folder tree to pick up changes made elsewhere (e.g. on Web, which
+    /// shares the same database). Called when the Chat menu opens and when the window
+    /// regains focus; throttled so focus flicker doesn't trigger repeated reloads.
+    /// </summary>
+    public Task RefreshFromOtherSurfacesAsync()
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (now - _lastExternalRefresh < TimeSpan.FromSeconds(2))
+            return Task.CompletedTask;
+        _lastExternalRefresh = now;
+        return LoadSessionsAsync();
+    }
+
     private async Task LoadSessionsAsync()
     {
         var me = App.SovrantUserId;

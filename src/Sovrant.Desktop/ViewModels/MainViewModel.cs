@@ -42,6 +42,10 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsGovernanceGroup));
         OnPropertyChanged(nameof(IsAdminGroup));
         OnPropertyChanged(nameof(IsSettingsGroup));
+
+        // Phase 133 — pick up folder/conversation changes made on Web (same database).
+        if (value == "chat")
+            _ = Sidebar.RefreshFromOtherSurfacesAsync();
     }
 
     private readonly IServiceProvider _services;

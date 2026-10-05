@@ -9,6 +9,14 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+
+        // Phase 133 — coming back to the window (e.g. after editing folders on Web)
+        // reloads the conversation tree so both surfaces show the same state.
+        Activated += (_, _) =>
+        {
+            if (DataContext is MainViewModel vm)
+                _ = vm.Sidebar.RefreshFromOtherSurfacesAsync();
+        };
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
