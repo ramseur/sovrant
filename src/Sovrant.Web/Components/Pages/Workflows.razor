@@ -87,7 +87,7 @@
                         <h2>@_selected.Goal</h2>
                         @if (_artifactCount > 0)
                         {
-                            <a href="/artifacts" class="text-muted text-sm" style="display:inline-block;margin-top:4px;">📎 @_artifactCount artifact@(_artifactCount == 1 ? "" : "s")</a>
+                            <a href="/artifacts" class="text-muted text-sm" style="display:inline-block;margin-top:4px;"><SovrantIcon Name="@IconNames.Attach" Size="13" Class="icon-inline icon-lead" />@_artifactCount artifact@(_artifactCount == 1 ? "" : "s")</a>
                         }
                     </div>
                     @if (!IsTerminal(_selected.Status))
@@ -125,9 +125,9 @@
                                         <option value="High">High</option>
                                         <option value="Fast">Fast</option>
                                     </select>
-                                    <button class="btn-sm btn-outline" title="Remove step"
+                                    <button class="btn-sm btn-outline" title="Remove step" aria-label="Remove step"
                                             disabled="@(_editableSteps.Count <= 1)"
-                                            @onclick="() => RemoveStep(idx)">✕</button>
+                                            @onclick="() => RemoveStep(idx)"><SovrantIcon Name="@IconNames.Close" Size="12" /></button>
                                 </div>
                                 <input class="gov-field-input" placeholder="Expected outcome"
                                        value="@step.Expected" @oninput="e => step.Expected = (string)e.Value!" />
@@ -168,7 +168,7 @@
                     @if (!string.IsNullOrEmpty(_selected.SessionId))
                     {
                         <a href="@($"/?session={Uri.EscapeDataString(_selected.SessionId)}")" class="btn-outline btn-sm" style="display:inline-flex;margin-bottom:12px;">
-                            💬 Open chat session →
+                            <SovrantIcon Name="@IconNames.Chat" Size="14" Class="icon-inline icon-lead" />Open chat session →
                         </a>
                         <p class="text-muted text-sm" style="margin:-8px 0 12px;">
                             The real back-and-forth for every step happens there. This log is just the structural timeline.

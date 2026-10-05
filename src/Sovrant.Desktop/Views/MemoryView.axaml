@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              x:Class="Sovrant.Desktop.Views.MemoryView"
              x:DataType="vm:MemoryViewModel"
@@ -343,14 +345,12 @@
                                                 <TextBlock Text="{Binding Layer}" FontSize="10"
                                                            Foreground="{DynamicResource TextSecondary}" />
                                             </Border>
-                                            <Path Data="{StaticResource IconLock}" Width="11" Height="11" Stretch="Uniform"
+                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Private}" Size="11"
                                                   IsVisible="{Binding IsPrivate}"
-                                                  StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
-                                                  Stroke="{DynamicResource TextMuted}" VerticalAlignment="Center" />
-                                            <Path Data="{StaticResource IconUnlock}" Width="11" Height="11" Stretch="Uniform"
+                                                  Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Public}" Size="11"
                                                   IsVisible="{Binding !IsPrivate}"
-                                                  StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
-                                                  Stroke="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                                  Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}"
                                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                                         </StackPanel>

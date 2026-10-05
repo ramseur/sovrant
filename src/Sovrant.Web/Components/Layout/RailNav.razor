@@ -26,7 +26,7 @@
                     title="@group.Label" aria-label="@group.Label"
                     aria-haspopup="@(hasFlyout ? "menu" : null)" aria-expanded="@(hasFlyout ? (open ? "true" : "false") : null)"
                     @onclick="() => Click(group, hasFlyout)">
-                <span class="rail-icon-glyph">@((MarkupString)group.IconSvg)</span>
+                <span class="rail-icon-glyph"><SovrantIcon Name="@group.IconName" /></span>
             </button>
             @if (open)
             {

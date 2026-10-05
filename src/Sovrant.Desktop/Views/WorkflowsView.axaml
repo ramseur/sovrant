@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              x:Class="Sovrant.Desktop.Views.WorkflowsView"
              x:DataType="vm:WorkflowsViewModel"
@@ -170,12 +172,13 @@
                                     <TextBlock Text="{Binding Goal}"
                                                FontSize="16" FontWeight="Bold" TextWrapping="Wrap"
                                                Foreground="{DynamicResource TextPrimary}" />
-                                    <TextBlock IsVisible="{Binding ArtifactCount}"
-                                               FontSize="11" Foreground="{DynamicResource TextMuted}">
-                                        <Run Text="📎" />
-                                        <Run Text="{Binding ArtifactCount}" />
-                                        <Run Text="artifact(s)" />
-                                    </TextBlock>
+                                    <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding ArtifactCount}">
+                                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Attach}" Size="11" VerticalAlignment="Center" Foreground="{DynamicResource TextMuted}" />
+                                        <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center">
+                                            <Run Text="{Binding ArtifactCount}" />
+                                            <Run Text="artifact(s)" />
+                                        </TextBlock>
+                                    </StackPanel>
                                 </StackPanel>
                             </DockPanel>
 
@@ -258,11 +261,13 @@
                                                     BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
                                                 <StackPanel Spacing="6">
                                                     <DockPanel>
-                                                        <Button DockPanel.Dock="Right" Content="✕" ToolTip.Tip="Remove step"
+                                                        <Button AutomationProperties.Name="Remove step" DockPanel.Dock="Right" ToolTip.Tip="Remove step"
                                                                 Command="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).RemoveStepCommand}"
                                                                 CommandParameter="{Binding}"
                                                                 Padding="6,2" FontSize="11"
-                                                                Background="Transparent" Foreground="{DynamicResource TextSecondary}" />
+                                                                Background="Transparent" Foreground="{DynamicResource TextSecondary}">
+                                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Close}" Size="11" />
+                                                        </Button>
                                                         <ComboBox DockPanel.Dock="Right" Width="100" Margin="0,0,6,0"
                                                                   ItemsSource="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).TierOptions, Mode=OneTime}"
                                                                   SelectedItem="{Binding Tier, Mode=TwoWay}" />
@@ -299,12 +304,17 @@
                             <!-- ── Journal tab ──────────────────────────── -->
                             <StackPanel Spacing="12"
                                         IsVisible="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).IsJournalTabActive}">
-                                <Button Content="💬 Open chat session →"
+                                <Button
                                         IsVisible="{Binding SessionId, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
                                         Command="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).OpenChatSessionCommand}"
                                         Padding="10,5" CornerRadius="6" FontSize="12"
                                         Background="Transparent" Foreground="{DynamicResource TextPrimary}"
-                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1" />
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                    <StackPanel Orientation="Horizontal" Spacing="5">
+                                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Chat}" Size="13" VerticalAlignment="Center" />
+                                        <TextBlock Text="Open chat session →" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
                                 <TextBlock Text="The real back-and-forth for every step happens there. This log is just the structural timeline."
                                            FontSize="11" TextWrapping="Wrap"
                                            IsVisible="{Binding SessionId, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"

@@ -425,7 +425,8 @@ public partial class ArtifactItemViewModel : ViewModelBase
     [ObservableProperty]
     private string _folderName = string.Empty;
 
-    public string FolderDisplayName => $"📁 {FolderName}";
+    // The folder icon is drawn by the view (Phase 136), not as an emoji in the text.
+    public string FolderDisplayName => FolderName;
 
     public ObservableCollection<ArtifactItemViewModel> FolderFiles { get; } = [];
 

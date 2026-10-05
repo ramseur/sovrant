@@ -20,10 +20,10 @@
             <button class="rail-icon app-nav-group @(isCurrentGroup && !isOpen ? "active" : "")"
                     aria-expanded="@(isOpen ? "true" : "false")"
                     @onclick="() => Toggle(group.Key)">
-                <span class="rail-icon-glyph">@((MarkupString)group.IconSvg)</span>
+                <span class="rail-icon-glyph"><SovrantIcon Name="@group.IconName" /></span>
                 <span class="rail-label">@group.Label</span>
                 <span class="app-nav-chev @(isOpen ? "open" : "")" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                    <SovrantIcon Name="@IconNames.Expand" StrokeWidth="2.4" />
                 </span>
             </button>
             @if (isOpen)
@@ -43,7 +43,7 @@
         {
             <button class="rail-icon app-nav-group @(isCurrentGroup ? "active" : "")"
                     @onclick="() => GoPlain(group)">
-                <span class="rail-icon-glyph">@((MarkupString)group.IconSvg)</span>
+                <span class="rail-icon-glyph"><SovrantIcon Name="@group.IconName" /></span>
                 <span class="rail-label">@group.Label</span>
             </button>
         }

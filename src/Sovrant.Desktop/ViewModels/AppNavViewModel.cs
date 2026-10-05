@@ -1,8 +1,7 @@
 using System.Collections.ObjectModel;
-using Avalonia;
-using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Api.Ui;
 
 namespace Sovrant.Desktop.ViewModels;
 
@@ -15,24 +14,24 @@ namespace Sovrant.Desktop.ViewModels;
 public partial class AppNavViewModel : ViewModelBase
 {
     private sealed record Item(string Label, string Page, string? Section = null);
-    private sealed record Group(string Key, string Label, string IconKey, IReadOnlyList<Item> Items, bool AdminOnly = false)
+    private sealed record Group(string Key, string Label, string IconName, IReadOnlyList<Item> Items, bool AdminOnly = false)
     {
         public bool IsCollapsible => Items.Count > 1;
     }
 
     private static readonly IReadOnlyList<Group> s_groups =
     [
-        new("dashboard", "Dashboard", "IconDashboard", [new("Dashboard", "Dashboard")]),
-        new("chat", "Chat", "IconChat", [new("Chat", "Chat")]),
-        new("knowledge", "Knowledge", "IconKnowledge",
+        new("dashboard", "Dashboard", IconNames.Dashboard, [new("Dashboard", "Dashboard")]),
+        new("chat", "Chat", IconNames.Chat, [new("Chat", "Chat")]),
+        new("knowledge", "Knowledge", IconNames.Knowledge,
         [
             new("Artifacts", "Artifacts"), new("Code Templates", "Guidelines"), new("Documents", "Documents"),
             new("Memory", "Memory"), new("Skills", "Skills"), new("Tools", "Tools"),
         ]),
-        new("agents", "Agents", "IconAgents",
+        new("agents", "Agents", IconNames.Agents,
             [new("Library", "Agents"), new("Orchestration", "Orchestration"), new("Workflows", "Workflows")]),
-        new("workspace", "Projects", "IconProjects", [new("Projects", "Projects")]),
-        new("admin", "Admin", "IconAdmin",
+        new("workspace", "Projects", IconNames.Projects, [new("Projects", "Projects")]),
+        new("admin", "Admin", IconNames.Admin,
         [
             new("Command Center", "CommandCenter", "Overview"),
             new("Users", "Admin", "Access"), new("Workspaces", "AdminWorkspaces"), new("Providers", "AdminProviders"),
@@ -95,7 +94,7 @@ public partial class AppNavViewModel : ViewModelBase
         foreach (var g in visible)
         {
             var isOpen = g.IsCollapsible && g.Key == open;
-            Rows.Add(AppNavRowViewModel.ForGroup(g.Key, g.Label, Icon(g.IconKey), g.IsCollapsible, isOpen,
+            Rows.Add(AppNavRowViewModel.ForGroup(g.Key, g.Label, g.IconName, g.IsCollapsible, isOpen,
                 isActive: g.Key == current && !isOpen));
             if (!isOpen)
                 continue;
@@ -110,7 +109,7 @@ public partial class AppNavViewModel : ViewModelBase
         Groups.Clear();
         foreach (var g in visible)
         {
-            var row = AppNavRowViewModel.ForGroup(g.Key, g.Label, Icon(g.IconKey), g.IsCollapsible, false, g.Key == current);
+            var row = AppNavRowViewModel.ForGroup(g.Key, g.Label, g.IconName, g.IsCollapsible, false, g.Key == current);
             if (g.IsCollapsible)
             {
                 foreach (var item in g.Items)
@@ -143,9 +142,6 @@ public partial class AppNavViewModel : ViewModelBase
                 break;
         }
     }
-
-    private static Geometry? Icon(string key) =>
-        Application.Current?.TryGetResource(key, Application.Current.ActualThemeVariant, out var res) == true ? res as Geometry : null;
 }
 
 public enum AppNavRowKind
@@ -162,7 +158,8 @@ public partial class AppNavRowViewModel : ViewModelBase
     public string GroupKey { get; private init; } = string.Empty;
     public string Label { get; private init; } = string.Empty;
     public string? Page { get; private init; }
-    public Geometry? IconData { get; private init; }
+    /// <summary>An <see cref="IconNames"/> value (group rows only).</summary>
+    public string? IconName { get; private init; }
     public bool IsCollapsible { get; private init; }
     public bool IsOpen { get; private init; }
     public bool IsActive { get; private init; }
@@ -180,8 +177,8 @@ public partial class AppNavRowViewModel : ViewModelBase
     public ObservableCollection<AppNavRowViewModel> FlyoutItems { get; } = [];
     public bool HasFlyoutItems => IsCollapsible;
 
-    public static AppNavRowViewModel ForGroup(string key, string label, Geometry? icon, bool collapsible, bool open, bool isActive) =>
-        new() { Kind = AppNavRowKind.Group, GroupKey = key, Label = label, IconData = icon, IsCollapsible = collapsible, IsOpen = open, IsActive = isActive };
+    public static AppNavRowViewModel ForGroup(string key, string label, string iconName, bool collapsible, bool open, bool isActive) =>
+        new() { Kind = AppNavRowKind.Group, GroupKey = key, Label = label, IconName = iconName, IsCollapsible = collapsible, IsOpen = open, IsActive = isActive };
 
     public static AppNavRowViewModel ForSection(string label) =>
         new() { Kind = AppNavRowKind.Section, Label = label.ToUpperInvariant() };

@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.ArtifactsView"
@@ -56,10 +57,13 @@
                                                        FontSize="10"
                                                        Foreground="{DynamicResource TextMuted}"
                                                        VerticalAlignment="Center" />
-                                            <TextBlock Text="{Binding FolderDisplayName}"
-                                                       FontSize="13" FontWeight="SemiBold"
-                                                       Foreground="{DynamicResource BrandPrimary}"
-                                                       TextTrimming="CharacterEllipsis" />
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Folder}" Size="14" VerticalAlignment="Center" Foreground="{DynamicResource BrandPrimary}" />
+                                                <TextBlock Text="{Binding FolderDisplayName}"
+                                                           FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource BrandPrimary}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
                                         </DockPanel>
                                         <StackPanel IsVisible="{Binding IsFolder}" Orientation="Horizontal" Spacing="8">
                                             <TextBlock FontSize="10" Foreground="{DynamicResource TextSecondary}">
@@ -156,11 +160,14 @@
                                         BorderBrush="{DynamicResource SurfaceBorder}"
                                         BorderThickness="1" />
                             </StackPanel>
-                            <TextBlock Text="{Binding SelectedArtifact.FolderDisplayName}"
-                                       FontSize="14" FontWeight="SemiBold"
-                                       Foreground="{DynamicResource TextPrimary}"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis" />
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Folder}" Size="16" VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}" />
+                                <TextBlock Text="{Binding SelectedArtifact.FolderDisplayName}"
+                                           FontSize="14" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}"
+                                           VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
                         </DockPanel>
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="12" Margin="0,0,0,12">
                             <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}">

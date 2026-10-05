@@ -234,7 +234,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — Postgres check moved to Phase 134 |
 | Postgres / Supabase backend audit — real Postgres test target (skipped when unavailable), store-by-store parity with the SQLite suites, schema diff V001–V048 vs `PostgresSchema.sql`, split-backend query audit, SQLite→Postgres migrator check; closes Phase 133's open Postgres criterion | Phase 134 | Planned |
 | App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Built |
-| Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Planned |
+| Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Built |
 
 ### v1.0 release polish ✅
 
@@ -12496,7 +12496,7 @@ Phase 133 put conversation folders in the rail panel, but that panel only shows 
 
 ## Phase 136 — Lucide Icons Everywhere
 
-**Status:** Planned (2026-10-05) — approach agreed; package compatibility checked; design mock done (`docs/design/web.html` / `desktop.html`, *Icon vocabulary* panel); brand treatment decided (category icons); ready for code.
+**Status:** Built (2026-10-05) — Web and Desktop. Web verified live in headless Edge (28/28 checks across 13 pages); Desktop verified live on a real database (nav, folder tree, top bar); remaining Desktop screens (chat approvals, integrations gallery, setup wizard) pending a hand check. Design mock: `docs/design/web.html` / `desktop.html`, *Icon vocabulary* panel.
 
 ### Why
 
@@ -12550,8 +12550,36 @@ The hand-copied icons are already Lucide-style, but each one is maintained by ha
 
 ### Acceptance criteria
 - [x] Design mocks updated on both surfaces (no emoji as chrome), parity diff still chrome-only, logged in `docs/design/README.md`
-- [ ] `SovrantIcon` on Web and Desktop with one shared name list; a test proves every name resolves on both
-- [ ] No emoji used as UI chrome remains in `src/Sovrant.Web` or `src/Sovrant.Desktop`
-- [ ] `AppNavModel`, `FolderIcons`, inline page SVGs, `NavIcons.axaml` and Desktop inline `Path` icons all render through `SovrantIcon`; `FolderIcons` and `NavIcons.axaml` deleted
-- [ ] Headless Avalonia render test for `SovrantIcon` passes in CI
-- [ ] Web verified live in headless Edge, and Desktop verified live (nav, folders, top bar, chat, integrations)
+- [x] `SovrantIcon` on Web and Desktop with one shared name list; a test proves every name resolves on both
+- [x] No emoji used as UI chrome remains in `src/Sovrant.Web` or `src/Sovrant.Desktop`
+- [x] `AppNavModel`, `FolderIcons`, inline page SVGs, `NavIcons.axaml` and Desktop inline `Path` icons all render through `SovrantIcon`; `FolderIcons` and `NavIcons.axaml` deleted
+- [x] Headless Avalonia render test for `SovrantIcon` passes in CI
+- [x] Web verified live in headless Edge, and Desktop verified live (nav, folders, top bar; chat approvals, integrations and setup wizard pending a hand check)
+
+### Build notes (2026-10-05)
+
+- **Vocabulary:** `Sovrant.Api.Ui.IconNames` (62 names). Building found 9 more than the mock's 53, and the mock was updated to match:
+  - `team`: the Chat welcome's team suggestion, which reused a folder drawing.
+  - `brand`: the setup screen's app mark.
+  - `rail-collapse` / `rail-expand`: the hand-drawn sidebar toggles.
+  - `stop`, `dropdown`, `back`, `sort-asc`, `sort-desc`: ◼ ▾ ◂ ▲ ▼ glyph characters used as icons.
+- **Web:**
+  - `Services/SovrantIcons` maps names to `Blazicons.Lucide`, and `Shared/SovrantIcon.razor` renders inline SVG with `currentColor` and `aria-hidden`.
+  - `AppNavModel` now holds icon names, and the 35 inline page SVGs and every `FolderIcons` call site use `SovrantIcon`.
+  - `FolderIcons.cs` and the unused `GovernancePanel.razor` were deleted.
+- **Desktop:**
+  - `Controls/SovrantIcon` derives from `LucideIcon` and sets `IconName`. It inherits `Foreground` like text, and its default stroke is 1.9.
+  - `SovrantIconMap` maps names to `Lucide.Avalonia`.
+  - All 28 `Path` icons, the nav rows, the rail toggles and the lock converter use it.
+  - `NavIcons.axaml` and the unused `GovernancePanelView` were deleted.
+  - `LucideIcon` scales its stroke with size (as SVG does), so Desktop strokes now match Web, where the old `Path` strokes were fixed pixel widths.
+- **Brands:**
+  - `IntegrationCatalog.Icon` now holds category icon names, not emoji. It's used only by Web and Desktop, and isn't exposed through the API or SDK.
+  - Providers use `IconNames.ForProvider` (cloud or local).
+- **Tests:** new `tests/Sovrant.Ui.Tests` (xUnit v3, required by `Avalonia.Headless.XUnit` 12), 20 tests:
+  - Both maps cover exactly the vocabulary.
+  - The mocks' `VOCAB` matches `IconNames` and the Desktop glyphs.
+  - A headless render proves `SovrantIcon` draws on Avalonia 12.
+  - A scan of Web and Desktop source fails on emoji, pictographic symbols, entities or escapes used as chrome. The only exception is the browser tab-title dot, which is plain text and marked `icon-scan:allow`.
+  - Plus 6 catalog icon tests in Runtime. Full suite: 2,369 passed, 3 skipped.
+- **Known differences:** Desktop's `brand` mark is a stroked orange bolt, because `LucideIcon` draws strokes only. Web's is filled.

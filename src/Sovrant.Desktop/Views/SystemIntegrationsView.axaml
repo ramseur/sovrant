@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              x:Class="Sovrant.Desktop.Views.SystemIntegrationsView"
              x:DataType="vm:SystemIntegrationsViewModel"
@@ -72,9 +74,8 @@
                         </StackPanel>
                         <StackPanel Spacing="2">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Path Data="{StaticResource IconSwarm}" Width="20" Height="20" Stretch="Uniform"
-                                      StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
-                                      Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
+                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.IntegrationDatabase}" Size="20"
+                                      Foreground="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                                 <TextBlock Text="PostgreSQL" FontSize="17" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
                             </StackPanel>
@@ -213,9 +214,8 @@
                         </StackPanel>
                         <StackPanel Spacing="2">
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Path Data="{StaticResource IconSwarm}" Width="20" Height="20" Stretch="Uniform"
-                                      StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
-                                      Stroke="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
+                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.IntegrationDatabase}" Size="20"
+                                      Foreground="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
                                 <TextBlock Text="Supabase" FontSize="17" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
                             </StackPanel>

@@ -14,6 +14,8 @@ using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Workspaces;
 
+using Sovrant.Api.Ui;
+
 namespace Sovrant.Desktop.ViewModels;
 
 public partial class SidebarViewModel : ViewModelBase
@@ -97,20 +99,12 @@ public partial class SidebarViewModel : ViewModelBase
         ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
     };
 
+    // Phase 136: Lucide has no brand logos, so each provider shows its category icon
+    // (hosted vs local) until licensed brand logos are added.
     private static readonly UnconfiguredProviderItem[] KnownProviders =
-    [
-        new("OpenAI",       "🤖"),
-        new("Anthropic",    "🧠"),
-        new("OpenRouter",   "🔀"),
-        new("DeepSeek",     "🔵"),
-        new("Groq",         "🚀"),
-        new("Mistral",      "🌀"),
-        new("Google",       "🔷"),
-        new("Together AI",  "🤝"),
-        new("Ollama",       "🦙"),
-        new("LM Studio",    "💻"),
-        new("Azure OpenAI", "☁️"),
-    ];
+        new[] { "OpenAI", "Anthropic", "OpenRouter", "DeepSeek", "Groq", "Mistral", "Google", "Together AI", "Ollama", "LM Studio", "Azure OpenAI" }
+            .Select(n => new UnconfiguredProviderItem(n, IconNames.ForProvider(n)))
+            .ToArray();
 
     public event EventHandler<string>? NavigationRequested;
     public event EventHandler<string>? SessionResumeRequested;

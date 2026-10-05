@@ -20,7 +20,7 @@
         </p>
         <div class="sf-pick">
             <button class="sf-pick-row @(_target is null ? "on" : "")" style="--d:0" @onclick="() => Select(null)">
-                <span class="sf-ico">@(_movingFolderId is null ? FolderIcons.Chat : FolderIcons.Folder)</span>
+                <span class="sf-ico"><SovrantIcon Name="@(_movingFolderId is null ? IconNames.Chat : IconNames.Folder)" /></span>
                 <span class="sf-name">@(_movingFolderId is null ? "Unfiled" : "Top level")</span>
                 @if (_currentParent is null)
                 {
@@ -35,7 +35,7 @@
                         style="--d:@depth" disabled="@disabled"
                         title="@(disabled ? SessionFolderRules.Describe(refusal!.Value) : null)"
                         @onclick="() => Select(folder.FolderId)">
-                    <span class="sf-ico">@FolderIcons.Folder</span>
+                    <span class="sf-ico"><SovrantIcon Name="@IconNames.Folder" /></span>
                     <span class="sf-name">@folder.Name</span>
                     @if (isCurrent)
                     {
@@ -57,7 +57,7 @@
             <div class="sf-error" role="alert">@_error</div>
         }
         <div class="sf-dialog-ft">
-            <button class="btn-sm sf-ghost" @onclick="StartCreate">@FolderIcons.FolderPlus New folder</button>
+            <button class="btn-sm sf-ghost" @onclick="StartCreate"><SovrantIcon Name="@IconNames.NewFolder" /> New folder</button>
             <span class="sf-sp"></span>
             <button class="btn-sm" @onclick="Close">Cancel</button>
             <button class="btn-sm btn-primary" disabled="@(_busy || _target == _currentParent)" @onclick="Move">Move here</button>

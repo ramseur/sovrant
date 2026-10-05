@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.AgentsView"
@@ -141,10 +142,9 @@
                                                     BorderThickness="0"
                                                     Cursor="Hand"
                                                     ToolTip.Tip="Click to toggle privacy">
-                                                <Path Data="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
-                                                      Width="10" Height="10" Stretch="Uniform"
-                                                      StrokeThickness="2" StrokeLineCap="Round" StrokeJoin="Round" Fill="Transparent"
-                                                      Stroke="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                                <ctrl:SovrantIcon IconName="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
+                                                      Size="10"
+                                                      Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                             </Button>
                                         </StackPanel>
                                     </StackPanel>

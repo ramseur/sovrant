@@ -11,7 +11,7 @@
             <div class="sidebar-search">
                 <input type="text" placeholder="Search conversations..." @bind="_searchText" @bind:event="oninput" />
             </div>
-            <button class="sf-icon-btn" title="New folder" aria-label="New folder" @onclick="() => NewFolder(null)">@FolderIcons.FolderPlus</button>
+            <button class="sf-icon-btn" title="New folder" aria-label="New folder" @onclick="() => NewFolder(null)"><SovrantIcon Name="@IconNames.NewFolder" /></button>
         </div>
 
         @if (!string.IsNullOrEmpty(_error))
@@ -37,11 +37,11 @@
                             }
                             else if (session.Status == ActiveSessionStatus.Completed)
                             {
-                                <span class="active-done" title="Completed">&#10003;</span>
+                                <span class="active-done" title="Completed"><SovrantIcon Name="@IconNames.Done" Size="13" /></span>
                             }
                             else
                             {
-                                <span class="active-failed" title="@session.Error">&#9888;</span>
+                                <span class="active-failed" title="@session.Error"><SovrantIcon Name="@IconNames.Failed" Size="13" /></span>
                             }
                             @session.Title
                         </div>
@@ -49,11 +49,11 @@
                     </button>
                     @if (session.Status == ActiveSessionStatus.Running)
                     {
-                        <button class="session-delete" @onclick="() => CancelSession(session.SessionId)" title="Cancel">&#x25FC;</button>
+                        <button class="session-delete" @onclick="() => CancelSession(session.SessionId)" title="Cancel" aria-label="Cancel"><SovrantIcon Name="@IconNames.Stop" Size="11" /></button>
                     }
                     else
                     {
-                        <button class="session-delete" @onclick="() => DismissSession(session.SessionId)" title="Dismiss">&#x2715;</button>
+                        <button class="session-delete" @onclick="() => DismissSession(session.SessionId)" title="Dismiss" aria-label="Dismiss"><SovrantIcon Name="@IconNames.Close" Size="12" /></button>
                     }
                 </div>
             }
@@ -119,19 +119,19 @@
             {
                 <button disabled="@(DepthOf(menuRow.Id) >= SessionFolderRules.MaxDepth)"
                         title="@(DepthOf(menuRow.Id) >= SessionFolderRules.MaxDepth ? SessionFolderRules.Describe(SessionFolderError.TooDeep) : null)"
-                        @onclick="() => NewFolder(menuRow.Id)">@FolderIcons.FolderPlus New subfolder</button>
-                <button @onclick="() => RenameFolder(menuRow)">@FolderIcons.Pencil Rename</button>
-                <button @onclick="() => MoveFolder(menuRow)">@FolderIcons.Folder Move to…</button>
+                        @onclick="() => NewFolder(menuRow.Id)"><SovrantIcon Name="@IconNames.NewFolder" /> New subfolder</button>
+                <button @onclick="() => RenameFolder(menuRow)"><SovrantIcon Name="@IconNames.Rename" /> Rename</button>
+                <button @onclick="() => MoveFolder(menuRow)"><SovrantIcon Name="@IconNames.Folder" /> Move to…</button>
                 <div class="sf-sep"></div>
-                <button class="danger" @onclick="() => DeleteFolder(menuRow)">@FolderIcons.Trash Delete folder</button>
+                <button class="danger" @onclick="() => DeleteFolder(menuRow)"><SovrantIcon Name="@IconNames.Delete" /> Delete folder</button>
                 <div class="sf-hint">Conversations and subfolders inside move up to @ParentLabel(menuRow.FolderId). No conversation is ever deleted.</div>
             }
             else
             {
-                <button @onclick="() => MoveSession(menuRow)">@FolderIcons.Folder Move to folder…</button>
-                <button @onclick="() => RenameSession(menuRow)">@FolderIcons.Pencil Rename</button>
+                <button @onclick="() => MoveSession(menuRow)"><SovrantIcon Name="@IconNames.Folder" /> Move to folder…</button>
+                <button @onclick="() => RenameSession(menuRow)"><SovrantIcon Name="@IconNames.Rename" /> Rename</button>
                 <div class="sf-sep"></div>
-                <button class="danger" @onclick="() => DeleteSession(menuRow.Id)">@FolderIcons.Trash Delete conversation</button>
+                <button class="danger" @onclick="() => DeleteSession(menuRow.Id)"><SovrantIcon Name="@IconNames.Delete" /> Delete conversation</button>
             }
         </div>
     }
@@ -194,8 +194,8 @@
              @onclick="() => ActivateRow(row)">
             @if (isFolder)
             {
-                <span class="sf-tw @(row.IsExpanded ? "open" : "")" @onclick="() => ToggleFolder(row)" @onclick:stopPropagation="true">@FolderIcons.Chevron</span>
-                <span class="sf-ico">@FolderIcons.Folder</span>
+                <span class="sf-tw @(row.IsExpanded ? "open" : "")" @onclick="() => ToggleFolder(row)" @onclick:stopPropagation="true"><SovrantIcon Name="@IconNames.Expand" StrokeWidth="2.4" /></span>
+                <span class="sf-ico"><SovrantIcon Name="@IconNames.Folder" /></span>
             }
             else
             {
@@ -217,7 +217,7 @@
             {
                 <span class="sf-count">@row.Count</span>
             }
-            <button class="sf-more" title="More" aria-label="More actions" @onclick="() => OpenMenu(row)" @onclick:stopPropagation="true">@FolderIcons.Dots</button>
+            <button class="sf-more" title="More" aria-label="More actions" @onclick="() => OpenMenu(row)" @onclick:stopPropagation="true"><SovrantIcon Name="@IconNames.More" StrokeWidth="2.4" /></button>
         </div>
     };
 
@@ -565,7 +565,8 @@
             try
             {
                 if (needsAttention)
-                    await JS.InvokeVoidAsync("sovrantInterop.setTabTitlePrefix", "● ");
+                    // A browser tab title is plain text, so this dot cannot be a SovrantIcon. icon-scan:allow
+                    await JS.InvokeVoidAsync("sovrantInterop.setTabTitlePrefix", "\u25CF ");
                 else
                     await JS.InvokeVoidAsync("sovrantInterop.clearTabTitlePrefix");
             }

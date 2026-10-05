@@ -1,3 +1,5 @@
+using Sovrant.Api.Ui;
+
 namespace Sovrant.Web.Services;
 
 /// <summary>One page reachable from a nav group. <paramref name="Section"/> starts a small label row (Admin only).</summary>
@@ -8,7 +10,7 @@ internal sealed record AppNavItem(string Label, string Href, string? Section = n
 /// sections in the expanded rail and flyouts in the collapsed rail; the rest
 /// are plain links to <see cref="Href"/>.
 /// </summary>
-internal sealed record AppNavGroup(string Key, string Label, string IconSvg, string Href, IReadOnlyList<AppNavItem> Items, bool AdminOnly = false)
+internal sealed record AppNavGroup(string Key, string Label, string IconName, string Href, IReadOnlyList<AppNavItem> Items, bool AdminOnly = false)
 {
     public bool IsCollapsible => Items.Count > 1;
 }
@@ -20,18 +22,16 @@ internal sealed record AppNavGroup(string Key, string Label, string IconSvg, str
 /// </summary>
 internal static class AppNavModel
 {
-    private const string Svg = "<svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.9\" stroke-linecap=\"round\" stroke-linejoin=\"round\">";
-
     public static readonly IReadOnlyList<AppNavGroup> Groups =
     [
         new("dashboard", "Dashboard",
-            Svg + "<rect x=\"3\" y=\"3\" width=\"7\" height=\"9\" rx=\"1.5\"/><rect x=\"14\" y=\"3\" width=\"7\" height=\"5\" rx=\"1.5\"/><rect x=\"14\" y=\"12\" width=\"7\" height=\"9\" rx=\"1.5\"/><rect x=\"3\" y=\"16\" width=\"7\" height=\"5\" rx=\"1.5\"/></svg>",
+            IconNames.Dashboard,
             "/dashboard", [new("Dashboard", "/dashboard")]),
         new("chat", "Chat",
-            Svg + "<path d=\"M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z\"/></svg>",
+            IconNames.Chat,
             "/", [new("Chat", "/")]),
         new("knowledge", "Knowledge",
-            Svg + "<path d=\"M4 19.5A2.5 2.5 0 0 1 6.5 17H20\"/><path d=\"M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z\"/></svg>",
+            IconNames.Knowledge,
             "/artifacts",
             [
                 new("Artifacts", "/artifacts"),
@@ -42,7 +42,7 @@ internal static class AppNavModel
                 new("Tools", "/tools"),
             ]),
         new("agents", "Agents",
-            Svg + "<rect x=\"4\" y=\"7\" width=\"16\" height=\"13\" rx=\"2.5\"/><path d=\"M9 7V5a3 3 0 0 1 6 0v2\"/><line x1=\"9\" y1=\"13\" x2=\"9\" y2=\"13.01\"/><line x1=\"15\" y1=\"13\" x2=\"15\" y2=\"13.01\"/><path d=\"M9 17h6\"/></svg>",
+            IconNames.Agents,
             "/agents",
             [
                 new("Library", "/agents"),
@@ -50,10 +50,10 @@ internal static class AppNavModel
                 new("Workflows", "/workflows"),
             ]),
         new("workspace", "Projects",
-            Svg + "<path d=\"M3 7.5A1.5 1.5 0 0 1 4.5 6H9l2 2.5h8.5A1.5 1.5 0 0 1 21 10v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18z\"/></svg>",
+            IconNames.Projects,
             "/projects", [new("Projects", "/projects")]),
         new("admin", "Admin",
-            Svg + "<path d=\"M12 2l8 3.5v6c0 5-3.4 8.9-8 10.5-4.6-1.6-8-5.5-8-10.5v-6z\"/></svg>",
+            IconNames.Admin,
             "/command",
             [
                 new("Command Center", "/command", "Overview"),

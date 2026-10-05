@@ -1,24 +1,19 @@
 using System.Globalization;
-using Avalonia;
 using Avalonia.Data.Converters;
+using Sovrant.Api.Ui;
 
 namespace Sovrant.Desktop.ViewModels;
 
 /// <summary>
-/// Returns the IconLock/IconUnlock StreamGeometry (from NavIcons.axaml) for
-/// binding to a Path's Data — not text, so this is not usable on TextBlock.Text.
+/// Returns the <see cref="IconNames.Private"/> / <see cref="IconNames.Public"/> icon name
+/// for binding to <c>SovrantIcon.IconName</c> (Phase 136); not usable on TextBlock.Text.
 /// </summary>
 public sealed class BoolToLockIconConverter : IValueConverter
 {
     public static readonly BoolToLockIconConverter Instance = new();
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
-    {
-        var key = value is bool b && b ? "IconLock" : "IconUnlock";
-        if (Application.Current is { } app && app.TryGetResource(key, app.ActualThemeVariant, out var res))
-            return res;
-        return null;
-    }
+        => value is bool b && b ? IconNames.Private : IconNames.Public;
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         => throw new NotSupportedException();

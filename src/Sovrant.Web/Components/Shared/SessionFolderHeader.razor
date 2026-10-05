@@ -9,7 +9,7 @@
 
 <div class="sf-chead">
     <span class="sf-crumb">
-        <span class="sf-ico">@FolderIcons.Folder</span>
+        <span class="sf-ico"><SovrantIcon Name="@IconNames.Folder" /></span>
         @if (_path.Count == 0)
         {
             <span>Unfiled</span>
@@ -17,11 +17,11 @@
         @foreach (var name in _path)
         {
             <span>@name</span>
-            <span class="sf-crumb-sep">@FolderIcons.Chevron</span>
+            <span class="sf-crumb-sep"><SovrantIcon Name="@IconNames.Expand" StrokeWidth="2.4" /></span>
         }
         @if (_path.Count == 0)
         {
-            <span class="sf-crumb-sep">@FolderIcons.Chevron</span>
+            <span class="sf-crumb-sep"><SovrantIcon Name="@IconNames.Expand" StrokeWidth="2.4" /></span>
         }
         <span class="sf-crumb-title">@_title</span>
     </span>
@@ -30,7 +30,7 @@
         <span class="sf-badge @(label.IsActive ? "active" : "")">@label.Text</span>
     }
     <span class="sf-sp"></span>
-    <button class="sf-ghost-btn" @onclick="OpenMove">@FolderIcons.Folder Move</button>
+    <button class="sf-ghost-btn" @onclick="OpenMove"><SovrantIcon Name="@IconNames.Folder" /> Move</button>
 </div>
 
 <SessionMoveDialog @ref="_move" />

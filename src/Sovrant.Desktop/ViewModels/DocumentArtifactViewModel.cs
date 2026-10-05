@@ -2,6 +2,8 @@ using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using Sovrant.Api.Ui;
+
 namespace Sovrant.Desktop.ViewModels;
 
 /// <summary>
@@ -21,7 +23,7 @@ public partial class DocumentArtifactViewModel : ViewModelBase
     private string _sizeText = string.Empty;
 
     [ObservableProperty]
-    private string _icon = "\uD83D\uDCCE";
+    private string _icon = IconNames.File;
 
     [ObservableProperty]
     private string? _accessUrl;

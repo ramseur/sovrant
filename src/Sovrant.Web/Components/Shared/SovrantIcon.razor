@@ -1,0 +1,15 @@
+@* Phase 136 — one icon from the shared vocabulary (Sovrant.Api.Ui.IconNames), drawn
+   with Lucide. Decorative (aria-hidden): the surrounding button or text carries the label. *@
+@((MarkupString)SovrantIcons.Svg(Name, StrokeWidth, Size, Class))
+
+@code {
+    /// <summary>An <see cref="Sovrant.Api.Ui.IconNames"/> value, e.g. <c>IconNames.Close</c>.</summary>
+    [Parameter, EditorRequired] public string Name { get; set; } = string.Empty;
+
+    /// <summary>Pixel size; leave unset to let the container's CSS size the svg.</summary>
+    [Parameter] public int? Size { get; set; }
+
+    [Parameter] public double StrokeWidth { get; set; } = SovrantIcons.DefaultStrokeWidth;
+
+    [Parameter] public string? Class { get; set; }
+}

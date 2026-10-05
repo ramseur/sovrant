@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              x:Class="Sovrant.Desktop.Views.SessionFolderDialogOverlay"
              x:DataType="vm:SessionFolderDialogViewModel"
@@ -46,9 +48,8 @@
                 <DockPanel DockPanel.Dock="Bottom" Margin="14,12">
                     <Button DockPanel.Dock="Left" Background="Transparent" Command="{Binding StartCreateFolderCommand}">
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <Path Data="{StaticResource IconFolderPlus}" Width="13" Height="13" Stretch="Uniform"
-                                  Stroke="{DynamicResource TextSecondary}" StrokeThickness="2" Fill="Transparent"
-                                  StrokeLineCap="Round" StrokeJoin="Round" VerticalAlignment="Center" />
+                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.NewFolder}" Size="13"
+                                  Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
                             <TextBlock Text="New folder" FontSize="12.5" Foreground="{DynamicResource TextSecondary}" />
                         </StackPanel>
                     </Button>
@@ -85,9 +86,8 @@
                                             <DockPanel Margin="{Binding Indent}">
                                                 <TextBlock DockPanel.Dock="Right" Text="CURRENT" IsVisible="{Binding IsCurrent}"
                                                            FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
-                                                <Path Data="{StaticResource IconFolder}" Width="15" Height="15" Stretch="Uniform" Margin="0,0,7,0"
-                                                      Stroke="{DynamicResource TextMuted}" StrokeThickness="1.9" Fill="Transparent"
-                                                      StrokeLineCap="Round" StrokeJoin="Round" VerticalAlignment="Center" />
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Folder}" Size="15" Margin="0,0,7,0"
+                                                      Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                                 <TextBlock Classes="pickname" Text="{Binding Name}" FontSize="13"
                                                            Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"
                                                            TextTrimming="CharacterEllipsis" />

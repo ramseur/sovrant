@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 
+using Sovrant.Api.Ui;
+
 namespace Sovrant.Desktop.ViewModels;
 
 /// <summary>
@@ -250,9 +252,9 @@ public partial class ActiveSessionInfoViewModel : ObservableObject
     public bool IsRunning => Status == ActiveSessionStatus.Running;
     public string StatusIcon => Status switch
     {
-        ActiveSessionStatus.Running => "⟳",
-        ActiveSessionStatus.Completed => "✓",
-        ActiveSessionStatus.Failed => "✗",
+        ActiveSessionStatus.Running => IconNames.Refresh,
+        ActiveSessionStatus.Completed => IconNames.Done,
+        ActiveSessionStatus.Failed => IconNames.Failed,
         _ => "",
     };
     public TimeSpan Elapsed => (EndedAt ?? DateTime.UtcNow) - StartedAt;

@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              x:Class="Sovrant.Desktop.Views.SidebarView"
              x:DataType="vm:SidebarViewModel"
@@ -69,22 +71,20 @@
                     ToolTip.Tip="{Binding Text}">
                 <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto" Margin="{Binding Indent}">
                     <!-- Chevron (folders) -->
-                    <Path Grid.Column="0" Data="{StaticResource IconChevronRight}"
-                          Width="12" Height="12" Stretch="Uniform" Margin="0,0,7,0"
-                          Stroke="{DynamicResource TextMuted}" StrokeThickness="2.4" Fill="Transparent"
-                          StrokeLineCap="Round" StrokeJoin="Round" VerticalAlignment="Center"
+                    <ctrl:SovrantIcon Grid.Column="0" IconName="{x:Static ui:IconNames.Expand}"
+                          Size="12" Margin="0,0,7,0"
+                          Foreground="{DynamicResource TextMuted}" StrokeWidth="2.4" VerticalAlignment="Center"
                           IsVisible="{Binding IsFolder}">
-                        <Path.RenderTransform>
+                        <ctrl:SovrantIcon.RenderTransform>
                             <RotateTransform Angle="{Binding ChevronAngle}" />
-                        </Path.RenderTransform>
-                    </Path>
+                        </ctrl:SovrantIcon.RenderTransform>
+                    </ctrl:SovrantIcon>
                     <Border Grid.Column="0" Width="19" IsVisible="{Binding IsSession}" />
 
                     <!-- Folder icon, or the conversation dot (green while a turn is running) -->
-                    <Path Grid.Column="1" Data="{StaticResource IconFolder}"
-                          Width="15" Height="15" Stretch="Uniform" Margin="0,0,7,0"
-                          Stroke="{DynamicResource TextMuted}" StrokeThickness="1.9" Fill="Transparent"
-                          StrokeLineCap="Round" StrokeJoin="Round" VerticalAlignment="Center"
+                    <ctrl:SovrantIcon Grid.Column="1" IconName="{x:Static ui:IconNames.Folder}"
+                          Size="15" Margin="0,0,7,0"
+                          Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
                           IsVisible="{Binding IsFolder}" />
                     <Panel Grid.Column="1" IsVisible="{Binding IsSession}" Margin="4,0,10,0" VerticalAlignment="Center">
                         <Ellipse Width="6" Height="6" Fill="{DynamicResource TextMuted}" IsVisible="{Binding !IsRunning}" />
@@ -110,9 +110,8 @@
                     <Button Grid.Column="4" Classes="sfmore" Width="24" Height="24" Padding="0"
                             Background="Transparent" CornerRadius="6" VerticalAlignment="Center"
                             ToolTip.Tip="More">
-                        <Path Data="{StaticResource IconDots}" Width="15" Height="15" Stretch="Uniform"
-                              Stroke="{DynamicResource TextMuted}" StrokeThickness="2.4" Fill="Transparent"
-                              StrokeLineCap="Round" StrokeJoin="Round" />
+                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.More}" Size="15"
+                              Foreground="{DynamicResource TextMuted}" StrokeWidth="2.4" />
                         <Button.Flyout>
                             <MenuFlyout Placement="BottomEdgeAlignedRight">
                                 <MenuItem Header="New subfolder" IsVisible="{Binding IsFolder}" IsEnabled="{Binding CanAddSubfolder}"
@@ -157,9 +156,8 @@
                     <Button DockPanel.Dock="Right" Width="30" Height="30" Padding="0" Margin="6,0,0,0"
                             Background="Transparent" CornerRadius="8" ToolTip.Tip="New folder"
                             Command="{Binding NewFolderCommand}">
-                        <Path Data="{StaticResource IconFolderPlus}" Width="16" Height="16" Stretch="Uniform"
-                              Stroke="{DynamicResource TextSecondary}" StrokeThickness="2" Fill="Transparent"
-                              StrokeLineCap="Round" StrokeJoin="Round" />
+                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.NewFolder}" Size="16"
+                              Foreground="{DynamicResource TextSecondary}" />
                     </Button>
                     <TextBox Watermark="Search conversations..."
                              Text="{Binding SearchText}"
@@ -172,8 +170,10 @@
                 <Border IsVisible="{Binding HasFolderError}" CornerRadius="8" Padding="8,6" Margin="0,0,0,8"
                         Background="{DynamicResource SurfaceHover}">
                     <DockPanel>
-                        <Button DockPanel.Dock="Right" Content="✕" Padding="4,0" Background="Transparent"
-                                Foreground="{DynamicResource StatusFail}" Command="{Binding DismissFolderErrorCommand}" />
+                        <Button AutomationProperties.Name="Dismiss" ToolTip.Tip="Dismiss" DockPanel.Dock="Right" Padding="4,0" Background="Transparent"
+                                Foreground="{DynamicResource StatusFail}" Command="{Binding DismissFolderErrorCommand}">
+                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Close}" Size="12" />
+                        </Button>
                         <TextBlock Text="{Binding FolderError}" TextWrapping="Wrap" FontSize="12"
                                    Foreground="{DynamicResource StatusFail}" />
                     </DockPanel>

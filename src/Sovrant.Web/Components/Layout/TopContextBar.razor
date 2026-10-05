@@ -23,7 +23,7 @@
                     <span class="model-tree-provider">@_currentProvider</span>
                 </div>
             </div>
-            <span class="model-tree-chevron @(_treeOpen ? "open" : "")">&#x25BE;</span>
+            <span class="model-tree-chevron @(_treeOpen ? "open" : "")"><SovrantIcon Name="@IconNames.Dropdown" Size="12" /></span>
         </button>
         @if (_treeOpen)
         {
@@ -60,7 +60,7 @@
                         {
                             <button class="model-tree-provider-item model-tree-unconfigured"
                                     @onclick="() => NavigateToProviderSetup(p.Name)">
-                                <span class="model-tree-provider-name">@p.Icon @p.Name</span>
+                                <span class="model-tree-provider-name"><SovrantIcon Name="@p.Icon" Size="14" Class="icon-inline icon-lead" />@p.Name</span>
                                 <span class="model-tree-setup-label">Set up →</span>
                             </button>
                         }
@@ -69,7 +69,7 @@
                 else
                 {
                     <button class="model-tree-back" @onclick="() => _selectedTreeGroup = null">
-                        &#x25C2; Back to providers
+                        <SovrantIcon Name="@IconNames.Back" Size="12" Class="icon-inline icon-lead" />Back to providers
                     </button>
                     <div class="model-tree-step-label">@_selectedTreeGroup.Provider models</div>
                     <div class="model-tree-models">
@@ -95,7 +95,7 @@
 
     <!-- Workspace -->
     <div class="tcb-field">
-        <span class="tcb-icon">&#x1F3E2;</span>
+        <span class="tcb-icon"><SovrantIcon Name="@IconNames.Workspace" Size="14" /></span>
         <select @bind="_selectedWorkspaceId" @bind:after="OnWorkspaceChanged" disabled="@(_workspaces.Count <= 1)">
             @foreach (var w in _workspaces)
             {
@@ -106,7 +106,7 @@
 
     <!-- Project -->
     <div class="tcb-field">
-        <span class="tcb-icon">&#x1F4C1;</span>
+        <span class="tcb-icon"><SovrantIcon Name="@IconNames.Projects" Size="14" /></span>
         <select @bind="_selectedProjectId" @bind:after="OnProjectChanged" disabled="@(_projects.Count == 0)">
             <option value="">@(_projects.Count == 0 ? "No projects" : "(No project)")</option>
             @foreach (var p in _projects)
@@ -125,9 +125,9 @@
                 @ref="_mcpTriggerRef"
                 @onclick="ToggleMcpDropdown"
                 @onclick:stopPropagation="true">
-            <span class="tcb-icon">&#128279;</span>
+            <span class="tcb-icon"><SovrantIcon Name="@IconNames.Integrations" Size="14" /></span>
             <span class="tcb-mcp-summary">@McpSummaryLabel</span>
-            <span class="tcb-mcp-chevron @(_mcpDropdownOpen ? "open" : "")">&#x25BE;</span>
+            <span class="tcb-mcp-chevron @(_mcpDropdownOpen ? "open" : "")"><SovrantIcon Name="@IconNames.Dropdown" Size="12" /></span>
         </button>
         @if (_mcpDropdownOpen)
         {
@@ -168,9 +168,9 @@
     {
         <div class="tcb-divider"></div>
         <div class="tcb-agent-badge" title="This session is scoped to @ActiveContext.ActiveAgentName">
-            <span class="tcb-icon">&#x1F916;</span>
+            <span class="tcb-icon"><SovrantIcon Name="@IconNames.Agents" Size="14" /></span>
             <span class="tcb-agent-name">@ActiveContext.ActiveAgentName</span>
-            <button class="tcb-agent-clear" title="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true">&#x2715;</button>
+            <button class="tcb-agent-clear" title="Clear agent" aria-label="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true"><SovrantIcon Name="@IconNames.Close" Size="12" /></button>
         </div>
     }
 </div>
@@ -244,20 +244,12 @@
     private List<TreeGroup> _treeGroups = [];
     private List<(string Name, string Icon)> _unconfiguredProviders = [];
 
+    // Phase 136: Lucide has no brand logos, so each provider shows its category icon
+    // (hosted vs local) until licensed brand logos are added.
     private static readonly (string Name, string Icon)[] _knownProviders =
-    [
-        ("OpenAI",       "🤖"),
-        ("Anthropic",    "🧠"),
-        ("OpenRouter",   "🔀"),
-        ("DeepSeek",     "🔵"),
-        ("Groq",         "🚀"),
-        ("Mistral",      "🌀"),
-        ("Google",       "🔷"),
-        ("Together AI",  "🤝"),
-        ("Ollama",       "🦙"),
-        ("LM Studio",    "💻"),
-        ("Azure OpenAI", "☁️"),
-    ];
+        new[] { "OpenAI", "Anthropic", "OpenRouter", "DeepSeek", "Groq", "Mistral", "Google", "Together AI", "Ollama", "LM Studio", "Azure OpenAI" }
+            .Select(n => (n, IconNames.ForProvider(n)))
+            .ToArray();
 
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
     {

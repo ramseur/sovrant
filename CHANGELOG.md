@@ -19,6 +19,12 @@ Versions correspond to tags on the `development` branch.
 
 ### Changed
 
+- **Lucide icons everywhere (Phase 136)** — Web and Desktop share a single icon vocabulary (`Sovrant.Api.Ui.IconNames`, 62 names), drawn with Lucide: `Blazicons.Lucide` on Web, `Lucide.Avalonia` on Desktop.
+  - **Emoji removed:** every emoji or symbol character used as UI chrome is gone: the top bar, tool approvals, document cards, sidebar status, integration and provider icons, and so on.
+  - **Hand-copied icons replaced:** every hand-copied SVG and geometry icon now goes through `SovrantIcon`.
+  - **Brands:** shown with a category icon (cloud or local provider; automation, platform, database, search or DXP integration) until licensed logos are added.
+  - **Catalog field:** `IntegrationCatalog.Icon` now holds an icon name instead of an emoji.
+  - **New tests:** a `Sovrant.Ui.Tests` project with vocabulary, headless-render and no-emoji guard tests.
 - **App sidebar (Phase 135)** — on Web and Desktop, Conversations (with their folders) now stay in the sidebar on every page, not just Chat. Knowledge, Agents and Admin are collapsible sections in the nav, with their pages listed inline: one is open at a time, and the current page's group opens automatically. The nav never scrolls on its own; Conversations fill the remaining height (at least 160px). The collapsed icon rail opens a flyout of a group's pages on hover, click or Enter/Space (Esc closes). Chat's flyout lists the 5 most recent conversations plus "Show all conversations". The per-group side panels (Knowledge, Agents, Projects, Admin) are gone.
 - **`GET /v1/sessions` returns more per row** — `session_id`, `title`, `updated_at`, `folder_id`, `agent_name`, `is_private`, and `labels` alongside the existing `id`. System sessions are no longer listed.
 - **Web sidebar no longer loads every conversation's history to label it** — it uses stored titles (like Desktop), loading history only for untitled conversations, and lists conversations through the folder tree — folders show all of theirs; the 20-item cap now applies to Unfiled only.

@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              x:Class="Sovrant.Desktop.Views.AutomationsView"
              x:DataType="vm:AutomationsViewModel"
@@ -18,9 +20,7 @@
             <Border Width="64" Height="64" CornerRadius="16"
                     Background="{DynamicResource BrandPrimary}"
                     HorizontalAlignment="Center">
-                <TextBlock Text="⚡" FontSize="28"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center" />
+                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Automation}" Size="28" HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
 
             <TextBlock Text="Automations" FontSize="22" FontWeight="Bold"

@@ -1613,7 +1613,8 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .work-strip-header:hover { border-color: var(--text-secondary); }
 .work-strip-header-error { border-color: var(--status-fail); }
 
-.work-strip-caret { font-size: 10px; color: var(--text-muted); }
+.work-strip-caret { display: inline-flex; color: var(--text-muted); transition: transform .12s; }
+.work-strip-caret.open { transform: rotate(90deg); }
 .work-strip-count { font-weight: 600; color: var(--text-primary); }
 .work-strip-dot { color: var(--text-muted); }
 .work-strip-groups { color: var(--text-secondary); }
@@ -1644,7 +1645,7 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
 .work-strip-row:hover { background: var(--surface-hover); }
 .work-strip-row-active { background: var(--surface-hover); }
 /* Error state is signalled by the status dot fill (.status-dot-fail) and the
-   header ⚠ icon — never by coloring this row's text (Phase 126 contrast rule:
+   header warning icon — never by coloring this row's text (Phase 126 contrast rule:
    icon + fill only; --status-fail as text fails 4.5:1 on the light theme). */
 
 .work-strip-status-dot {
@@ -2660,8 +2661,10 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     list-style: none;
 }
 .doc-advanced-toggle::-webkit-details-marker { display: none; }
-.doc-advanced-toggle::before { content: "▶ "; font-size: 10px; }
-details[open] .doc-advanced-toggle::before { content: "▼ "; }
+/* CSS-drawn chevron (Phase 136: no glyph characters as icons) */
+.doc-advanced-toggle::before { content: ""; display: inline-block; width: 6px; height: 6px; margin: 0 8px 1px 2px;
+    border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform .12s; }
+details[open] .doc-advanced-toggle::before { transform: rotate(45deg); }
 
 .detail-meta {
     display: flex;
@@ -4139,3 +4142,11 @@ details[open] .doc-advanced-toggle::before { content: "▼ "; }
 .rail-flyout-sep { height: 1px; background: var(--surface-border); margin: 4px 2px; }
 .rail-flyout-all { color: var(--brand-primary); font-weight: 600; }
 .rail-flyout-empty { font-size: 12px; color: var(--text-muted); padding: 6px 10px; }
+
+/* ===== Icons (Phase 136) — SovrantIcon renders inline Lucide SVG (aria-hidden, focusable=false) ===== */
+svg[focusable="false"] { flex-shrink: 0; }
+.icon-inline { display: inline-block; vertical-align: -0.15em; }
+.icon-lead { margin-right: 5px; }
+svg.icon-brand { color: #FF9800; fill: currentColor; }
+.tcb-icon, .tool-icon, .doc-artifact-icon, .delete-modal-icon, .work-strip-warn-icon,
+.active-done, .active-failed, .suggestion-icon, .sys-int-icon { display: inline-flex; align-items: center; }

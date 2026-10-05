@@ -284,6 +284,8 @@ Roadmap Phase 136. The mocks already had no emoji, apart from one status dot, wh
 
 ## Already shipped from this work
 
+- Lucide icons (Phase 136): `SovrantIcon` on Web (`Components/Shared/SovrantIcon.razor`, `Services/SovrantIcons`) and Desktop (`Controls/SovrantIcon`), sharing `Sovrant.Api.Ui.IconNames`. The mock's `VOCAB` grew to 62 names as the code turned up more hand-drawn icons and glyph characters (`team`, `brand`, `rail-collapse` / `rail-expand`, `stop`, `dropdown`, `back`, `sort-asc` / `sort-desc`). `Sovrant.Ui.Tests` keeps the mock, `IconNames` and the Desktop map in step.
+
 - The app sidebar (Phase 135): collapsible nav groups plus an always-visible Conversations section in the expanded rail, and flyouts in the collapsed rail, on Web (`AppNav.razor`, `RailNav.razor`, `AppNavModel`) and Desktop (`AppNavViewModel`, `MainWindow.axaml`). It matches the mock's option 2 sizing and compact rows.
 
 - The left-nav redesign (commit `7970ca3`): collapsible rail, real line icons replacing emoji, left accent bar for the active item, Admin's nine destinations grouped under Overview / Access / Safety / System.

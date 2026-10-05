@@ -2,6 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sovrant.Desktop.ViewModels"
         xmlns:views="using:Sovrant.Desktop.Views"
+        xmlns:ctrl="using:Sovrant.Desktop.Controls"
+        xmlns:ui="using:Sovrant.Api.Ui"
         x:Class="Sovrant.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Sovrant"
@@ -54,11 +56,11 @@
         <Style Selector="Button.navrow.active:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.navitem.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
             <Setter Property="Background" Value="{DynamicResource BrandPrimarySoft}" />
         </Style>
-        <Style Selector="Button.navrow Path.navicon">
-            <Setter Property="Stroke" Value="{DynamicResource TextSecondary}" />
+        <Style Selector="Button.navrow ctrl|SovrantIcon.navicon">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
         </Style>
-        <Style Selector="Button.navrow.active Path.navicon">
-            <Setter Property="Stroke" Value="{DynamicResource BrandPrimary}" />
+        <Style Selector="Button.navrow.active ctrl|SovrantIcon.navicon">
+            <Setter Property="Foreground" Value="{DynamicResource BrandPrimary}" />
         </Style>
         <Style Selector="Button.navrow TextBlock.navlabel">
             <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
@@ -222,19 +224,17 @@
                                                         Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).AppNav.ActivateCommand}"
                                                         CommandParameter="{Binding}">
                                                     <Grid ColumnDefinitions="Auto,*,Auto">
-                                                        <Path Grid.Column="0" Classes="navicon" Data="{Binding IconData}" Width="19" Height="19" Stretch="Uniform"
-                                                              StrokeThickness="1.9" Fill="Transparent" StrokeLineCap="Round" StrokeJoin="Round"
+                                                        <ctrl:SovrantIcon Grid.Column="0" Classes="navicon" IconName="{Binding IconName}" Size="19"
                                                               VerticalAlignment="Center" Margin="0,0,12,0" />
                                                         <TextBlock Grid.Column="1" Classes="navlabel" Text="{Binding Label}" FontSize="14.5" FontWeight="Medium"
                                                                    VerticalAlignment="Center" />
-                                                        <Path Grid.Column="2" Data="{StaticResource IconChevronRight}" IsVisible="{Binding IsCollapsible}"
-                                                              Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource TextMuted}"
-                                                              StrokeThickness="2.4" Fill="Transparent" StrokeLineCap="Round" StrokeJoin="Round"
+                                                        <ctrl:SovrantIcon Grid.Column="2" IconName="{x:Static ui:IconNames.Expand}" IsVisible="{Binding IsCollapsible}"
+                                                              Size="13" Foreground="{DynamicResource TextMuted}" StrokeWidth="2.4"
                                                               VerticalAlignment="Center">
-                                                            <Path.RenderTransform>
+                                                            <ctrl:SovrantIcon.RenderTransform>
                                                                 <RotateTransform Angle="{Binding ChevronAngle}" />
-                                                            </Path.RenderTransform>
-                                                        </Path>
+                                                            </ctrl:SovrantIcon.RenderTransform>
+                                                        </ctrl:SovrantIcon>
                                                     </Grid>
                                                 </Button>
                                                 <!-- Section label (Admin): Overview / Access / Safety / System -->
@@ -271,8 +271,7 @@
                                             HorizontalContentAlignment="Center" ToolTip.Tip="{Binding Label}"
                                             PointerEntered="OnRailIconPointerEntered"
                                             Click="OnRailIconClick">
-                                        <Path Classes="navicon" Data="{Binding IconData}" Width="19" Height="19" Stretch="Uniform"
-                                              StrokeThickness="1.9" Fill="Transparent" StrokeLineCap="Round" StrokeJoin="Round" />
+                                        <ctrl:SovrantIcon Classes="navicon" IconName="{Binding IconName}" Size="19" />
                                         <FlyoutBase.AttachedFlyout>
                                             <Flyout Placement="RightEdgeAlignedTop" ShowMode="Standard">
                                                 <StackPanel Width="236" Margin="-4">
@@ -337,18 +336,7 @@
                     BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                     Foreground="{DynamicResource TextMuted}"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                <Viewbox Width="16" Height="14" Stretch="Fill">
-                    <Canvas Width="16" Height="14">
-                        <Border Canvas.Left="1" Canvas.Top="1" Width="14" Height="12"
-                                CornerRadius="1.75" BorderThickness="1.3"
-                                BorderBrush="{DynamicResource TextMuted}" Background="Transparent"/>
-                        <Path Data="M5.5,1 L5.5,13" Canvas.Left="0" Canvas.Top="0"
-                              Stroke="{DynamicResource TextMuted}" StrokeThickness="1.3"/>
-                        <Border Canvas.Left="1.65" Canvas.Top="1.65" Width="3.2" Height="10.7"
-                                CornerRadius="0.75" Opacity="0.55"
-                                Background="{DynamicResource TextMuted}"/>
-                    </Canvas>
-                </Viewbox>
+                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.RailCollapse}" Size="15" />
             </Button>
             <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,-13,0"
                     ToolTip.Tip="Expand sidebar"
@@ -359,15 +347,7 @@
                     BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
                     Foreground="{DynamicResource TextMuted}"
                     HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                <Viewbox Width="16" Height="14" Stretch="Fill">
-                    <Canvas Width="16" Height="14">
-                        <Border Canvas.Left="1" Canvas.Top="1" Width="14" Height="12"
-                                CornerRadius="1.75" BorderThickness="1.3"
-                                BorderBrush="{DynamicResource TextMuted}" Background="Transparent"/>
-                        <Path Data="M5.5,1 L5.5,13" Canvas.Left="0" Canvas.Top="0"
-                              Stroke="{DynamicResource TextMuted}" StrokeThickness="1.3"/>
-                    </Canvas>
-                </Viewbox>
+                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.RailExpand}" Size="15" />
             </Button>
             </Panel>
 

@@ -169,7 +169,8 @@ public partial class MessageViewModel : ViewModelBase
     public int ErrorToolCount => ToolUses.Count(t => t.IsError);
     public bool HasWorkStripErrors => ErrorToolCount > 0;
     public bool HasWorkStrip => NonPendingToolCount > 0;
-    public string WorkStripCaret => IsWorkStripExpanded ? "▾" : "▸";
+    /// <summary>Rotation for the work strip's chevron icon: 90° when expanded (Phase 136).</summary>
+    public double WorkStripCaretAngle => IsWorkStripExpanded ? 90 : 0;
     public string WorkStripActionLabel => NonPendingToolCount == 1 ? "1 action" : $"{NonPendingToolCount} actions";
     public string WorkStripErrorLabel => ErrorToolCount == 1 ? "1 error" : $"{ErrorToolCount} errors";
 
@@ -210,7 +211,7 @@ public partial class MessageViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkStripErrorLabel));
     }
 
-    partial void OnIsWorkStripExpandedChanged(bool value) => OnPropertyChanged(nameof(WorkStripCaret));
+    partial void OnIsWorkStripExpandedChanged(bool value) => OnPropertyChanged(nameof(WorkStripCaretAngle));
 
     [RelayCommand]
     private void ToggleWorkStrip() => IsWorkStripExpanded = !IsWorkStripExpanded;
