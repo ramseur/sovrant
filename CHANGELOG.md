@@ -44,6 +44,10 @@ Versions correspond to tags on the `development` branch.
 
 ### Fixed
 
+- **Prompts sometimes needed sending twice** — OpenRouter (especially for `:free` models) can answer HTTP 200 and then report a rate-limited or busy upstream *inside* the stream (`{"error": …}`), or close the stream with no content. The stream reader skipped the error chunk, so the turn "completed" in about 0.3 s with 0 tokens and no message: the timer started and stopped, and the user had to re-send.
+  - **In-stream errors** are now read and surfaced as provider errors ("Provider returned error 429: …").
+  - **Empty replies** (no text, no tool calls, no output tokens) are now treated as a failed call, not a silent success.
+  - **Both are retried automatically** by the runtime's existing 3-attempt backoff, and only shown in chat with Retry if every attempt fails.
 - **Isolated agents erroring out when the child process exits early** — `ProcessAgent` closed the child's stdin outside the `IOException` guard, so a child that exited before reading its task (broken pipe) failed the whole agent run. The close is now inside the guard. (From Rahul Singh's fork, PR #8.)
 - **Eval code graders ran only the first word of their command on Linux/macOS** — `CodeGrader` passed `sh -c` a flat argument string that was split on whitespace; it now passes the command as a single `-c` argument. Windows was unaffected.
 - **Artifact file URIs on Linux/macOS** — `LocalArtifactStore` built `file:////home/...` URIs by string concatenation; it now uses `new Uri(path)`.

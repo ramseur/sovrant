@@ -754,7 +754,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         return last;
     }
 
+    /// <summary>The model's reply had no content at all (no text, no tool calls, no output tokens).</summary>
+    internal const string EmptyResponseError =
+        "The model returned an empty response. This often happens when a free model is busy; please try again.";
+
     private static bool IsRetryableError(string message) =>
+        message.Contains(EmptyResponseError, StringComparison.Ordinal) ||
         message.Contains("429", StringComparison.Ordinal) ||
         message.Contains("500", StringComparison.Ordinal) ||
         message.Contains("502", StringComparison.Ordinal) ||
@@ -854,6 +859,16 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         {
             var inputElement = ParseToolInput(inputJson.ToString());
             blocks.Add(new OutputContentBlock.ToolUseBlock(id, name, inputElement));
+        }
+
+        // A call that "succeeds" with no text, no tool calls and no output tokens is a failed
+        // reply (seen with busy :free models), not an answer. Surface it as a retryable error
+        // instead of ending the turn silently, which looked like the prompt was ignored.
+        if (success && blocks.Count == 0 && outputTokens == 0)
+        {
+            success = false;
+            LogRequestFailed(_logger, EmptyResponseError);
+            events.Add(new RuntimeEvent.RuntimeError(FormatProviderError(EmptyResponseError, provider.Name, request.Model)));
         }
 
         var accumulated = new StreamAccumulation(success, stopReason, inputTokens, outputTokens, blocks);
