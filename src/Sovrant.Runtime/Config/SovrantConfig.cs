@@ -16,8 +16,45 @@ public sealed class SovrantConfig
     /// <summary>Controls how the runtime handles potentially destructive tool invocations.</summary>
     public PermissionMode PermissionMode { get; set; } = PermissionMode.Default;
 
-    /// <summary>Optional base URL override for the LLM API.</summary>
-    public Uri? BaseUrl { get; set; }
+    private Uri? _baseUrl;
+
+    /// <summary>
+    /// Optional base URL override for the LLM API. Setting a non-null URL means a provider
+    /// profile was activated, which clears <see cref="InactiveProviderReason"/> (Phase 138).
+    /// </summary>
+    public Uri? BaseUrl
+    {
+        get => _baseUrl;
+        set
+        {
+            _baseUrl = value;
+            if (value is not null)
+                InactiveProviderReason = null;
+        }
+    }
+
+    /// <summary>
+    /// Phase 138: why no provider is active (for example, the saved profile isn't enabled for
+    /// the current workspace), or <see langword="null"/> when one is. While set, turns fail with
+    /// this message instead of reaching any endpoint.
+    /// </summary>
+    public string? InactiveProviderReason { get; private set; }
+
+    /// <summary>Switches the running provider off: clears its endpoint and key and records why.</summary>
+    public void DeactivateProvider(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        _baseUrl = null;
+        ApiKey = null;
+        InactiveProviderReason = reason;
+    }
+
+    /// <summary>Marks a provider active again at <paramref name="baseUrl"/> (null = the default endpoint).</summary>
+    public void ActivateProvider(Uri? baseUrl)
+    {
+        _baseUrl = baseUrl;
+        InactiveProviderReason = null;
+    }
 
     /// <summary>Optional API key override. Defaults to the <c>LLM_API_KEY</c> environment variable.</summary>
     public string? ApiKey { get; set; }

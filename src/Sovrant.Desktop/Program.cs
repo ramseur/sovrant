@@ -7,6 +7,8 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // Phase 144: .env first, before App's statics (SOVRANT_USER_ID, …) read the environment.
+        Sovrant.Runtime.Config.BootstrapConfigLoader.EnsureDotEnvLoaded();
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

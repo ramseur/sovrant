@@ -20,7 +20,7 @@ public enum OrchestrationMode
     Swarm,
 
     /// <summary>Open-ended goal with replanning — long-running exploratory tasks.</summary>
-    Mission,
+    Workflow,
 }
 
 /// <summary>

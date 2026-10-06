@@ -27,7 +27,9 @@ public partial class AgentsViewModel : ViewModelBase
 
     [ObservableProperty] private string _searchText = string.Empty;
     [ObservableProperty] private int _totalCount;
-    [ObservableProperty] private AgentTemplateItemViewModel? _selectedTemplate;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowDetailPane), nameof(ShowEmptyState))]
+    private AgentTemplateItemViewModel? _selectedTemplate;
     [ObservableProperty] private string _detailMarkdown = string.Empty;
     [ObservableProperty] private string _runPrompt = string.Empty;
     [ObservableProperty] private bool _isRunning;
@@ -35,7 +37,16 @@ public partial class AgentsViewModel : ViewModelBase
     [ObservableProperty] private string _lastRunOutput = string.Empty;
 
     // Editor state
-    [ObservableProperty] private bool _isEditing;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowDetailPane), nameof(ShowEmptyState))]
+    private bool _isEditing;
+
+    /// <summary>
+    /// The detail pane shows for a selected agent, and also while creating a new one ("+ New" clears
+    /// the selection, which used to hide the editor along with it, so New appeared to do nothing).
+    /// </summary>
+    public bool ShowDetailPane => SelectedTemplate is not null || IsEditing;
+    public bool ShowEmptyState => !ShowDetailPane;
     [ObservableProperty] private bool _isNew;
     [ObservableProperty] private bool _isSaving;
     [ObservableProperty] private string _editError = string.Empty;

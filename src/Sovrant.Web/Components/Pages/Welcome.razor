@@ -1,0 +1,8 @@
+@page "/welcome"
+@inject NavigationManager Nav
+
+@* Phase 141 — the full-window Welcome page retired; its content now lives on Home. *@
+
+@code {
+    protected override void OnInitialized() => Nav.NavigateTo("/dashboard", replace: true);
+}

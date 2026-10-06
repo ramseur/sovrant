@@ -15,7 +15,7 @@ We build Sovrant guided by four tenets:
 3. **Minimise compute footprint** — every architectural decision considers CPU, memory, and energy efficiency. Lower resource consumption means a smaller environmental impact and better performance on modest hardware.
 4. **Own your own data** — individuals, teams, and organisations should have full control over their data. Sovrant supports private workspaces, per-user memory scoping, and self-hosted LLMs so sensitive work never has to leave your infrastructure. Data privacy is a first-class feature, not an afterthought.
 
-Sovrant is a command center for AI — from conversational chat and directed agents to persistent teams, long-running missions, and parallel swarms. Runs can be fully autonomous, human-watched, or anywhere in between. Sovrant also connects to Claws — fully autonomous agent runtimes such as Pico Claw, Hermes, and Open Claw — via MCP, letting you observe and steer them from a single cockpit; future releases will let you launch Claws directly from Sovrant to handle tasks. It is not limited to coding — Sovrant powers chat interfaces, research workflows, business process automation, content creation, project management, and any task that benefits from tool-augmented, session-persistent AI.
+Sovrant is a command center for AI — from conversational chat and directed agents to persistent teams, long-running workflows, and parallel swarms. Runs can be fully autonomous, human-watched, or anywhere in between. Sovrant also connects to Claws — fully autonomous agent runtimes such as Pico Claw, Hermes, and Open Claw — via MCP, letting you observe and steer them from a single cockpit; future releases will let you launch Claws directly from Sovrant to handle tasks. It is not limited to coding — Sovrant powers chat interfaces, research workflows, business process automation, content creation, project management, and any task that benefits from tool-augmented, session-persistent AI.
 
 The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **desktop application** (Windows/macOS/Linux), a **web application** (Blazor Server), an **MCP server** for IDE embedding, or via **webhooks** from Slack, Teams, Discord, and custom systems. Agents read and write files, execute shell commands, search the web, call tools autonomously, delegate to sub-agents, and maintain full conversation history across sessions — all with configurable permission controls.
 
@@ -23,7 +23,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-15. See [LICENSE](LICENSE).
-**Status:** 58 tools. 25 agent templates. 32 built-in skills. 141 server endpoints + SignalR hub. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Mission engine. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,222 tests passing across 10 projects.
+**Status:** 60 tools. 25 agent templates. 32 built-in skills. 146 server endpoints + SignalR hub. Conversation folders. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,343 tests passing across 10 projects.
 
 | Web | Desktop |
 |---|---|
@@ -41,7 +41,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 - [Architecture](#architecture)
 - [Tools](#tools)
 - [Agent System](#agent-system)
-- [Missions](#missions)
+- [Workflows](#workflows)
 - [Eval Framework](#eval-framework)
 - [Providers](#providers)
 - [Server API](#server-api)
@@ -143,7 +143,7 @@ dotnet run --project src/Sovrant.Cli -- auth delete llm
 cat key.txt | dotnet run --project src/Sovrant.Cli -- auth set llm --stdin
 ```
 
-**Env-var override (still supported for 12-factor / CI parity — wins over the stored value):**
+**From the environment (12-factor / containers / CI):** set the key in the shell, the container's env, or a `.env` file. On first boot it's imported into the encrypted keystore, and a provider is set up for you; after that the stored value wins, so changes made in the UI stick. Set `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply env values on every start.
 
 Linux / macOS / WSL:
 ```bash
@@ -196,7 +196,7 @@ curl -X POST http://localhost:5200/v1/auth/register \
 export SVT_TOKEN="svt_..."
 ```
 
-All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` by default. Environment variables (e.g. `LLM_API_KEY`) are still accepted as an override for 12-factor / CI deployments and always take precedence over the stored value.
+All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` by default. Environment variables (e.g. `LLM_API_KEY`, from the shell, container env or `.env`) are imported into it on first boot — or on every start with `SOVRANT_ENV_KEYS_OVERRIDE=true` — for 12-factor / CI deployments and always take precedence over the stored value.
 
 ```bash
 # Non-streaming
@@ -240,14 +240,14 @@ dotnet run --project src/Sovrant.Cli -- --permission-mode bypassPermissions prom
 
 ## Command Center
 
-The Command Center (`/command`) is the homepage for Web and Desktop — a single live grid that answers *"what is Sovrant doing for me right now?"* It aggregates every active mission, team run, agent run, and conversation session into one read-only cockpit, with click-through to the existing detail pages (Activity, Orchestration, Mission detail).
+The Command Center (`/command`) is the homepage for Web and Desktop — a single live grid that answers *"what is Sovrant doing for me right now?"* It aggregates every active workflow, team run, agent run, and conversation session into one read-only cockpit, with click-through to the existing detail pages (Activity, Orchestration, Workflows).
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │ Command Center                                           ⟳ live · 30s │
 ├──────────────────────────────────────────────────────────────────────┤
 │ KIND       TITLE                       STATUS    STARTED   COST       │
-│ 🎯 mission Refactor the auth module    Running   12m ago   $0.42      │
+│ 🎯 workflow Refactor the auth module   Running   12m ago   $0.42      │
 │ 👥 team    Code review sweep           Running   3m ago    $0.08      │
 │ 🤖 agent   security-auditor:OWASP scan Running   <1m ago   $0.01      │
 │ 💬 session user-123                    Idle      2h ago    $1.17      │
@@ -257,7 +257,7 @@ The Command Center (`/command`) is the homepage for Web and Desktop — a single
 - **Live** — polled every 30 seconds; paginated grid with header timestamp and page-preserve on navigation.
 - **Read-only by design (v1).** Click a row to drill into the detail page that already exists for it.
 - **Privacy masking.** Private records appear as masked rows — title and content are hidden, existence is acknowledged for admin accountability.
-- **Backed by one endpoint:** `GET /v1/command-center/state` aggregates from `agent_runs`, the mission engine, `team_runs`, and the session pool.
+- **Backed by one endpoint:** `GET /v1/command-center/state` aggregates from `agent_runs`, the workflow engine, `team_runs`, and the session pool.
 - **First-run lands here.** A clean install completes the setup wizard and lands the user on Command Center, not on a blank chat — the empty state explains how to start activity.
 
 See [`docs/server.md`](docs/server.md) for the endpoint contract and [`docs/frontend-integration.md`](docs/frontend-integration.md) for the SDK call.
@@ -320,9 +320,9 @@ sovrant router models
 sovrant router status
 ```
 
-### 58 Built-in Tools
+### 60 Built-in Tools
 
-Agents autonomously use tools for file operations, shell execution, web access, task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, agent delegation, team orchestration, swarm orchestration, mission management, artifact retrieval, and document generation. Up to 20 tool rounds per turn with automatic retries.
+Agents autonomously use tools for file operations, shell execution, web access, task management, plan/worktree mode, notebook editing, MCP resource access, LSP code intelligence, code verification, skill execution, agent delegation, team orchestration, swarm orchestration, workflow management, artifact retrieval, and document generation. Up to 20 tool rounds per turn with automatic retries.
 
 ### 25 Specialized Agent Templates
 
@@ -340,9 +340,13 @@ Create persistent named agents with specific roles, custom system prompts, and t
 
 Submit a single complex prompt and the swarm auto-decomposes it into a task DAG, executes tasks in parallel waves via specialized agents, enforces file-level locking and token budgets, and runs an optional quality gate review. Available via CLI (`sovrant swarm "task"`), the `Swarm` tool, `/swarm` slash command, and `POST /v1/swarm` (SSE streaming).
 
-### Mission Engine
+### Workflow Engine
 
-Long-lived, goal-driven execution that spans multiple engine runs. A mission pursues an objective autonomously with re-planning, acceptance gates, and a full event journal. Missions are durable (persisted to SQLite), workspace-scoped, and manageable via API (`/v1/missions/*`).
+Long-lived, goal-driven AI workflows that span multiple engine runs (formerly called "missions"). Describe a goal; the planner decomposes it into steps, agents execute them with re-planning and acceptance gates, and every transition lands in an event journal. Optionally review and edit the generated plan before it runs. Workflows are durable (persisted to SQLite), workspace-scoped, advanced in the background by `WorkflowSchedulerService` on the server, and manageable from the Workflows page (Web + Desktop) or the API (`/v1/workflows/*`). See [Workflows](#workflows).
+
+### Conversation Folders
+
+File any conversation — plain chats, agent chats, workflow chats, webhook conversations, and the chats that launched a swarm or team run — into folders you create. Folders are per user, span every workspace, and nest up to 5 levels. Drag a conversation (or a folder) onto a folder, or use **Move to folder…** from its ⋯ menu or the chat header's **Move** button; invalid moves (a folder into its own subfolder, past 5 levels, a duplicate name) are refused while you drag. Deleting a folder moves its contents up a level — no conversation is ever deleted. Each row shows labels derived from what the conversation is linked to right now (`Agent · researcher`, `Workflow · Running`, `Swarm · 2 runs`, `Webhook · slack`); nothing about a conversation's type is stored. Web + Desktop parity; API at `/v1/session-folders`. See [`docs/server.md`](docs/server.md#conversation-folders).
 
 ### Session Persistence
 
@@ -396,10 +400,10 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     ┌─────────────────▼──────────────────────────────────────────┐
     │  Sovrant.Runtime                                           │
     │                                                            │
-    │  Mission Engine                                            │
-    │  ├── IMissionStore (SQLite)                                │
-    │  ├── LlmMissionPlanner → RuntimePlan                       │
-    │  └── ParallelMissionExecutor                               │
+    │  Workflow Engine                                           │
+    │  ├── IWorkflowStore (SQLite)                               │
+    │  ├── LlmWorkflowPlanner → RuntimePlan                      │
+    │  └── ParallelWorkflowExecutor                              │
     │                                                            │
     │  Engine Layer                                              │
     │  ├── IPlanner → LlmPlanner (plan/re-plan)                  │
@@ -417,7 +421,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
     └───────────┬──────────────────┬─────────────────────────────┘
                 │                  │
     ┌───────────▼────────┐  ┌──────▼──────────────────────────┐
-    │  Sovrant.Api       │  │  Sovrant.Tools (58 tools)        │
+    │  Sovrant.Api       │  │  Sovrant.Tools (60 tools)        │
     │                    │  │                                  │
     │  SmartRouter       │  │  File:  Read Write Edit          │
     │  ├── OpenAI        │  │         Glob Grep LS             │
@@ -470,18 +474,18 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | Project | Description |
 |---|---|
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
-| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 141 endpoints + SignalR hub. |
+| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 146 endpoints + SignalR hub. |
 | `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and management pages. |
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
-| `Sovrant.Runtime` | Core agentic loop, mission engine, planner/executor, SQLite persistence (30 migrations V001–V030), permission system, tool executor, MCP client, cost tracking. |
+| `Sovrant.Runtime` | Core agentic loop, workflow engine, planner/executor, SQLite persistence (48 migrations V001–V048), permission system, tool executor, MCP client, cost tracking. |
 | `Sovrant.Api` | LLM provider abstraction: OpenAI-compat, Ollama, native messages API. SmartRouter with health/latency/cost scoring. Intent-aware model routing. |
-| `Sovrant.Tools` | All 58 tool implementations. 32 built-in skill `.md` files. |
-| `Sovrant.Storage.Postgres` | Optional PostgreSQL/Supabase backend — overrides `ISessionStore` and `ICredentialStore` with Npgsql implementations. Schema mirrors SQLite (V001–V030). Activated at boot when `system.database_backend = "supabase"` is set via the Admin → System Integrations UI. |
+| `Sovrant.Tools` | All 60 tool implementations. 32 built-in skill `.md` files. |
+| `Sovrant.Storage.Postgres` | Optional PostgreSQL/Supabase backend — overrides `ISessionStore` and `ICredentialStore` with Npgsql implementations. Schema mirrors SQLite (V001–V047; see `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/`). Activated at boot when `system.database_backend = "supabase"` is set via the Admin → System Integrations UI. |
 | `Sovrant.Commands` | Slash commands for the REPL (`/help`, `/clear`, `/session`, `/memory`, etc.). |
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.Mcp` | Shared MCP protocol handlers (tools/list, tools/call, resources, prompts, completions). Consumed by both the CLI's `mcp-server` stdio subcommand and `Sovrant.Server`'s HTTP/SSE MCP transport. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
-| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 141-endpoint server (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
+| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 146-endpoint server (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
 
 ### Key Design Decisions
 
@@ -499,7 +503,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 
 ## Tools
 
-58 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+60 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -524,16 +528,22 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 
 *Persistent named agents with roles, system prompts, and tool restrictions. SQLite-backed, workspace-scoped. See [Agent System](#agent-system).*
 
-### Missions
-`Mission` *(create and drive long-lived goals with re-planning and acceptance gates)*
+### Workflows
+`Workflow` *(create and drive long-lived goals with re-planning and acceptance gates)*
 
-### Swarm Orchestration
-`Swarm` *(auto-decompose + parallel DAG execution with optional team)* · `SwarmStatus` *(live progress tracking)*
+### Swarm Orchestration & Coordination
+`Swarm` *(auto-decompose + parallel DAG execution with optional team)* · `SwarmStatus` *(live progress tracking)* · `CoordinationStatus` *(pending coordination messages and recent events for an agent group)*
 
 *Submit complex tasks for automatic decomposition into parallel waves. See [Agent System](#agent-system).*
 
 ### Discovery & Skills
 `ToolSearch` *(keyword search over registered tools)* · `Skill` *(loads and executes a skill by name or /trigger)* · `SkillCreate` *(creates new `.md` skill files at runtime)*
+
+### Artifacts & Documents
+`Artifact` *(retrieve files produced by a run)* · `DocumentGenerate` · `DocumentFromTemplate` · `DocumentListTemplates` · `DocumentSuggestTemplate` *(route a free-text request to the best-matching template)* · `DocumentPackage` *(render a multi-document package against one data object)* · `DocumentListPackages`
+
+### Code Scaffolding
+`CodeCreate` · `CodeCreateMulti` *(scaffold a project from one of 21 templates, with build/run/test guidance)* · `CodeListTemplates` · `CodeValidate` *(compiler-free structural quality gates for a scaffolded project)*
 
 ### Quality
 `Verify` *(6-phase quality gate: build, type-check, lint, test, security scan, diff review)*
@@ -681,24 +691,39 @@ User prompt → [1. Decompose] → SwarmPlan (task DAG with waves)
 
 ---
 
-## Missions
+## Workflows
 
-Missions are long-lived, goal-driven executions that span multiple engine runs. Unlike a single conversation turn, a mission pursues an objective autonomously — planning steps, executing them, re-planning when things change, and optionally pausing for human approval.
+> **Renamed from "Missions."** The mission layer was renamed to workflows across the whole stack — DB tables (V047), API (`/v1/missions*` → `/v1/workflows*`, clean cutover with no alias), CLI (`/mission` → `/workflow`), agent tool (`Mission` → `Workflow`), and SDK (`createMission` → `createWorkflow`, etc.). Existing data carries over; see [CHANGELOG](CHANGELOG.md).
+
+Workflows are long-lived, goal-driven AI executions that span multiple engine runs. Unlike a single conversation turn, a workflow pursues an objective autonomously — planning steps, executing them, re-planning when things change, and optionally pausing for human approval. Sovrant workflows are AI-driven (the steps are agent decisions, not predetermined trigger→action chains); for trigger-based automation and SaaS connectors, connect n8n, Zapier, or Make via the Integrations Gallery and use them as tools inside a workflow.
 
 **Lifecycle:** `Planning → Running → Awaiting Human → Completed / Failed / Cancelled`
+
+**Workflows page (Web + Desktop):**
+- List + detail pane with **Plan** and **Journal** tabs; live auto-refresh while a workflow is Planning or Running.
+- **Generate Plan first** — the LLM planner decomposes the goal and the workflow lands in `Awaiting Human` so you can edit steps (intent, expected outcome, tier) before resuming; the reviewed plan runs as saved, without re-planning.
+- The journal shows real per-step output and an artifact count, not just lifecycle labels.
+- Every workflow gets its own linked chat session, seeded with the goal at creation. The Journal tab links straight to it, and a status message is posted there when the workflow completes, fails, or needs review.
+
+**Background execution:** `Sovrant.Server` runs `WorkflowSchedulerService`, which polls `Planning`/`Running` workflows and advances them without anyone clicking Run. Tune with `SOVRANT_WORKFLOW_POLL_SECONDS` (default 20) and `SOVRANT_WORKFLOW_MAX_CONCURRENT` (default 3), or the equivalent workspace settings.
+
+**CLI:** `/workflow create <goal>`, `/workflow list`, `/workflow show <id>`, `/workflow run <id>`, `/workflow events <id>`, `/workflow export <id> [--json]`
 
 **API:**
 
 ```
-POST   /v1/missions           — create a mission with a goal
-GET    /v1/missions            — list missions (filter by status, owner)
-GET    /v1/missions/{id}       — get mission state + current plan
-POST   /v1/missions/{id}/run   — drive the mission forward one cycle
-GET    /v1/missions/{id}/events — full event journal (reconstructable history)
-GET    /v1/missions/{id}/export — export as JSON or Markdown
+POST   /v1/workflows            — create a workflow with a goal
+GET    /v1/workflows            — list workflows (filter by status, owner)
+GET    /v1/workflows/{id}       — get workflow state + current plan
+POST   /v1/workflows/{id}/run   — drive the workflow forward one cycle
+GET    /v1/workflows/{id}/events — full event journal (reconstructable history)
+GET    /v1/workflows/{id}/export — export as JSON or Markdown
+POST   /v1/workflows/plan       — create + plan for review, without running (2.0)
+PUT    /v1/workflows/{id}/plan  — replace the plan with edited steps before it runs (2.0)
+POST   /v1/workflows/{id}/cancel — cancel a workflow that hasn't finished (2.0)
 ```
 
-Missions are durable (persisted to SQLite), workspace-scoped, and include a full append-only event journal so history is always reconstructable. The engine layer underneath provides crash-safe execution via `runtime_traces` — every state transition is committed before the corresponding side effect runs, so a crash mid-step leaves a recoverable trail.
+Workflows are durable (persisted to SQLite), workspace-scoped, and include a full append-only event journal so history is always reconstructable. The engine layer underneath provides crash-safe execution via `runtime_traces` — every state transition is committed before the corresponding side effect runs, so a crash mid-step leaves a recoverable trail.
 
 ---
 
@@ -748,7 +773,7 @@ GET  /v1/evals/{name}/history
 
 **CLI:** use `sovrant auth set llm` (prompts without echo) to store the key in the same encrypted keystore, then set the base URL with `sovrant auth set base-url` or `LLM_BASE_URL`. Keys stored this way are managed, rotatable, and never land in shell history or config files.
 
-> **CI / scripted deployments:** `LLM_API_KEY` and `LLM_BASE_URL` environment variables are accepted as an override and take precedence over the stored value — but for interactive use the keystore is always preferred.
+> **CI / scripted deployments and containers:** set `LLM_API_KEY` (plus optional `LLM_BASE_URL`, `SOVRANT_MODEL`) in the environment or a `.env` file. On first boot the key is imported into the encrypted keystore and every signed-up user without a provider gets one for it, so there's nothing to click through. After that the stored value wins; set `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply env values on every start.
 
 > Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
 
@@ -758,19 +783,20 @@ The `SmartRouter` pings all configured providers on startup, scores them by late
 
 ## Server API
 
-The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 141 endpoints + SignalR hub across 27 route groups:
+The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 146 endpoints + SignalR hub across 27 route groups:
 
 | Group | Endpoints | Description |
 |---|---|---|
 | **Chat** | `POST /v1/chat/completions` | OpenAI-compatible chat with streaming (SSE) support |
-| **Command Center** | `GET /v1/command-center/state` | Live aggregated cockpit state (active missions, team runs, agent runs, sessions); private records masked |
+| **Command Center** | `GET /v1/command-center/state` | Live aggregated cockpit state (active workflows, team runs, agent runs, sessions); private records masked |
 | **User Dashboard** | `GET /v1/user-dashboard/state` | Personal cross-workspace activity view; own + teammates' public; own private; others' private excluded |
 | **Sessions** | 7 endpoints | CRUD, config, export, message history |
+| **Conversation folders** | 5 endpoints | Per-user folder tree (create, rename/move, delete), file a conversation into a folder |
 | **Workspaces** | 17 endpoints | Workspace CRUD, members, invites, config, memory, usage |
 | **Projects** | 15 endpoints | Project CRUD within workspaces, members, config, archive |
 | **Users** | 9 endpoints | User management, profiles, usage, audit |
 | **Teams** | 10 endpoints | Team CRUD, members, runs, per-team run profile (`PUT /v1/teams/{id}/profile`) |
-| **Missions** | 6 endpoints | Mission CRUD, run, events, export |
+| **Workflows** | 6 endpoints | Workflow CRUD, run, events, export |
 | **Swarm** | 4 endpoints | Start swarm, status, events, session history |
 | **Engine** | 4 endpoints | Runtime trace, in-flight runs, recovery |
 | **Evals** | 3 endpoints | Run evals, list suites, history |
@@ -835,7 +861,7 @@ dotnet run --project src/Sovrant.Web
 
 The TypeScript/JavaScript SDK (`sdk/js`) provides a typed client for building custom frontends against the Sovrant server.
 
-- **`SovrantClient`** — covers the 141-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center (`getCommandCenterState`), user dashboard (`getUserDashboardState`), sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), missions, swarm, engine, evals, artifacts, and registries
+- **`SovrantClient`** — covers the 146-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center (`getCommandCenterState`), user dashboard (`getUserDashboardState`), sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), workflows, swarm, engine, evals, artifacts, and registries
 - **SSE streaming** — real-time token-by-token responses with `streamChat()`
 - **React `useChat()` hook** — drop-in conversational UI component
 - **85+ TypeScript interfaces** — full type coverage for all request/response shapes
@@ -937,11 +963,11 @@ Any language server that speaks LSP over stdio can be plugged in.
 
 All durable state is stored in a single SQLite database at `~/.sovrant/data/sovrant.db`. The database is created automatically on first run — no installer or manual setup required.
 
-**30 migrations (V001–V030).** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users (with password hashes + reset tokens), per-user API tokens (with sliding-TTL `last_used_at`), swarm events (with user ownership), runtime traces, missions, teams (with per-team run profiles), agent runs, inter-agent coordination, hooks, workspace settings, MCP/LSP server registry (incl. MCP HTTP transport), user preferences, provider profiles (encrypted API keys via the keystore), per-session MCP gating, unified workspace identity, workspace provider profiles, agent run prompts, swarm federation (`parent_swarm_id`), and per-record privacy (`is_private` on missions/agent_runs/sessions — V030).
+**48 migrations (V001–V048).** Covers sessions (with FTS5 full-text search and titles), agent memory, audit logs, credentials (AES-256-GCM encrypted), token usage, workspaces, projects, users (with password hashes + reset tokens), per-user API tokens (with sliding-TTL `last_used_at`), swarm events (with user ownership), runtime traces, workflows (renamed from missions in V047), teams (with per-team run profiles), agent runs, inter-agent coordination, hooks, workspace settings, MCP/LSP server registry (incl. MCP HTTP transport), user preferences, provider profiles (encrypted API keys via the keystore), per-session MCP gating, unified workspace identity, workspace provider profiles, agent run prompts, swarm federation (`parent_swarm_id`), and per-record privacy (`is_private` on workflows/agent_runs/sessions — V030).
 
 ### Optional Supabase / PostgreSQL Backend
 
-`Sovrant.Storage.Postgres` provides an optional PostgreSQL backend for session and credential storage. When enabled, `ISessionStore` and `ICredentialStore` run on Postgres; all other stores (memory, audit, teams, missions, swarm, etc.) stay on SQLite.
+`Sovrant.Storage.Postgres` provides an optional PostgreSQL backend for session and credential storage. When enabled, `ISessionStore` and `ICredentialStore` run on Postgres; all other stores (memory, audit, teams, workflows, swarm, etc.) stay on SQLite.
 
 Configure from **Admin → System Integrations** (Web or Desktop):
 
@@ -1016,14 +1042,18 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 
 ### Environment Variables
 
-API-key variables marked **(stored)** below can alternatively be saved with `sovrant auth set <name>` into the encrypted credential store; the env var still overrides the stored value when set.
+Every variable works from the shell, a container's environment, or a `.env` file in the app's working directory ([`.env.example`](.env.example) is the full, annotated list; a test fails if it documents a variable the code doesn't read). API-key variables marked **(stored)** are imported into the encrypted credential store on first boot, after which the stored value wins (edit it in the UI or with `sovrant auth set <name>`); `SOVRANT_ENV_KEYS_OVERRIDE=true` re-imports them on every start.
 
 | Variable | Required | Description |
 |---|---|---|
-| `LLM_API_KEY` | Yes (or `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Aliases: `OPENAI_API_KEY`, `PROVIDER_API_KEY` |
-| `LLM_BASE_URL` | No | Provider base URL (default: `https://api.openai.com/v1`). Alias: `OPENAI_BASE_URL` |
-| `SOVRANT_PORT` | No | Server port (default: `5200`) |
-| `SOVRANT_MODEL` | No | Default model name |
+| `LLM_API_KEY` | Yes (or the setup screen / `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Signed-up users without a provider get one for it. Alias: `OPENAI_API_KEY` |
+| `LLM_BASE_URL` | No | Provider base URL. Default: inferred from the key (`sk-or-` → OpenRouter, `sk-ant-` → Anthropic), else `https://api.openai.com/v1` |
+| `SOVRANT_MODEL` | No | Default model when a user hasn't picked one |
+| `SOVRANT_ENV_KEYS_OVERRIDE` | No | `true` = env keys replace stored keys on every start (default: imported on first boot only) |
+| `OPENROUTER_API_KEY` | No | Live model metadata and pricing from OpenRouter — **(stored)** as `openrouter` |
+| `SOVRANT_PORT` | No | Server HTTP port (default: `5200`) — Server only |
+| `SOVRANT_WEB_PORT` | No | Web HTTP port (default: `5100`) — Web only |
+| `SOVRANT_TRUSTED_PROXIES` | No | Reverse proxies whose `X-Forwarded-*` headers are trusted: IPs and/or CIDRs, comma-separated, or `*` (default: loopback only) — Server + Web |
 | `PROVIDER_BASE_URL` | No | Enables native messages API provider (`/v1/messages` format) |
 | `PROVIDER_API_KEY` | No | API key for the native messages API provider — **(stored)** as `provider` |
 | `OLLAMA_BASE_URL` | No | Enables local Ollama provider |
@@ -1067,7 +1097,7 @@ API-key variables marked **(stored)** below can alternatively be saved with `sov
 
 | Path | Purpose |
 |---|---|
-| `~/.sovrant/data/sovrant.db` | SQLite database (sessions, memory, audit, credentials, teams, missions, provider profiles, etc.) |
+| `~/.sovrant/data/sovrant.db` | SQLite database (sessions, memory, audit, credentials, teams, workflows, provider profiles, etc.) |
 | `~/.sovrant/governance.json` | Legacy governance config — migrated to DB on first boot, renamed to `.bak` |
 | `~/.sovrant/logs/` | Rolling application log files |
 | `~/.sovrant/credentials/.keystore` | AES-256-GCM master key (auto-generated). Decrypts the `credentials` table and provider profile API keys in SQLite. Override path via `SOVRANT_KEYSTORE_PATH` (env var or `.env` file). |
@@ -1149,7 +1179,7 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 2,222 tests across 10 projects
+dotnet test Sovrant.slnx   # 2,343 tests across 10 projects
 ```
 
 Test projects (10): `Sovrant.Runtime.Tests` (998) · `Sovrant.Agents.Tests` (240) · `Sovrant.Tools.Tests` (404) · `Sovrant.Server.Tests` (161) · `Sovrant.Api.Tests` (215) · `Sovrant.Runtime.Documents.Tests` (87) · `Sovrant.Commands.Tests` (56) · `Sovrant.Mcp.Tests` (34) · `Sovrant.Lsp.Tests` (26) · `Sovrant.Integration.Tests` (1).
@@ -1162,9 +1192,9 @@ All tests use isolated in-memory SQLite databases. No external services or API k
 
 | Document | Contents |
 |---|---|
-| [`docs/server.md`](docs/server.md) | Full server API reference — all 141 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
+| [`docs/server.md`](docs/server.md) | Full server API reference — all 146 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | SDK reference, proxy setup, browser SSE, multi-tenant LLM keys, React hook, remote mode (dual-mode web frontend) |
-| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 30 migrations (V001–V030), domain stores, Supabase/PostgreSQL backend, security model, keystore integration |
+| [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 48 migrations (V001–V048), domain stores, Supabase/PostgreSQL backend, security model, keystore integration |
 | [`docs/agent-systems.md`](docs/agent-systems.md) | Team vs Swarm deep dive — architecture, value analysis, unified orchestration, inter-agent coordination |
 | [`docs/mcp-server.md`](docs/mcp-server.md) | MCP server mode — IDE config, available tools/resources, OAuth, env vars |
 | [`docs/webhooks.md`](docs/webhooks.md) | Webhook endpoint, Slack bot setup, Teams/Discord integration guides |

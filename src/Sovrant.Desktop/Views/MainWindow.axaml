@@ -2,6 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sovrant.Desktop.ViewModels"
         xmlns:views="using:Sovrant.Desktop.Views"
+        xmlns:ctrl="using:Sovrant.Desktop.Controls"
+        xmlns:ui="using:Sovrant.Api.Ui"
         x:Class="Sovrant.Desktop.Views.MainWindow"
         x:DataType="vm:MainViewModel"
         Title="Sovrant"
@@ -10,6 +12,70 @@
         MinWidth="900" MinHeight="600"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource SurfaceBackground}">
+
+    <Window.Styles>
+        <!-- Left-nav redesign: smooth background fade on nav-row buttons (hover and
+             active-state changes alike), matching Web's 0.12s CSS transition. Scoped to
+             the sidebar so it doesn't touch button behavior elsewhere in the app. -->
+        <Style Selector="Border.nav-shell Button">
+            <Setter Property="Transitions">
+                <Transitions>
+                    <BrushTransition Property="Background" Duration="0:0:0.12" />
+                </Transitions>
+            </Setter>
+        </Style>
+
+        <!-- Phase 135 — app sidebar rows (expanded nav, collapsed icons, flyout items). -->
+        <Style Selector="Button.navrow, Button.navitem">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="CornerRadius" Value="9" />
+            <Setter Property="Padding" Value="10,0" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.navitem">
+            <Setter Property="Padding" Value="44,0,10,0" />
+            <Setter Property="CornerRadius" Value="8" />
+        </Style>
+        <Style Selector="Button.navitem.flyitem">
+            <Setter Property="Padding" Value="10,0" />
+        </Style>
+        <Style Selector="Button.navrow.railicon">
+            <Setter Property="HorizontalContentAlignment" Value="Center" />
+            <Setter Property="Padding" Value="0" />
+        </Style>
+        <Style Selector="Button.navrow:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.navitem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource SurfaceHover}" />
+        </Style>
+        <Style Selector="Button.navrow.active, Button.navitem.active">
+            <Setter Property="Background" Value="{DynamicResource BrandPrimarySoft}" />
+        </Style>
+        <Style Selector="Button.navrow.active:pointerover /template/ ContentPresenter#PART_ContentPresenter, Button.navitem.active:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="{DynamicResource BrandPrimarySoft}" />
+        </Style>
+        <Style Selector="Button.navrow ctrl|SovrantIcon.navicon">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="Button.navrow.active ctrl|SovrantIcon.navicon">
+            <Setter Property="Foreground" Value="{DynamicResource BrandPrimary}" />
+        </Style>
+        <Style Selector="Button.navrow TextBlock.navlabel">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="Button.navrow.active TextBlock.navlabel">
+            <Setter Property="Foreground" Value="{DynamicResource BrandPrimary}" />
+        </Style>
+        <Style Selector="Button.navitem TextBlock.navitemlabel">
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+        </Style>
+        <Style Selector="Button.navitem.active TextBlock.navitemlabel">
+            <Setter Property="Foreground" Value="{DynamicResource BrandPrimary}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </Window.Styles>
 
     <Window.DataTemplates>
         <DataTemplate DataType="vm:ChatViewModel">
@@ -64,6 +130,9 @@
         <DataTemplate DataType="vm:OrchestrationViewModel">
             <views:OrchestrationView />
         </DataTemplate>
+        <DataTemplate DataType="vm:WorkflowsViewModel">
+            <views:WorkflowsView />
+        </DataTemplate>
         <DataTemplate DataType="vm:CommandCenterViewModel">
             <views:CommandCenterView />
         </DataTemplate>
@@ -83,136 +152,49 @@
 
     <Panel>
         <DockPanel>
-            <!-- Phase 69 — single 240px sidebar: icon row at top, group panel in middle, settings + user at bottom. -->
-            <Border DockPanel.Dock="Left"
+            <!-- Left-nav redesign — collapsible rail: a single vertical group-nav
+                 list starting flush at the top (icon+label expanded / icon-only
+                 collapsed), swappable sub-panel below, settings + user footer at
+                 bottom. The collapse toggle floats on the rail's own border edge
+                 instead of reserving a header row, so Dashboard is the first thing
+                 in the rail with no blank space above it. -->
+            <Panel DockPanel.Dock="Left">
+            <Border Classes="nav-shell"
                     Width="{Binding NavWidth}"
                     Background="{DynamicResource SidebarBackground}"
                     BorderBrush="{DynamicResource SurfaceBorder}"
                     BorderThickness="0,0,1,0">
                 <DockPanel>
-                    <Border DockPanel.Dock="Top"
-                            BorderBrush="{DynamicResource SurfaceBorder}"
-                            BorderThickness="0,0,0,1"
-                            Padding="6,8">
-                        <DockPanel LastChildFill="True">
-                            <!-- Collapse toggle: always visible -->
-                            <Button DockPanel.Dock="Right" ToolTip.Tip="Collapse sidebar"
-                                    Command="{Binding ToggleNavCommand}"
-                                    IsVisible="{Binding IsNavExpanded}"
-                                    Height="30" Width="30" CornerRadius="6" Padding="7,8"
-                                    Background="Transparent"
-                                    Foreground="{DynamicResource TextMuted}"
-                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                                <Viewbox Width="16" Height="14" Stretch="Fill">
-                                    <Canvas Width="16" Height="14">
-                                        <Border Canvas.Left="1" Canvas.Top="1" Width="14" Height="12"
-                                                CornerRadius="1.75" BorderThickness="1.3"
-                                                BorderBrush="{DynamicResource TextMuted}" Background="Transparent"/>
-                                        <Path Data="M5.5,1 L5.5,13" Canvas.Left="0" Canvas.Top="0"
-                                              Stroke="{DynamicResource TextMuted}" StrokeThickness="1.3"/>
-                                        <Border Canvas.Left="1.65" Canvas.Top="1.65" Width="3.2" Height="10.7"
-                                                CornerRadius="0.75" Opacity="0.55"
-                                                Background="{DynamicResource TextMuted}"/>
-                                    </Canvas>
-                                </Viewbox>
-                            </Button>
-                            <Button DockPanel.Dock="Right" ToolTip.Tip="Expand sidebar"
-                                    Command="{Binding ToggleNavCommand}"
-                                    IsVisible="{Binding IsNavCollapsed}"
-                                    Height="30" Width="30" CornerRadius="6" Padding="7,8"
-                                    Background="Transparent"
-                                    Foreground="{DynamicResource TextMuted}"
-                                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
-                                <Viewbox Width="16" Height="14" Stretch="Fill">
-                                    <Canvas Width="16" Height="14">
-                                        <Border Canvas.Left="1" Canvas.Top="1" Width="14" Height="12"
-                                                CornerRadius="1.75" BorderThickness="1.3"
-                                                BorderBrush="{DynamicResource TextMuted}" Background="Transparent"/>
-                                        <Path Data="M5.5,1 L5.5,13" Canvas.Left="0" Canvas.Top="0"
-                                              Stroke="{DynamicResource TextMuted}" StrokeThickness="1.3"/>
-                                    </Canvas>
-                                </Viewbox>
-                            </Button>
-                            <!-- Admin + main icons: hidden when collapsed -->
-                            <DockPanel LastChildFill="True" IsVisible="{Binding IsNavExpanded}">
-                                <Button DockPanel.Dock="Right" Content="🔑" ToolTip.Tip="Admin"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="admin"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="4,0"
-                                        IsVisible="{Binding IsAdmin}"
-                                        Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <UniformGrid Rows="1">
-                                <Button Content="📊" ToolTip.Tip="User Dashboard"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="💬" ToolTip.Tip="Chat"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="chat"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="📚" ToolTip.Tip="Knowledge"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="knowledge"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="🤖" ToolTip.Tip="Agents"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="agents"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                <Button Content="🗂" ToolTip.Tip="Projects"
-                                        Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
-                                        Height="30" CornerRadius="6" FontSize="13" Padding="0"
-                                        Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                        Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}"
-                                        HorizontalAlignment="Stretch"
-                                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center" />
-                                </UniformGrid>
-                            </DockPanel>
-                        </DockPanel>
-                    </Border>
-
                     <!-- Bottom: shared footer — avatar + name on left, settings on the right -->
                     <Border DockPanel.Dock="Bottom" IsVisible="{Binding IsNavExpanded}"
-                            Padding="10,8"
+                            Padding="12,10"
                             BorderThickness="0,1,0,0"
                             BorderBrush="{DynamicResource SurfaceBorder}">
                         <DockPanel LastChildFill="True">
                             <Button DockPanel.Dock="Right"
                                     Content="↪" ToolTip.Tip="Log out"
                                     Command="{Binding LogoutCommand}"
-                                    Width="32" Height="32" CornerRadius="8"
+                                    Width="34" Height="34" CornerRadius="9"
                                     FontSize="16" Padding="0" Margin="4,0,0,0"
                                     Background="Transparent"
                                     Foreground="{DynamicResource TextSecondary}"
                                     HorizontalContentAlignment="Center"
                                     VerticalContentAlignment="Center" />
                             <Button Command="{Binding SelectGroupCommand}" CommandParameter="settings"
-                                    Background="Transparent" BorderThickness="0" Padding="4,2"
-                                    CornerRadius="6" ToolTip.Tip="Settings" Cursor="Hand"
+                                    Background="Transparent" BorderThickness="0" Padding="5,2"
+                                    CornerRadius="8" ToolTip.Tip="Settings" Cursor="Hand"
                                     HorizontalContentAlignment="Left" VerticalContentAlignment="Center">
-                                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                    <Border Width="28" Height="28" CornerRadius="14"
+                                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                                    <Border Width="32" Height="32" CornerRadius="16"
                                             Background="{DynamicResource BrandPrimary}">
-                                        <TextBlock Text="{Binding Sidebar.UserInitial}" FontSize="12" FontWeight="SemiBold"
+                                        <TextBlock Text="{Binding Sidebar.UserInitial}" FontSize="13.5" FontWeight="SemiBold"
                                                    Foreground="White"
                                                    HorizontalAlignment="Center" VerticalAlignment="Center" />
                                     </Border>
                                     <StackPanel VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Sidebar.CurrentUserName}" FontSize="11"
+                                        <TextBlock Text="{Binding Sidebar.CurrentUserName}" FontSize="13"
                                                    Foreground="{DynamicResource TextPrimary}" />
-                                        <TextBlock Text="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole}" FontSize="9"
+                                        <TextBlock Text="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole}" FontSize="11"
                                                    Foreground="{DynamicResource TextSecondary}"
                                                    IsVisible="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
                                     </StackPanel>
@@ -221,65 +203,153 @@
                         </DockPanel>
                     </Border>
 
-                    <!-- Middle: collapsed icon strip OR expanded sub-panel -->
+                    <!-- Phase 135 — app sidebar (docs/design/desktop.html). Expanded: collapsible
+                         nav groups (one open at a time, the current page's group by default), then
+                         Conversations on every page. The nav never scrolls on its own; Conversations
+                         fill the rest (min 160px) with their own scroll; only a very short window
+                         scrolls this middle area as one (RailGrid sizing in MainWindow.axaml.cs).
+                         Collapsed: icon rail with flyouts (click / Enter / Space / hover; Esc closes). -->
                     <Panel>
-                        <!-- Collapsed: vertical icon strip -->
-                        <StackPanel IsVisible="{Binding IsNavCollapsed}" Margin="4,8,4,4" Spacing="2">
-                            <Button Content="📊" ToolTip.Tip="User Dashboard"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="dashboard"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsDashboardGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="💬" ToolTip.Tip="Chat"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="chat"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsChatGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="📚" ToolTip.Tip="Knowledge"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="knowledge"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsKnowledgeGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🤖" ToolTip.Tip="Agents"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="agents"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsAgentsGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🗂" ToolTip.Tip="Projects"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="workspace"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    Background="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsWorkspaceGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                            <Button Content="🔑" ToolTip.Tip="Admin"
-                                    Command="{Binding SelectGroupCommand}" CommandParameter="admin"
-                                    Height="36" CornerRadius="6" FontSize="16" Padding="0"
-                                    HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                                    IsVisible="{Binding IsAdmin}"
-                                    Background="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.BrandOrTransparent}}"
-                                    Foreground="{Binding IsAdminGroup, Converter={x:Static vm:BoolToBrushConverter.WhiteOrSecondary}}" />
-                        </StackPanel>
+                        <ScrollViewer x:Name="RailScroll" IsVisible="{Binding IsNavExpanded}"
+                                      HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                            <Grid x:Name="RailGrid" RowDefinitions="Auto,Auto,*">
+                                <ItemsControl x:Name="NavRows" Grid.Row="0" Margin="10,6,10,6"
+                                              ItemsSource="{Binding AppNav.Rows}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="vm:AppNavRowViewModel">
+                                            <Panel>
+                                                <!-- Group header: 36px, icon + label (+ chevron when collapsible) -->
+                                                <Button Classes="navrow" Classes.active="{Binding IsActive}" IsVisible="{Binding IsGroup}"
+                                                        Height="36" Margin="0,1" HorizontalContentAlignment="Stretch"
+                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).AppNav.ActivateCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <Grid ColumnDefinitions="Auto,*,Auto">
+                                                        <ctrl:SovrantIcon Grid.Column="0" Classes="navicon" IconName="{Binding IconName}" Size="19"
+                                                              VerticalAlignment="Center" Margin="0,0,12,0" />
+                                                        <TextBlock Grid.Column="1" Classes="navlabel" Text="{Binding Label}" FontSize="14.5" FontWeight="Medium"
+                                                                   VerticalAlignment="Center" />
+                                                        <ctrl:SovrantIcon Grid.Column="2" IconName="{x:Static ui:IconNames.Expand}" IsVisible="{Binding IsCollapsible}"
+                                                              Size="13" Foreground="{DynamicResource TextMuted}" StrokeWidth="2.4"
+                                                              VerticalAlignment="Center">
+                                                            <ctrl:SovrantIcon.RenderTransform>
+                                                                <RotateTransform Angle="{Binding ChevronAngle}" />
+                                                            </ctrl:SovrantIcon.RenderTransform>
+                                                        </ctrl:SovrantIcon>
+                                                    </Grid>
+                                                </Button>
+                                                <!-- Section label (Admin): Overview / Access / Safety / System -->
+                                                <TextBlock IsVisible="{Binding IsSection}" Text="{Binding Label}" FontSize="10" FontWeight="Bold"
+                                                           Foreground="{DynamicResource TextMuted}" Margin="44,6,0,2" />
+                                                <!-- Page: 30px, indented under its group -->
+                                                <Button Classes="navitem" Classes.active="{Binding IsActive}" IsVisible="{Binding IsItem}"
+                                                        Height="30" Margin="0,1"
+                                                        Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).AppNav.ActivateCommand}"
+                                                        CommandParameter="{Binding}">
+                                                    <TextBlock Classes="navitemlabel" Text="{Binding Label}" FontSize="12.5" VerticalAlignment="Center" />
+                                                </Button>
+                                            </Panel>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
 
-                        <!-- Expanded: sub-panel content swaps based on SelectedGroup -->
-                        <Panel IsVisible="{Binding IsNavExpanded}">
-                            <views:SidebarView DataContext="{Binding Sidebar}"
-                                               IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsChatGroup}" />
-                            <views:KnowledgePanelView DataContext="{Binding Sidebar}"
-                                                      IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsKnowledgeGroup}" />
-                            <views:AgentsPanelView DataContext="{Binding Sidebar}"
-                                                   IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsAgentsGroup}" />
-                            <views:WorkspacePanelView DataContext="{Binding Sidebar}"
-                                                      IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsWorkspaceGroup}" />
-                            <views:AdminPanelView DataContext="{Binding Sidebar}"
-                                                 IsVisible="{Binding $parent[Window].((vm:MainViewModel)DataContext).IsAdminGroup}" />
-                        </Panel>
+                                <Border Grid.Row="1" Height="1" Margin="10,0" Background="{DynamicResource SurfaceBorder}" />
+
+                                <DockPanel Grid.Row="2" MinHeight="160">
+                                    <TextBlock DockPanel.Dock="Top" Text="CONVERSATIONS" FontSize="10.5" FontWeight="Bold"
+                                               Foreground="{DynamicResource TextMuted}" Margin="14,10,0,0" />
+                                    <views:SidebarView DataContext="{Binding Sidebar}" />
+                                </DockPanel>
+                            </Grid>
+                        </ScrollViewer>
+
+                        <!-- Collapsed rail: icons; collapsible groups and Chat open a flyout. -->
+                        <ItemsControl IsVisible="{Binding IsNavCollapsed}" Margin="10,8,10,8"
+                                      ItemsSource="{Binding AppNav.Groups}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AppNavRowViewModel">
+                                    <Button Classes="navrow railicon" Classes.active="{Binding IsActive}" Height="40" Margin="0,1"
+                                            HorizontalContentAlignment="Center" ToolTip.Tip="{Binding Label}"
+                                            PointerEntered="OnRailIconPointerEntered"
+                                            Click="OnRailIconClick">
+                                        <ctrl:SovrantIcon Classes="navicon" IconName="{Binding IconName}" Size="19" />
+                                        <FlyoutBase.AttachedFlyout>
+                                            <Flyout Placement="RightEdgeAlignedTop" ShowMode="Standard">
+                                                <StackPanel Width="236" Margin="-4">
+                                                    <TextBlock Text="{Binding Label}" FontSize="10.5" FontWeight="Bold"
+                                                               Foreground="{DynamicResource TextMuted}" Margin="10,4,0,6" />
+                                                    <!-- Group pages -->
+                                                    <ItemsControl ItemsSource="{Binding FlyoutItems}" IsVisible="{Binding HasFlyoutItems}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate x:DataType="vm:AppNavRowViewModel">
+                                                                <Panel>
+                                                                    <TextBlock IsVisible="{Binding IsSection}" Text="{Binding Label}" FontSize="10" FontWeight="Bold"
+                                                                               Foreground="{DynamicResource TextMuted}" Margin="10,6,0,2" />
+                                                                    <Button Classes="navitem flyitem" Classes.active="{Binding IsActive}" IsVisible="{Binding IsItem}"
+                                                                            Height="32" Click="OnFlyoutItemClick"
+                                                                            Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).AppNav.ActivateCommand}"
+                                                                            CommandParameter="{Binding}">
+                                                                        <TextBlock Classes="navitemlabel" Text="{Binding Label}" FontSize="12.5" VerticalAlignment="Center" />
+                                                                    </Button>
+                                                                </Panel>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                    <!-- Chat: recent conversations + Show all -->
+                                                    <StackPanel IsVisible="{Binding IsChatGroup}">
+                                                        <ItemsControl ItemsSource="{Binding $parent[Window].((vm:MainViewModel)DataContext).Sidebar.RecentConversations}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate x:DataType="vm:SessionTreeRowViewModel">
+                                                                    <Button Classes="navitem flyitem" Height="32" Click="OnFlyoutItemClick"
+                                                                            Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).Sidebar.ResumeSessionCommand}"
+                                                                            CommandParameter="{Binding Id}">
+                                                                        <TextBlock Classes="navitemlabel" Text="{Binding Text}" FontSize="12.5"
+                                                                                   TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                                                    </Button>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <Border Height="1" Margin="2,4" Background="{DynamicResource SurfaceBorder}" />
+                                                        <Button Classes="navitem flyitem" Height="32" Click="OnShowAllConversationsClick">
+                                                            <TextBlock Text="Show all conversations" FontSize="12.5" FontWeight="SemiBold"
+                                                                       Foreground="{DynamicResource BrandPrimary}" VerticalAlignment="Center" />
+                                                        </Button>
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </Flyout>
+                                        </FlyoutBase.AttachedFlyout>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                     </Panel>
                 </DockPanel>
             </Border>
+
+            <!-- Collapse/expand toggle — floats on the rail's border edge rather
+                 than owning its own row. -->
+            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,-13,0"
+                    ToolTip.Tip="Collapse sidebar"
+                    Command="{Binding ToggleNavCommand}"
+                    IsVisible="{Binding IsNavExpanded}"
+                    Height="26" Width="26" CornerRadius="13" Padding="0"
+                    Background="{DynamicResource SurfaceBackground}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    Foreground="{DynamicResource TextMuted}"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.RailCollapse}" Size="15" />
+            </Button>
+            <Button HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,14,-13,0"
+                    ToolTip.Tip="Expand sidebar"
+                    Command="{Binding ToggleNavCommand}"
+                    IsVisible="{Binding IsNavCollapsed}"
+                    Height="26" Width="26" CornerRadius="13" Padding="0"
+                    Background="{DynamicResource SurfaceBackground}"
+                    BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                    Foreground="{DynamicResource TextMuted}"
+                    HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
+                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.RailExpand}" Size="15" />
+            </Button>
+            </Panel>
 
             <!-- Main content -->
             <DockPanel>
@@ -292,5 +362,9 @@
 
         <!-- Command palette overlay -->
         <views:CommandPaletteOverlay DataContext="{Binding CommandPalette}" />
+
+        <!-- Phase 133 — conversation-folder dialogs (Move picker, name prompt) -->
+        <views:SessionFolderDialogOverlay DataContext="{Binding Sidebar.FolderDialog}" />
+
     </Panel>
 </Window>

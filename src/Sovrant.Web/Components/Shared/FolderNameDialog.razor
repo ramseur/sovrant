@@ -1,0 +1,83 @@
+@using Sovrant.Runtime.Session
+
+@* Phase 133 — one-field name prompt for New folder / New subfolder / Rename.
+   The submit callback throws SessionFolderException on a refusal; its message
+   is shown inline and the dialog stays open. *@
+
+@if (_open)
+{
+    <div class="palette-backdrop" @onclick="Close"></div>
+    <div class="sf-dialog sf-dialog-sm" role="dialog" aria-label="@_heading">
+        <h3>@_heading</h3>
+        @if (!string.IsNullOrEmpty(_hint))
+        {
+            <p class="sf-dialog-sub">@_hint</p>
+        }
+        <div class="sf-dialog-body">
+            <input class="sf-input" maxlength="@SessionFolderRules.MaxNameLength" placeholder="Name"
+                   @bind="_value" @bind:event="oninput" @onkeydown="Key" @ref="_input" />
+        </div>
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="sf-error" role="alert">@_error</div>
+        }
+        <div class="sf-dialog-ft">
+            <span class="sf-sp"></span>
+            <button class="btn-sm" @onclick="Close">Cancel</button>
+            <button class="btn-sm btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_value))" @onclick="Submit">@_action</button>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _open;
+    private bool _busy;
+    private string _heading = string.Empty;
+    private string _action = "Save";
+    private string? _hint;
+    private string _value = string.Empty;
+    private string? _error;
+    private Func<string, Task>? _submit;
+    private ElementReference _input;
+
+    public async Task OpenAsync(string heading, string action, string initial, Func<string, Task> submit, string? hint = null)
+    {
+        _heading = heading;
+        _action = action;
+        _hint = hint;
+        _value = initial;
+        _submit = submit;
+        _error = null;
+        _open = true;
+        StateHasChanged();
+        await Task.Yield();
+        try { await _input.FocusAsync(); } catch (InvalidOperationException) { }
+    }
+
+    private async Task Key(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await Submit();
+        else if (e.Key == "Escape") Close();
+    }
+
+    private async Task Submit()
+    {
+        if (_submit is null || string.IsNullOrWhiteSpace(_value)) return;
+        _busy = true;
+        try
+        {
+            await _submit(_value);
+            _open = false;
+        }
+        catch (SessionFolderException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Close() => _open = false;
+}

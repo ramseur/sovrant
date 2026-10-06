@@ -8,6 +8,11 @@ public sealed class LspClientTests
     [InlineData(@"C:\src\file.py", "file:///C:/src/file.py")]
     public void PathToUri_Converts_Windows_Path(string path, string expected)
     {
+        // Path.GetFullPath only treats "C:\..." as rooted on Windows; elsewhere it is a
+        // relative name resolved against the current directory.
+        if (!OperatingSystem.IsWindows())
+            return;
+
         var result = LspClient.PathToUri(path);
         Assert.Equal(expected, result);
     }

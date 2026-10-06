@@ -4,6 +4,7 @@ using System.Security.Cryptography;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Sovrant.Api.Ui;
 using Sovrant.Desktop.Adapters;
 using Sovrant.Runtime.Knowledge;
 
@@ -117,10 +118,8 @@ public partial class MessageViewModel : ViewModelBase
     [ObservableProperty]
     private string? _userDisplayName;
 
-    /// <summary>Single uppercase letter for the user avatar bubble.</summary>
-    public string UserInitial => string.IsNullOrEmpty(UserDisplayName)
-        ? "U"
-        : UserDisplayName[..1].ToUpperInvariant();
+    /// <summary>Up to two initials for the user avatar (Phase 137; same rule as Web).</summary>
+    public string UserInitial => AvatarText.Initials(UserDisplayName ?? SenderLabel);
 
     /// <summary>
     /// Display label for the message sender. Shows "Provider / model" for assistant
@@ -169,7 +168,8 @@ public partial class MessageViewModel : ViewModelBase
     public int ErrorToolCount => ToolUses.Count(t => t.IsError);
     public bool HasWorkStripErrors => ErrorToolCount > 0;
     public bool HasWorkStrip => NonPendingToolCount > 0;
-    public string WorkStripCaret => IsWorkStripExpanded ? "▾" : "▸";
+    /// <summary>Rotation for the work strip's chevron icon: 90° when expanded (Phase 136).</summary>
+    public double WorkStripCaretAngle => IsWorkStripExpanded ? 90 : 0;
     public string WorkStripActionLabel => NonPendingToolCount == 1 ? "1 action" : $"{NonPendingToolCount} actions";
     public string WorkStripErrorLabel => ErrorToolCount == 1 ? "1 error" : $"{ErrorToolCount} errors";
 
@@ -210,7 +210,7 @@ public partial class MessageViewModel : ViewModelBase
         OnPropertyChanged(nameof(WorkStripErrorLabel));
     }
 
-    partial void OnIsWorkStripExpandedChanged(bool value) => OnPropertyChanged(nameof(WorkStripCaret));
+    partial void OnIsWorkStripExpandedChanged(bool value) => OnPropertyChanged(nameof(WorkStripCaretAngle));
 
     [RelayCommand]
     private void ToggleWorkStrip() => IsWorkStripExpanded = !IsWorkStripExpanded;
@@ -315,7 +315,7 @@ public partial class MessageViewModel : ViewModelBase
         "TeamCreate" => "Create Team",
         "TeamRun" => "Run Team",
         "TeamDelegate" => "Delegate to Team",
-        "Mission" => "Mission",
+        "Workflow" => "Workflow",
         _ => toolName,
     };
 
@@ -336,7 +336,7 @@ public partial class MessageViewModel : ViewModelBase
         "TeamCreate" => "Creating team...",
         "TeamRun" => "Running team...",
         "TeamDelegate" => "Delegating task...",
-        "Mission" => "Running mission...",
+        "Workflow" => "Running workflow...",
         _ => $"Running {toolName}...",
     };
 

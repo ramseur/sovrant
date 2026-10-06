@@ -45,6 +45,7 @@ internal static class SessionRoutes
     private static async Task<IResult> ListSessions(
         HttpContext ctx,
         ISessionStore store,
+        ISessionLinkResolver linkResolver,
         CancellationToken ct)
     {
         var query = ctx.Request.Query["q"].FirstOrDefault();
@@ -56,8 +57,12 @@ internal static class SessionRoutes
             return Results.Ok(new { sessions = searchResults });
         }
 
-        var ids = await store.ListAsync(OwnerFilter(ctx), ct).ConfigureAwait(false);
-        var items = ids.Select(id => new SessionSummaryDto { Id = id }).ToList();
+        // Phase 133 — each row carries its folder and its derived link labels, so
+        // remote-mode sidebars render the same folder tree as embedded mode.
+        var listed = await store.ListWithTitlesAsync(OwnerFilter(ctx), ct).ConfigureAwait(false);
+        var visible = listed.Where(s => !SessionLabels.IsSystemSession(s.SessionId)).ToList();
+        var labelled = await linkResolver.WithLabelsAsync(visible, ct).ConfigureAwait(false);
+        var items = labelled.Select(SessionSummaryDto.From).ToList();
         return Results.Ok(new { sessions = items });
     }
 
@@ -341,6 +346,50 @@ internal sealed class SessionSummaryDto
 {
     [JsonPropertyName("id")]
     public string Id { get; init; } = string.Empty;
+
+    // Phase 133 — additive fields. `session_id` duplicates `id` because the
+    // .NET remote client and the SDK's newer callers read it under that name.
+    [JsonPropertyName("session_id")]
+    public string SessionId { get; init; } = string.Empty;
+
+    [JsonPropertyName("title")]
+    public string? Title { get; init; }
+
+    [JsonPropertyName("updated_at")]
+    public string UpdatedAt { get; init; } = string.Empty;
+
+    [JsonPropertyName("folder_id")]
+    public string? FolderId { get; init; }
+
+    [JsonPropertyName("agent_name")]
+    public string? AgentName { get; init; }
+
+    [JsonPropertyName("is_private")]
+    public bool IsPrivate { get; init; }
+
+    [JsonPropertyName("labels")]
+    public IReadOnlyList<SessionLabelDto> Labels { get; init; } = [];
+
+    public static SessionSummaryDto From(SessionListItem s) => new()
+    {
+        Id = s.SessionId,
+        SessionId = s.SessionId,
+        Title = s.Title,
+        UpdatedAt = s.UpdatedAt.ToString("o", CultureInfo.InvariantCulture),
+        FolderId = s.FolderId,
+        AgentName = s.AgentName,
+        IsPrivate = s.IsPrivate,
+        Labels = (s.Labels ?? []).Select(l => new SessionLabelDto { Text = l.Text, IsActive = l.IsActive }).ToList(),
+    };
+}
+
+internal sealed class SessionLabelDto
+{
+    [JsonPropertyName("text")]
+    public string Text { get; init; } = string.Empty;
+
+    [JsonPropertyName("is_active")]
+    public bool IsActive { get; init; }
 }
 
 internal sealed class SessionMessageDto

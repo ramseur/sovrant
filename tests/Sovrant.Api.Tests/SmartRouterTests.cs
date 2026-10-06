@@ -388,7 +388,7 @@ public sealed class SmartRouterTests
     }
 
     /// <summary>Helper subclass that overrides Name for testing.</summary>
-    private sealed class NamedOpenAiCompatProvider : OpenAiCompatProvider
+    internal sealed class NamedOpenAiCompatProvider : OpenAiCompatProvider
     {
         private readonly string _name;
         public NamedOpenAiCompatProvider(HttpClient http, IAuthProvider auth,

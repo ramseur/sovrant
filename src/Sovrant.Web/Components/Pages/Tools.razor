@@ -32,9 +32,9 @@
                 <table class="provider-table sortable-table">
                     <thead>
                         <tr>
-                            <th class="sortable" @onclick='() => SortBy("name")'>Name @SortGlyph("name")</th>
-                            <th class="sortable" @onclick='() => SortBy("type")'>Type @SortGlyph("type")</th>
-                            <th class="sortable" @onclick='() => SortBy("required")'>Required @SortGlyph("required")</th>
+                            <th class="sortable" @onclick='() => SortBy("name")'>Name @SortIcon("name")</th>
+                            <th class="sortable" @onclick='() => SortBy("type")'>Type @SortIcon("type")</th>
+                            <th class="sortable" @onclick='() => SortBy("required")'>Required @SortIcon("required")</th>
                             <th>Description</th>
                         </tr>
                     </thead>
@@ -76,8 +76,16 @@
         else { _sortKey = key; _sortDesc = false; }
     }
 
-    private string SortGlyph(string key)
-        => _sortKey == key ? (_sortDesc ? "▼" : "▲") : string.Empty;
+    private RenderFragment SortIcon(string key) => builder =>
+    {
+        if (_sortKey != key)
+            return;
+        builder.OpenComponent<SovrantIcon>(0);
+        builder.AddAttribute(1, nameof(SovrantIcon.Name), _sortDesc ? IconNames.SortDescending : IconNames.SortAscending);
+        builder.AddAttribute(2, nameof(SovrantIcon.Size), (int?)12);
+        builder.AddAttribute(3, nameof(SovrantIcon.Class), "icon-inline");
+        builder.CloseComponent();
+    };
 
     private IEnumerable<ParamInfo> SortedParams(IEnumerable<ParamInfo> input)
     {

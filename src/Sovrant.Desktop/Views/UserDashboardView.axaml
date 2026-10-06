@@ -1,39 +1,119 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:views="using:Sovrant.Desktop.Views"
+             xmlns:onb="using:Sovrant.Runtime.Onboarding"
              x:Class="Sovrant.Desktop.Views.UserDashboardView"
              x:DataType="vm:UserDashboardViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
+    <!-- Phase 142 — Home has two tabs. Overview (always opens first): the guide, centred like the chat
+         welcome and sized for a laptop screen. Activity: the report (stats + table), unchanged.
+         See docs/design/desktop.html → Home. -->
+    <UserControl.Styles>
+        <Style Selector="Button.hometab">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0,0,0,2" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="0" />
+            <Setter Property="Padding" Value="14,10" />
+            <Setter Property="FontSize" Value="13.5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.hometab.on">
+            <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimary}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        </Style>
+        <Style Selector="Button.hometab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+        <Style Selector="Button.glance">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="Padding" Value="13,0" />
+            <Setter Property="Margin" Value="3" />
+            <Setter Property="CornerRadius" Value="15" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource SurfaceBorder}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceCard}" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Cursor" Value="Hand" />
+        </Style>
+        <Style Selector="Button.glance:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+            <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimary}" />
+            <Setter Property="Background" Value="{DynamicResource SurfaceCard}" />
+        </Style>
+    </UserControl.Styles>
+
     <DockPanel>
-        <!-- Header -->
-        <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
+        <!-- Tabs -->
+        <Border DockPanel.Dock="Top" BorderThickness="0,0,0,1" BorderBrush="{DynamicResource SurfaceBorder}" Margin="32,10,32,0">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center"
-                                IsVisible="{Binding LastRefreshed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                        <TextBlock Text="Last updated:" FontSize="11" Foreground="{DynamicResource TextMuted}" />
-                        <TextBlock Text="{Binding LastRefreshed}" FontSize="11" Foreground="{DynamicResource TextMuted}" />
-                    </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center"
+                            IsVisible="{Binding !IsOverview}">
+                    <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center"
+                               IsVisible="{Binding LastRefreshed, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                        <Run Text="Last updated: " /><Run Text="{Binding LastRefreshed}" />
+                    </TextBlock>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
-                            Padding="12,6" CornerRadius="6"
+                            Padding="12,5" CornerRadius="6"
                             Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
                 </StackPanel>
-                <StackPanel>
-                    <TextBlock Text="Dashboard" FontSize="24" FontWeight="Bold"
-                               Foreground="{DynamicResource TextPrimary}" />
-                    <WrapPanel Orientation="Horizontal">
-                        <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
-                                   Text="Your activity across every workspace you belong to — plus your teammates' public activity."
-                                   Margin="0,0,10,0" />
-                        <Button Command="{Binding ToggleHelpCommand}"
-                                Padding="0" Background="Transparent" BorderThickness="0"
-                                Foreground="{DynamicResource BrandPrimary}"
-                                FontSize="12" Cursor="Hand">
-                            <TextBlock Text="{Binding HelpToggleLabel}" TextDecorations="Underline" />
-                        </Button>
-                    </WrapPanel>
+                <StackPanel Orientation="Horizontal" Spacing="4">
+                    <Button Classes="hometab" Classes.on="{Binding IsOverview}" Content="Overview" Command="{Binding ShowOverviewCommand}" />
+                    <Button Classes="hometab" Classes.on="{Binding !IsOverview}" Content="Activity" Command="{Binding ShowActivityCommand}" />
                 </StackPanel>
+            </DockPanel>
+        </Border>
+
+    <ScrollViewer x:Name="HomeScroll" HorizontalScrollBarVisibility="Disabled">
+    <Panel>
+        <!-- Overview: the guide -->
+        <StackPanel IsVisible="{Binding IsOverview}" MaxWidth="1080" Margin="28,12,28,16" Spacing="14">
+            <StackPanel Spacing="6" HorizontalAlignment="Center" Margin="0,0,0,6">
+                <TextBlock Text="{Binding Guide.Greeting}" FontSize="26" FontWeight="Bold" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{x:Static onb:OnboardingService.Tagline}" FontSize="14" TextWrapping="Wrap"
+                           TextAlignment="Center" MaxWidth="760" HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextSecondary}" />
+            </StackPanel>
+
+            <!-- At a glance: the six stats; each opens Activity -->
+            <ItemsControl ItemsSource="{Binding Glance}" HorizontalAlignment="Center">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:GlanceItem">
+                        <Button Classes="glance" ToolTip.Tip="Open Activity"
+                                Command="{Binding $parent[UserControl].((vm:UserDashboardViewModel)DataContext).ShowActivityCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock Text="{Binding Value}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <views:HomeGuideView DataContext="{Binding Guide}" />
+        </StackPanel>
+
+        <!-- Activity: the report -->
+        <StackPanel IsVisible="{Binding !IsOverview}">
+        <StackPanel Margin="32,14,32,0" Spacing="8">
+            <!-- Wraps at any width (the old WrapPanel kept it on one line and cut it off). -->
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Command="{Binding ToggleHelpCommand}" VerticalAlignment="Top"
+                        Padding="10,0,0,0" Background="Transparent" BorderThickness="0"
+                        Foreground="{DynamicResource BrandPrimary}" FontSize="12" Cursor="Hand">
+                    <TextBlock Text="{Binding HelpToggleLabel}" TextDecorations="Underline" />
+                </Button>
+                <TextBlock FontSize="12.5" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondary}"
+                           Text="Your activity across every workspace you belong to — plus your teammates' public activity." />
             </DockPanel>
 
             <TextBlock Text="{Binding ErrorMessage}"
@@ -49,11 +129,11 @@
                     CornerRadius="8" Padding="16,12" Margin="0,8,0,0">
                 <StackPanel Spacing="10">
                     <Grid ColumnDefinitions="130,*">
-                        <TextBlock Grid.Column="0" Text="Missions" FontWeight="SemiBold"
+                        <TextBlock Grid.Column="0" Text="Workflows" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
-                                   Text="Long-running goals you own across all workspaces. A mission decomposes into team runs and agent runs until the goal is complete." />
+                                   Text="Long-running goals you own across all workspaces. A workflow decomposes into team runs and agent runs until the goal is complete." />
                     </Grid>
                     <Grid ColumnDefinitions="130,*">
                         <TextBlock Grid.Column="0" Text="Team runs" FontWeight="SemiBold"
@@ -81,7 +161,7 @@
                                    Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Top" />
                         <TextBlock Grid.Column="1" TextWrapping="Wrap"
                                    Foreground="{DynamicResource TextSecondary}" FontSize="12"
-                                   Text="Your own items you've made public — missions, runs, and sessions with the 🔓 lock open. These are visible to workspace admins and teammates." />
+                                   Text="Your own items you've made public — workflows, runs, and sessions with the privacy toggle set to public. These are visible to workspace admins and teammates." />
                     </Grid>
                     <Grid ColumnDefinitions="130,*">
                         <TextBlock Grid.Column="0" Text="Claws" FontWeight="SemiBold"
@@ -100,8 +180,8 @@
                         CornerRadius="8" Padding="14,12" Margin="0,0,8,0"
                         ToolTip.Tip="Long-running goals you own.">
                     <StackPanel>
-                        <TextBlock Text="MY MISSIONS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
-                        <TextBlock Text="{Binding OwnMissions}" FontSize="24" FontWeight="SemiBold"
+                        <TextBlock Text="MY WORKFLOWS" FontSize="11" Foreground="{DynamicResource TextSecondary}" />
+                        <TextBlock Text="{Binding OwnWorkflows}" FontSize="24" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                     </StackPanel>
                 </Border>
@@ -207,7 +287,7 @@
                         Padding="12,5" CornerRadius="6"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
             </StackPanel>
-            <ScrollViewer>
+            <Panel>
                 <ItemsControl ItemsSource="{Binding PagedRows}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:UserDashboardRowViewModel">
@@ -228,8 +308,6 @@
                                             CornerRadius="999" Padding="8,2"
                                             HorizontalAlignment="Left" VerticalAlignment="Center">
                                         <StackPanel Orientation="Horizontal" Spacing="4">
-                                            <TextBlock Text="{Binding KindIcon}" FontSize="11"
-                                                       VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding Kind}" FontSize="11"
                                                        Foreground="{DynamicResource TextSecondary}"
                                                        VerticalAlignment="Center" />
@@ -247,8 +325,14 @@
                                             ToolTip.Tip="Click to toggle privacy"
                                             VerticalAlignment="Center"
                                             HorizontalAlignment="Center">
-                                        <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
-                                                   FontSize="11" />
+                                        <Panel>
+                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Private}" Size="12"
+                                                  IsVisible="{Binding IsPrivate}"
+                                                  Foreground="{DynamicResource TextMuted}" />
+                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Public}" Size="12"
+                                                  IsVisible="{Binding !IsPrivate}"
+                                                  Foreground="{DynamicResource TextMuted}" />
+                                        </Panel>
                                     </Button>
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="0,0,12,0">
                                         <TextBlock Text="{Binding Title}" FontWeight="SemiBold"
@@ -280,7 +364,11 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </ScrollViewer>
+            </Panel>
         </DockPanel>
+
+        </StackPanel>
+    </Panel>
+    </ScrollViewer>
     </DockPanel>
 </UserControl>

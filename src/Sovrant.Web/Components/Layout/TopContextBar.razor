@@ -23,7 +23,7 @@
                     <span class="model-tree-provider">@_currentProvider</span>
                 </div>
             </div>
-            <span class="model-tree-chevron @(_treeOpen ? "open" : "")">&#x25BE;</span>
+            <span class="model-tree-chevron @(_treeOpen ? "open" : "")"><SovrantIcon Name="@IconNames.Dropdown" Size="12" /></span>
         </button>
         @if (_treeOpen)
         {
@@ -60,7 +60,7 @@
                         {
                             <button class="model-tree-provider-item model-tree-unconfigured"
                                     @onclick="() => NavigateToProviderSetup(p.Name)">
-                                <span class="model-tree-provider-name">@p.Icon @p.Name</span>
+                                <span class="model-tree-provider-name"><SovrantIcon Name="@p.Icon" Size="14" Class="icon-inline icon-lead" />@p.Name</span>
                                 <span class="model-tree-setup-label">Set up →</span>
                             </button>
                         }
@@ -69,7 +69,7 @@
                 else
                 {
                     <button class="model-tree-back" @onclick="() => _selectedTreeGroup = null">
-                        &#x25C2; Back to providers
+                        <SovrantIcon Name="@IconNames.Back" Size="12" Class="icon-inline icon-lead" />Back to providers
                     </button>
                     <div class="model-tree-step-label">@_selectedTreeGroup.Provider models</div>
                     <div class="model-tree-models">
@@ -95,7 +95,7 @@
 
     <!-- Workspace -->
     <div class="tcb-field">
-        <span class="tcb-icon">&#x1F3E2;</span>
+        <span class="tcb-icon"><SovrantIcon Name="@IconNames.Workspace" Size="14" /></span>
         <select @bind="_selectedWorkspaceId" @bind:after="OnWorkspaceChanged" disabled="@(_workspaces.Count <= 1)">
             @foreach (var w in _workspaces)
             {
@@ -106,7 +106,7 @@
 
     <!-- Project -->
     <div class="tcb-field">
-        <span class="tcb-icon">&#x1F4C1;</span>
+        <span class="tcb-icon"><SovrantIcon Name="@IconNames.Projects" Size="14" /></span>
         <select @bind="_selectedProjectId" @bind:after="OnProjectChanged" disabled="@(_projects.Count == 0)">
             <option value="">@(_projects.Count == 0 ? "No projects" : "(No project)")</option>
             @foreach (var p in _projects)
@@ -125,9 +125,14 @@
                 @ref="_mcpTriggerRef"
                 @onclick="ToggleMcpDropdown"
                 @onclick:stopPropagation="true">
-            <span class="tcb-icon">&#128279;</span>
+            <span class="tcb-icon"><SovrantIcon Name="@IconNames.Integrations" Size="14" /></span>
             <span class="tcb-mcp-summary">@McpSummaryLabel</span>
-            <span class="tcb-mcp-chevron @(_mcpDropdownOpen ? "open" : "")">&#x25BE;</span>
+            @if (WorstUnavailable is { } worst)
+            {
+                @* Phase 139 — a configured server couldn't connect *@
+                <span class="tcb-mcp-warn @(worst.Failure!.Kind == McpFailureKind.Credentials ? "fail" : "warn")" title="@worst.Message"><SovrantIcon Name="@IconNames.Warning" Size="13" /></span>
+            }
+            <span class="tcb-mcp-chevron @(_mcpDropdownOpen ? "open" : "")"><SovrantIcon Name="@IconNames.Dropdown" Size="12" /></span>
         </button>
         @if (_mcpDropdownOpen)
         {
@@ -145,6 +150,11 @@
                                    checked="@isActive"
                                    @onchange="e => ToggleMcpServer(serverName, (bool)(e.Value ?? false))" />
                             <span class="tcb-mcp-item-name">@serverName</span>
+                            @if (McpStatus.Get(serverName) is { Failure: { } itemFailure } itemStatus)
+                            {
+                                <span class="tcb-mcp-warn @(itemFailure.Kind == McpFailureKind.Credentials ? "fail" : "warn")" title="@itemStatus.Message"
+                                      aria-label="@itemStatus.Message"><SovrantIcon Name="@IconNames.Warning" Size="13" /></span>
+                            }
                         </label>
                     }
                 }
@@ -168,9 +178,9 @@
     {
         <div class="tcb-divider"></div>
         <div class="tcb-agent-badge" title="This session is scoped to @ActiveContext.ActiveAgentName">
-            <span class="tcb-icon">&#x1F916;</span>
+            <span class="tcb-icon"><SovrantIcon Name="@IconNames.Agents" Size="14" /></span>
             <span class="tcb-agent-name">@ActiveContext.ActiveAgentName</span>
-            <button class="tcb-agent-clear" title="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true">&#x2715;</button>
+            <button class="tcb-agent-clear" title="Clear agent" aria-label="Clear agent" @onclick="ClearAgent" @onclick:stopPropagation="true"><SovrantIcon Name="@IconNames.Close" Size="12" /></button>
         </div>
     }
 </div>
@@ -190,6 +200,16 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
     [Inject] private IMcpServerStore McpServerStore { get; set; } = default!;
+    [Inject] private McpServerStatusRegistry McpStatus { get; set; } = default!;
+
+    /// <summary>Phase 139 — the most serious unavailable server in this workspace's list (credentials beat network).</summary>
+    private McpServerStatus? WorstUnavailable => _availableMcpServers
+        .Select(n => McpStatus.Get(n))
+        .Where(s => s?.Failure is not null)
+        .OrderBy(s => s!.Failure!.Kind == McpFailureKind.Credentials ? 0 : 1)
+        .FirstOrDefault();
+
+    private void OnMcpStatusChanged(object? sender, McpServerStatusChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
 
     // MCP switcher state
     private List<string> _availableMcpServers = [];
@@ -242,22 +262,17 @@
     }
 
     private List<TreeGroup> _treeGroups = [];
+
+    // True once the active workspace's provider profiles loaded successfully (Phase 138 guard).
+    private bool _profilesLoaded;
     private List<(string Name, string Icon)> _unconfiguredProviders = [];
 
+    // Phase 136: Lucide has no brand logos, so each provider shows its category icon
+    // (hosted vs local) until licensed brand logos are added.
     private static readonly (string Name, string Icon)[] _knownProviders =
-    [
-        ("OpenAI",       "🤖"),
-        ("Anthropic",    "🧠"),
-        ("OpenRouter",   "🔀"),
-        ("DeepSeek",     "🔵"),
-        ("Groq",         "🚀"),
-        ("Mistral",      "🌀"),
-        ("Google",       "🔷"),
-        ("Together AI",  "🤝"),
-        ("Ollama",       "🦙"),
-        ("LM Studio",    "💻"),
-        ("Azure OpenAI", "☁️"),
-    ];
+        new[] { "OpenAI", "Anthropic", "OpenRouter", "DeepSeek", "Groq", "Mistral", "Google", "Together AI", "Ollama", "LM Studio", "Azure OpenAI" }
+            .Select(n => (n, IconNames.ForProvider(n)))
+            .ToArray();
 
     private static readonly Dictionary<string, string[]> StaticProviderModels = new(StringComparer.Ordinal)
     {
@@ -281,6 +296,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        McpStatus.Changed += OnMcpStatusChanged;
         await InferProviderAsync();
         await LoadProviderProfilesAsync();
         await ApplyDisplayStateAsync();
@@ -415,6 +431,18 @@
             ? _providerProfiles.FirstOrDefault(p => p.ProfileId == savedProfileId)
             : null;
 
+        // Phase 138: a saved profile that isn't enabled for this workspace is switched off for
+        // the running process (so it's never contacted here); it comes back on when it's
+        // available again. Only once the workspace's profiles actually loaded.
+        if (_profilesLoaded)
+        {
+            await Sovrant.Runtime.Providers.ActiveProviderGuard.ReconcileAsync(
+                Config, savedProfileId,
+                matched is null ? null : Sovrant.Runtime.Providers.ActiveProviderGuard.AvailableProfile.From(matched.CredentialId, matched.BaseUrl, matched.MaxTokens),
+                savedModel, Credentials,
+                (key, url) => { AuthProvider.ApiKey = key; AuthProvider.BaseUrl = url; });
+        }
+
         if (matched is null)
         {
             _currentModel = "No model";
@@ -439,6 +467,7 @@
     {
         _providerProfiles = [];
         _treeGroups = [];
+        _profilesLoaded = false;
         try
         {
             var rows = await ProfileStore.ListUserAndWorkspaceAsync(
@@ -457,6 +486,7 @@
                     IsWorkspaceProfile: row.IsAdminManaged));
             }
             _providerProfiles = list;
+            _profilesLoaded = true;
             BuildTreeGroups();
         }
         catch { /* best effort */ }
@@ -732,6 +762,7 @@
 
     public void Dispose()
     {
+        McpStatus.Changed -= OnMcpStatusChanged;
         ActiveContext.OnChanged -= OnActiveContextChanged;
         ActiveContext.OnDataChanged -= OnDataChanged;
         if (_dismissBindingId != 0)

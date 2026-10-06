@@ -33,7 +33,7 @@
 | 13 | McpServers | `SovrantConfig.cs` (read-only dict) | B | User-managed entries — see Open Q#1 |
 | 14 | LspServers | `SovrantConfig.cs` (read-only dict) | B | User-managed language server entries |
 | **CredentialConfig** | | | | |
-| 15 | LlmApiKey | `CredentialConfig.cs`, `LLM_API_KEY` > `OPENAI_API_KEY` > `PROVIDER_API_KEY` | C | Secret |
+| 15 | LlmApiKey | `EnvCredentialSeeder.cs` (Phase 144), `LLM_API_KEY` > `OPENAI_API_KEY` | C | Secret |
 | 16 | LlmBaseUrl | `CredentialConfig.cs`, `LLM_BASE_URL` > `OPENAI_BASE_URL` | B | Non-secret endpoint |
 | 17 | ProviderApiKey | `CredentialConfig.cs`, `PROVIDER_API_KEY` | C | Secret |
 | 18 | ProviderBaseUrl | `CredentialConfig.cs`, `PROVIDER_BASE_URL` | B | Non-secret endpoint |
@@ -232,7 +232,7 @@ environment take precedence (so CI secrets always win). Layers (highest preceden
 ### Example (`.env.example` ships in the repo root)
 
 ```dotenv
-LLM_API_KEY=
+# LLM_API_KEY=   (imported into the credential store on first boot — Phase 144)
 
 # Storage paths — uncomment to override defaults
 # SOVRANT_DB_PATH=~/.sovrant/data/sovrant.db
@@ -251,15 +251,17 @@ framework. TLS is disabled by default; for development use
 
 ## Bucket-C Credential Store ✅ DONE
 
-All five Bucket-C secrets now flow through the encrypted `ICredentialStore` with
-runtime override via env var. `sovrant auth set <name>` writes the value through
-`AesGcmCredentialStore`; consumers read it back via the env > store > snapshot
+All Bucket-C secrets flow through the encrypted `ICredentialStore`. Env variables
+are not read at request time: since Phase 144, `EnvCredentialSeeder` imports them
+into the store at start-up (first boot only, or every start with
+`SOVRANT_ENV_KEYS_OVERRIDE=true`). `sovrant auth set <name>` writes the value through
+`AesGcmCredentialStore`; consumers read it back via the store > snapshot
 chain so a `auth set llm <new-key>` rotation takes effect on the next request
 without restarting the process.
 
-| Row | Key | Store key (`CredentialKeys`) | CLI name | Env override(s) | Consumer |
+| Row | Key | Store key (`CredentialKeys`) | CLI name | Env seed (Phase 144) | Consumer |
 |-----|-----|------------------------------|----------|-----------------|----------|
-| 15  | `LlmApiKey`        | `llm.api_key`               | `llm`        | `LLM_API_KEY` > `OPENAI_API_KEY` > `PROVIDER_API_KEY` | `CredentialStoreAuthProvider` (primary `IAuthProvider`) |
+| 15  | `LlmApiKey`        | `llm.api_key`               | `llm`        | `LLM_API_KEY` > `OPENAI_API_KEY` | `CredentialStoreAuthProvider` (primary `IAuthProvider`) |
 | 17  | `ProviderApiKey`   | `provider.api_key`          | `provider`   | `PROVIDER_API_KEY`     | `ProviderApiProvider.BuildRequestAsync` (per-request `x-api-key`) |
 | 21  | `BraveApiKey`      | `websearch.brave_api_key`   | `brave`      | `BRAVE_API_KEY`        | `WebSearchTool` + `WebSearchCommand` (status display) |
 | 22  | `FirecrawlApiKey`  | `websearch.firecrawl_api_key` | `firecrawl` | `FIRECRAWL_API_KEY`    | `WebSearchTool` + `WebSearchCommand` (status display) |

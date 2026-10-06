@@ -56,7 +56,7 @@ public sealed class HeuristicOrchestrationRouterTests
     }
 
     [Fact]
-    public void EscalationGuard_TrivialTask_NeverSwarmOrMission()
+    public void EscalationGuard_TrivialTask_NeverSwarmOrWorkflow()
     {
         var plan = new RuntimePlan("p1", 1, "Quick fix",
         [
@@ -70,7 +70,7 @@ public sealed class HeuristicOrchestrationRouterTests
     }
 
     [Fact]
-    public void ComplexGoalWithEscalation_RecommendsMission()
+    public void ComplexGoalWithEscalation_RecommendsWorkflow()
     {
         var steps = new[]
         {
@@ -90,6 +90,6 @@ public sealed class HeuristicOrchestrationRouterTests
 
         var rec = _router.Recommend(plan);
 
-        Assert.Equal(OrchestrationMode.Mission, rec.Mode);
+        Assert.Equal(OrchestrationMode.Workflow, rec.Mode);
     }
 }

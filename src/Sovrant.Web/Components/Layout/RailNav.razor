@@ -1,30 +1,151 @@
 @*
-    Phase 69 — horizontal group-icon row that lives at the top of the
-    single secondary sidebar. Settings + avatar are rendered separately
-    in the sidebar footer to avoid duplicating them at the bottom.
+    Phase 135 — collapsed (icon-only) rail. Groups with several pages open a
+    flyout listing them; Chat's flyout lists recent conversations plus "Show all
+    conversations" (expands the rail). Flyouts open on hover, click, or
+    Enter/Space and close on Esc or when the pointer leaves — never hover-only.
+    The expanded rail uses AppNav instead; both read AppNavModel.
 *@
+@using Sovrant.Runtime.Session
 @using Sovrant.Web.Services
+@inject NavigationManager Nav
 @inject WebSessionService Session
+@inject ActiveContextService ActiveContext
+@inject IServiceProvider Services
+@implements IDisposable
 
 <div class="rail-icons-row">
-    <button class="rail-icon @(Selected == "dashboard" ? "active" : "")"
-            title="User Dashboard" @onclick='() => OnSelect.InvokeAsync("dashboard")'>&#x1F4CA;</button>
-    <button class="rail-icon @(Selected == "chat" ? "active" : "")"
-            title="Chat" @onclick='() => OnSelect.InvokeAsync("chat")'>&#x1F4AC;</button>
-    <button class="rail-icon @(Selected == "knowledge" ? "active" : "")"
-            title="Knowledge" @onclick='() => OnSelect.InvokeAsync("knowledge")'>&#x1F4DA;</button>
-    <button class="rail-icon @(Selected == "agents" ? "active" : "")"
-            title="Agents" @onclick='() => OnSelect.InvokeAsync("agents")'>&#x1F916;</button>
-    <button class="rail-icon @(Selected == "workspace" ? "active" : "")"
-            title="Projects" @onclick='() => OnSelect.InvokeAsync("workspace")'>&#x1F5C2;&#xFE0F;</button>
-    @if (Session.IsAdmin)
+    @foreach (var group in AppNavModel.Groups.Where(g => !g.AdminOnly || Session.IsAdmin))
     {
-        <button class="rail-icon @(Selected == "admin" ? "active" : "")"
-                title="Admin" @onclick='() => OnSelect.InvokeAsync("admin")'>&#x1F511;</button>
+        var hasFlyout = group.IsCollapsible || group.Key == "chat";
+        var open = _flyout == group.Key;
+        <div class="rail-icon-wrap"
+             @onmouseenter="() => Hover(group, hasFlyout)"
+             @onmouseleave="() => Leave(group.Key)"
+             @onkeydown="OnKey">
+            <button class="rail-icon @(group.Key == CurrentGroupKey ? "active" : "") @(open ? "flyopen" : "")"
+                    title="@group.Label" aria-label="@group.Label"
+                    aria-haspopup="@(hasFlyout ? "menu" : null)" aria-expanded="@(hasFlyout ? (open ? "true" : "false") : null)"
+                    @onclick="() => Click(group, hasFlyout)">
+                <span class="rail-icon-glyph"><SovrantIcon Name="@group.IconName" /></span>
+            </button>
+            @if (open)
+            {
+                <div class="rail-flyout" role="menu" aria-label="@group.Label">
+                    <div class="rail-flyout-head">@group.Label</div>
+                    @if (group.Key == "chat")
+                    {
+                        @foreach (var c in _recent)
+                        {
+                            <button class="rail-flyout-item" role="menuitem" @onclick="() => OpenConversation(c.SessionId)">@SessionFolderTree.DisplayTitle(c)</button>
+                        }
+                        @if (_recent.Count == 0)
+                        {
+                            <div class="rail-flyout-empty">No conversations yet</div>
+                        }
+                        <div class="rail-flyout-sep"></div>
+                        <button class="rail-flyout-item rail-flyout-all" role="menuitem" @onclick="ShowAll">Show all conversations</button>
+                    }
+                    else
+                    {
+                        @foreach (var item in group.Items)
+                        {
+                            @if (item.Section is not null)
+                            {
+                                <div class="rail-flyout-section">@item.Section</div>
+                            }
+                            <button class="rail-flyout-item @(AppNavModel.IsActive(item.Href, Path) ? "active" : "")" role="menuitem"
+                                    @onclick="() => Go(item.Href)">@item.Label</button>
+                        }
+                    }
+                </div>
+            }
+        </div>
     }
 </div>
 
 @code {
-    [Parameter] public string Selected { get; set; } = "chat";
-    [Parameter] public EventCallback<string> OnSelect { get; set; }
+    /// <summary>"Show all conversations" — the layout expands the rail.</summary>
+    [Parameter] public EventCallback OnExpand { get; set; }
+
+    private string? _flyout;
+    private IReadOnlyList<SessionListItem> _recent = [];
+
+    private string Path => "/" + Nav.ToBaseRelativePath(Nav.Uri);
+    private string? CurrentGroupKey => AppNavModel.GroupForPath(Path)?.Key;
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    {
+        _flyout = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task Hover(AppNavGroup group, bool hasFlyout)
+    {
+        if (hasFlyout)
+            await OpenFlyoutAsync(group.Key);
+    }
+
+    private void Leave(string key)
+    {
+        if (_flyout == key)
+            _flyout = null;
+    }
+
+    private async Task Click(AppNavGroup group, bool hasFlyout)
+    {
+        if (!hasFlyout)
+        {
+            Nav.NavigateTo(group.Href);
+            return;
+        }
+        if (_flyout == group.Key)
+            _flyout = null;
+        else
+            await OpenFlyoutAsync(group.Key);
+    }
+
+    private void OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+            _flyout = null;
+    }
+
+    private async Task OpenFlyoutAsync(string key)
+    {
+        _flyout = key;
+        if (key != "chat")
+            return;
+        try
+        {
+            var snapshot = await SessionSidebarService.From(Services).LoadAsync(Sovrant.Web.Program.SovrantUserId);
+            _recent = snapshot.Sessions.OrderByDescending(s => s.UpdatedAt).Take(5).ToList();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _recent = [];
+        }
+    }
+
+    private void Go(string href)
+    {
+        _flyout = null;
+        Nav.NavigateTo(href);
+    }
+
+    private void OpenConversation(string sessionId)
+    {
+        _flyout = null;
+        ActiveContext.ResumeSession(sessionId);
+        Nav.NavigateTo("/");
+    }
+
+    private async Task ShowAll()
+    {
+        _flyout = null;
+        await OnExpand.InvokeAsync();
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
 }

@@ -1,9 +1,11 @@
+using Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Api.Capabilities;
 
 namespace Sovrant.Api.Tests.Capabilities;
 
 /// <summary>Tests for <see cref="LiveModelMetadataFetcher"/>.</summary>
+[Collection(Sovrant.Api.Tests.ProcessEnvironmentCollection.Name)]
 public sealed class LiveModelMetadataFetcherTests
 {
     private readonly ModelCapabilityRegistry _registry = new(NullLogger<ModelCapabilityRegistry>.Instance);

@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:conv="using:Sovrant.Desktop.Converters"
              x:Class="Sovrant.Desktop.Views.TopContextBarView"
@@ -21,7 +23,7 @@
                         BorderBrush="{DynamicResource SurfaceBorder}"
                         BorderThickness="1">
                     <DockPanel>
-                        <TextBlock DockPanel.Dock="Right" Text="▾" FontSize="12"
+                        <ctrl:SovrantIcon DockPanel.Dock="Right" IconName="{x:Static ui:IconNames.Dropdown}" Size="12"
                                    Foreground="{DynamicResource TextMuted}"
                                    VerticalAlignment="Center" Margin="4,0,0,0" />
                         <StackPanel Orientation="Horizontal" Spacing="6">
@@ -114,8 +116,7 @@
                                                                    Foreground="{DynamicResource BrandPrimary}"
                                                                    VerticalAlignment="Center" />
                                                         <StackPanel Orientation="Horizontal" Spacing="6">
-                                                            <TextBlock Text="{Binding Icon}" FontSize="12"
-                                                                       VerticalAlignment="Center" />
+                                                            <ctrl:SovrantIcon IconName="{Binding Icon}" Size="13" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" />
                                                             <TextBlock Text="{Binding Name}" FontSize="12"
                                                                        FontWeight="Normal"
                                                                        VerticalAlignment="Center" />
@@ -135,7 +136,10 @@
                                         Background="Transparent"
                                         Foreground="{DynamicResource TextSecondary}"
                                         FontSize="11">
-                                    <TextBlock Text="◂ Back to providers" />
+                                    <StackPanel Orientation="Horizontal" Spacing="4">
+                                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Back}" Size="12" VerticalAlignment="Center" />
+                                        <TextBlock Text="Back to providers" VerticalAlignment="Center" />
+                                    </StackPanel>
                                 </Button>
                                 <TextBlock Text="{Binding SelectedTreeGroup.Provider, StringFormat='{}{0} models'}"
                                            FontSize="9" FontWeight="SemiBold"
@@ -188,8 +192,7 @@
 
             <!-- Workspace -->
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <TextBlock Text="🏢" FontSize="12" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextMuted}" />
+                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Workspace}" Size="14" VerticalAlignment="Center" Foreground="{DynamicResource TextMuted}" />
                 <ComboBox ItemsSource="{Binding ActiveContext.Workspaces}"
                           SelectedItem="{Binding ActiveContext.SelectedWorkspace}"
                           DisplayMemberBinding="{Binding Name}"
@@ -201,8 +204,7 @@
 
             <!-- Project -->
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <TextBlock Text="📁" FontSize="12" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextMuted}" />
+                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Projects}" Size="14" VerticalAlignment="Center" Foreground="{DynamicResource TextMuted}" />
                 <ComboBox ItemsSource="{Binding ActiveContext.ProjectChoices}"
                           SelectedItem="{Binding ActiveContext.SelectedProjectChoice}"
                           DisplayMemberBinding="{Binding Name}"
@@ -219,8 +221,7 @@
 
             <!-- Integrations / MCP multi-select — styled to match workspace/project switchers -->
             <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                <TextBlock Text="🔌" FontSize="12" VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextMuted}" />
+                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Integrations}" Size="14" VerticalAlignment="Center" Foreground="{DynamicResource TextMuted}" />
                 <Panel MinWidth="140">
                     <Button Command="{Binding ToggleMcpDropdownCommand}"
                             HorizontalAlignment="Stretch"
@@ -229,9 +230,18 @@
                             BorderBrush="{DynamicResource SurfaceBorder}"
                             BorderThickness="1">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Right" Text="▾" FontSize="11"
+                            <ctrl:SovrantIcon DockPanel.Dock="Right" IconName="{x:Static ui:IconNames.Dropdown}" Size="12"
                                        Foreground="{DynamicResource TextMuted}"
                                        VerticalAlignment="Center" Margin="6,0,0,0" />
+                            <!-- Phase 139 — a configured server couldn't connect -->
+                            <Panel DockPanel.Dock="Right" Margin="6,0,0,0" VerticalAlignment="Center"
+                                   IsVisible="{Binding ActiveContext.HasMcpWarning}"
+                                   ToolTip.Tip="{Binding ActiveContext.McpWarningText}">
+                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="13" Foreground="{DynamicResource StatusWarn}"
+                                                  IsVisible="{Binding ActiveContext.McpWarningIsNetwork}" />
+                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="13" Foreground="{DynamicResource StatusFail}"
+                                                  IsVisible="{Binding ActiveContext.McpWarningIsCredential}" />
+                            </Panel>
                             <TextBlock Text="{Binding McpSummaryLabel}"
                                        FontSize="12"
                                        Foreground="{DynamicResource TextPrimary}"
@@ -273,6 +283,15 @@
                                                               IsChecked="{Binding IsActive, Mode=TwoWay}"
                                                               VerticalAlignment="Center"
                                                               Margin="0,0,8,0" />
+                                                    <!-- Phase 139 — unavailable: warning icon, reason on hover -->
+                                                    <Panel DockPanel.Dock="Right" Margin="8,0,2,0" VerticalAlignment="Center"
+                                                           Background="Transparent"
+                                                           IsVisible="{Binding HasWarning}" ToolTip.Tip="{Binding WarningText}">
+                                                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="13" Foreground="{DynamicResource StatusWarn}"
+                                                                          IsVisible="{Binding IsNetworkWarning}" />
+                                                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="13" Foreground="{DynamicResource StatusFail}"
+                                                                          IsVisible="{Binding IsCredentialWarning}" />
+                                                    </Panel>
                                                     <TextBlock Text="{Binding Name}"
                                                                FontSize="12"
                                                                Foreground="{DynamicResource TextPrimary}"
@@ -324,7 +343,7 @@
                     ToolTip.Tip="{Binding ActiveContext.ActiveAgentName,
                                          StringFormat='Session scoped to agent: {0}'}">
                 <StackPanel Orientation="Horizontal" Spacing="5">
-                    <TextBlock Text="🤖" FontSize="11" VerticalAlignment="Center" />
+                    <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Agents}" Size="13" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" />
                     <TextBlock Text="{Binding ActiveContext.ActiveAgentName}"
                                FontSize="12" FontWeight="Medium"
                                Foreground="{DynamicResource TextPrimary}"
@@ -337,9 +356,7 @@
                             Padding="2,0"
                             VerticalAlignment="Center"
                             ToolTip.Tip="Clear agent">
-                        <TextBlock Text="✕"
-                                   FontSize="9"
-                                   Foreground="{DynamicResource TextMuted}" />
+                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Close}" Size="10" Foreground="{DynamicResource TextMuted}" />
                     </Button>
                 </StackPanel>
             </Border>

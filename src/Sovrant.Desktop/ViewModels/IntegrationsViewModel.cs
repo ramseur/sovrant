@@ -36,6 +36,71 @@ public partial class IntegrationsViewModel : ViewModelBase
     [ObservableProperty]
     private McpServerItem? _selectedServer;
 
+    // Phase 139 — live connection status (background reconnects) while the page is shown.
+    private readonly McpServerStatusRegistry? _mcpStatus;
+    private Avalonia.Threading.DispatcherTimer? _retryTick;
+
+    /// <summary>Called by the view when it's shown: follow status changes and tick "Next attempt in …".</summary>
+    public void StartWatchingStatus()
+    {
+        if (_mcpStatus is null || _retryTick is not null) return;
+        _mcpStatus.Changed += OnMcpStatusChanged;
+        _retryTick = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        _retryTick.Tick += (_, _) => SelectedServer?.RefreshRetryNote();
+        _retryTick.Start();
+    }
+
+    /// <summary>Called by the view when it's hidden.</summary>
+    public void StopWatchingStatus()
+    {
+        if (_mcpStatus is not null) _mcpStatus.Changed -= OnMcpStatusChanged;
+        _retryTick?.Stop();
+        _retryTick = null;
+    }
+
+    private void OnMcpStatusChanged(object? sender, McpServerStatusChangedEventArgs e) =>
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => ApplyStatus(e.Name));
+
+    /// <summary>Updates one server row in place (keeps the selection) from the registries.</summary>
+    private void ApplyStatus(string name)
+    {
+        var item = _allServers.FirstOrDefault(s => s.Name == name);
+        if (item is null) return;
+        item.Status = _mcpStatus?.Get(name);
+        item.IsConnected = _clientRegistry.Clients.ContainsKey(name);
+        var tools = _clientRegistry.ToolToServer.Where(kv => kv.Value == name).Select(kv => kv.Key)
+            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+        item.ToolCount = tools.Count;
+        item.ToolNames.Clear();
+        foreach (var t in tools) item.ToolNames.Add(t);
+        item.Markdown = BuildServerMarkdown(item);
+        if (ReferenceEquals(item, SelectedServer))
+            OnPropertyChanged(nameof(SelectedServer));
+        if (_activeContext is not null)
+            _ = _activeContext.RefreshMcpServersAsync();
+    }
+
+    /// <summary>Retry now / Retry: connect immediately with the stored config (never throws).</summary>
+    [RelayCommand]
+    private async Task RetryServerAsync(McpServerItem? server)
+    {
+        server ??= SelectedServer;
+        if (server is null) return;
+        var stored = await _serverStore.GetAllAsync().ConfigureAwait(true);
+        if (!stored.TryGetValue(server.Name, out var config)) return;
+        server.IsRetrying = true;
+        try
+        {
+            var result = await _registrar.RetryAsync(server.Name, config).ConfigureAwait(true);
+            StatusMessage = result.State == McpServerState.Connected ? $"Connected to '{server.Name}'." : string.Empty;
+        }
+        finally
+        {
+            server.IsRetrying = false;
+        }
+        ApplyStatus(server.Name);
+    }
+
     [ObservableProperty]
     private int _totalCount;
 
@@ -134,8 +199,10 @@ public partial class IntegrationsViewModel : ViewModelBase
         IWorkspaceService workspaceSvc,
         IPrincipalAccessor principal,
         ActiveContextViewModel? activeContext = null,
-        IWorkspaceSettingsStore? wsSettings = null)
+        IWorkspaceSettingsStore? wsSettings = null,
+        McpServerStatusRegistry? mcpStatus = null)
     {
+        _mcpStatus = mcpStatus;
         _serverStore = serverStore;
         _clientRegistry = clientRegistry;
         _registrar = registrar;
@@ -393,7 +460,8 @@ public partial class IntegrationsViewModel : ViewModelBase
         }
         catch (Exception ex)
         {
-            StatusMessage = $"Failed to connect to '{name}': {ex.Message}";
+            // Phase 139: the friendly sentence, not the raw exception (that goes to the log).
+            StatusMessage = _mcpStatus?.Get(name)?.Message is { Length: > 0 } friendly ? friendly : $"Failed to connect to '{name}': {ex.Message}";
             await LoadServersAsync().ConfigureAwait(true);
         }
         if (_activeContext is not null)
@@ -539,6 +607,7 @@ public partial class IntegrationsViewModel : ViewModelBase
         try
         {
             await _serverStore.DeleteAsync(server.Name).ConfigureAwait(true);
+            _registrar.ForgetServer(server.Name);
             _allServers.RemoveAll(s => s.Name == server.Name);
             TotalCount = _allServers.Count;
             if (SelectedServer == server) SelectedServer = null;
@@ -572,6 +641,7 @@ public partial class IntegrationsViewModel : ViewModelBase
                 Transport = server.Url is not null ? "http" : "stdio",
                 HasOAuth = server.OAuthConfig is not null,
                 IsConnected = isConnected,
+                Status = _mcpStatus?.Get(name),
                 ToolCount = tools.Count,
                 EnvVars = server.Env.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal),
                 Headers = server.Headers.ToDictionary(kvp => kvp.Key, kvp => kvp.Value, StringComparer.Ordinal),
@@ -752,7 +822,7 @@ public partial class IntegrationsViewModel : ViewModelBase
         var sb = new StringBuilder();
         sb.AppendLine(CultureInfo.InvariantCulture, $"# {server.Name}");
         sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"**Status:** {(server.IsConnected ? "Connected" : "Not Connected")}");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"**Status:** {(server.IsConnected ? "Connected" : server.IsUnavailable ? "Unavailable" : "Not Connected")}");
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"**Transport:** {server.Transport}");
         sb.AppendLine();
@@ -878,6 +948,24 @@ public partial class McpServerItem : ViewModelBase
     [ObservableProperty] private int _toolCount;
     [ObservableProperty] private bool _envEditing;
     [ObservableProperty] private string _envStatus = string.Empty;
+
+    // Phase 139 — why it isn't connected and what happens next.
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUnavailable), nameof(IsCredentialFailure), nameof(IsNetworkFailure),
+        nameof(FailureReason), nameof(FailureNextStep), nameof(RetryNote), nameof(RowStatus))]
+    private McpServerStatus? _status;
+
+    [ObservableProperty] private bool _isRetrying;
+
+    public bool IsUnavailable => Status?.Failure is not null;
+    public bool IsCredentialFailure => Status?.Failure?.Kind == McpFailureKind.Credentials;
+    public bool IsNetworkFailure => IsUnavailable && !IsCredentialFailure;
+    public string FailureReason => Status?.Failure?.Reason ?? string.Empty;
+    public string FailureNextStep => Status?.NextStep ?? string.Empty;
+    public string RetryNote => Status?.RetryNote(DateTimeOffset.UtcNow) ?? string.Empty;
+    public string RowStatus => Status?.Failure is { } f ? $"Unavailable · {f.ShortLabel}" : string.Empty;
+
+    public void RefreshRetryNote() => OnPropertyChanged(nameof(RetryNote));
 
     public ObservableCollection<string> ToolNames { get; } = [];
     public ObservableCollection<TrustRuleViewModel> TrustRules { get; } = [];

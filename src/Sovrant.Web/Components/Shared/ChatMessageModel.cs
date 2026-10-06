@@ -188,7 +188,7 @@ public sealed class ChatMessageModel
         "TeamCreate" => "Create Team",
         "TeamRun" => "Run Team",
         "TeamDelegate" => "Delegate to Team",
-        "Mission" => "Mission",
+        "Workflow" => "Workflow",
         _ => toolName,
     };
 
@@ -209,7 +209,7 @@ public sealed class ChatMessageModel
         "TeamCreate" => "Creating team...",
         "TeamRun" => "Running team...",
         "TeamDelegate" => "Delegating task...",
-        "Mission" => "Running mission...",
+        "Workflow" => "Running workflow...",
         _ => $"Running {toolName}...",
     };
 

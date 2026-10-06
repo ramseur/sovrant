@@ -28,7 +28,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _errorMessage = string.Empty;
-    [ObservableProperty] private int _activeMissions;
+    [ObservableProperty] private int _activeWorkflows;
     [ObservableProperty] private int _activeTeamRuns;
     [ObservableProperty] private int _activeAgentRuns;
     [ObservableProperty] private int _activeSessions;
@@ -227,7 +227,7 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 if (IsFocused) return;
-                ActiveMissions = state.ActiveMissions;
+                ActiveWorkflows = state.ActiveWorkflows;
                 ActiveTeamRuns = state.ActiveTeamRuns;
                 ActiveAgentRuns = state.ActiveAgentRuns;
                 ActiveSessions = state.ActiveSessions;
@@ -239,7 +239,6 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
                     Rows.Add(new CommandCenterRowViewModel
                     {
                         Kind = r.Kind,
-                        KindIcon = KindIcon(r.Kind),
                         Id = r.Id,
                         Title = r.Title,
                         Status = r.Status,
@@ -271,16 +270,6 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
             IsLoading = false;
         }
     }
-
-    private static string KindIcon(string kind) => kind switch
-    {
-        "mission" => "\U0001F3AF",
-        "team-run" => "\U0001F465",
-        "agent-run" => "\U0001F916",
-        "session" => "\U0001F4AC",
-        "claw" => "\U0001F517",
-        _ => "•",
-    };
 
     private static string FormatRelative(DateTimeOffset when)
     {
@@ -336,7 +325,6 @@ public sealed partial class CommandCenterViewModel : ViewModelBase, IDisposable
 public partial class CommandCenterRowViewModel : ViewModelBase
 {
     [ObservableProperty] private string _kind = string.Empty;
-    [ObservableProperty] private string _kindIcon = string.Empty;
     [ObservableProperty] private string _id = string.Empty;
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _status = string.Empty;

@@ -62,11 +62,6 @@ internal sealed class CodeGrader : IGrader
             await File.WriteAllTextAsync(tempFile, evalOutput, ct).ConfigureAwait(false);
             var expandedCommand = command.Replace("{output}", tempFile, StringComparison.OrdinalIgnoreCase);
 
-            var shellName = OperatingSystem.IsWindows() ? "cmd" : "sh";
-            var shellArgs = OperatingSystem.IsWindows()
-                ? $"/c {expandedCommand}"
-                : $"-c {expandedCommand}";
-
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(DefaultTimeoutMs);
 
@@ -75,13 +70,23 @@ internal sealed class CodeGrader : IGrader
 
             var psi = new ProcessStartInfo
             {
-                FileName = shellName,
-                Arguments = shellArgs,
+                FileName = OperatingSystem.IsWindows() ? "cmd" : "sh",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            if (OperatingSystem.IsWindows())
+            {
+                psi.Arguments = $"/c {expandedCommand}";
+            }
+            else
+            {
+                // ArgumentList keeps the whole command as sh's single -c script argument;
+                // a flat Arguments string would split it on whitespace.
+                psi.ArgumentList.Add("-c");
+                psi.ArgumentList.Add(expandedCommand);
+            }
 
             using var process = new Process { StartInfo = psi };
 

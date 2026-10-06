@@ -135,7 +135,7 @@ Per-workspace configuration (session TTL, max sessions, etc.) is stored in a `wo
 
 ## Record-Level Privacy (Phase 98)
 
-Individual missions, agent runs, and sessions carry an `is_private` boolean (V030 migration, default FALSE). Privacy is enforced server-side — no client-side bypass is possible.
+Individual workflows, agent runs, and sessions carry an `is_private` boolean (V030 migration, default FALSE). Privacy is enforced server-side — no client-side bypass is possible.
 
 | Surface | Private record behaviour |
 |---|---|
@@ -169,7 +169,7 @@ Tools are classified into four tiers:
 | Safe | Read, Glob, Grep, WebFetch, WebSearch | Always allowed |
 | Moderate | WriteFile, EditFile, TaskCreate, MCP* | Allowed in AcceptEdits+ |
 | Dangerous | Bash, PowerShell, REPL | Requires confirmation |
-| Escalation | Agent, Swarm, TeamCreate, Mission | Requires confirmation |
+| Escalation | Agent, Swarm, TeamCreate, Workflow | Requires confirmation |
 
 Unknown tools default to Moderate.
 

@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              x:Class="Sovrant.Desktop.Views.MemoryView"
              x:DataType="vm:MemoryViewModel"
@@ -306,7 +308,7 @@
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                             <CheckBox IsChecked="{Binding NewMemoryIsPrivate}" FontSize="12"
                                       Foreground="{DynamicResource TextSecondary}"
-                                      Content="🔒 Private (only injected for me)" />
+                                      Content="Private (only injected for me)" />
                             <Button Content="Save"
                                     Command="{Binding AddWorkspaceMemoryCommand}"
                                     IsEnabled="{Binding NewMemoryText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
@@ -343,10 +345,12 @@
                                                 <TextBlock Text="{Binding Layer}" FontSize="10"
                                                            Foreground="{DynamicResource TextSecondary}" />
                                             </Border>
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
-                                                       Text="🔒" IsVisible="{Binding IsPrivate}" />
-                                            <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
-                                                       Text="🔓" IsVisible="{Binding !IsPrivate}" />
+                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Private}" Size="11"
+                                                  IsVisible="{Binding IsPrivate}"
+                                                  Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Public}" Size="11"
+                                                  IsVisible="{Binding !IsPrivate}"
+                                                  Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                             <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:MMM d, yyyy}'}"
                                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                                         </StackPanel>

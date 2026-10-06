@@ -11,6 +11,8 @@ using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
 
+using Sovrant.Api.Ui;
+
 namespace Sovrant.Desktop.Controls;
 
 /// <summary>
@@ -358,7 +360,13 @@ public class SafeMarkdownPresenter : ContentControl
                 foreach (var child in link)
                     if (child is LiteralInline lt) textSb.Append(lt.Content.ToString());
                 var displayText = textSb.Length > 0 ? textSb.ToString() : url;
-                if (link.IsImage) displayText = "🖼 " + displayText;
+                if (link.IsImage)
+                {
+                    // Phase 136: an image icon instead of an emoji prefix.
+                    inlines.Add(new Avalonia.Controls.Documents.InlineUIContainer(
+                        new SovrantIcon { IconName = IconNames.Image, Size = 13, Margin = new Thickness(0, 0, 4, 0) })
+                    { BaselineAlignment = BaselineAlignment.Center });
+                }
                 inlines.Add(MakeLinkInline(displayText, url));
                 break;
             }

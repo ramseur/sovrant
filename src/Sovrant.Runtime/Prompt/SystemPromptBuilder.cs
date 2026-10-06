@@ -135,10 +135,10 @@ public sealed class SystemPromptBuilder
                     "authentication module\" or \"add internationalization to all user-facing strings\". " +
                     "The swarm pays an LLM decomposition cost up front; do not use it for tasks " +
                     "you can decompose yourself.\n\n" +
-                    "5. MISSION (Mission tool): Create a mission for long-lived goals that span " +
+                    "5. WORKFLOW (Workflow tool): Create a workflow for long-lived goals that span " +
                     "multiple engine runs and may need re-planning or human approval — e.g. " +
                     "\"migrate the database from Postgres to SQLite\" or \"implement the billing system\". " +
-                    "Missions track progress with an event journal and acceptance gates.\n\n" +
+                    "Workflows track progress with an event journal and acceptance gates.\n\n" +
                     "Escalate only when the lower level genuinely cannot handle it. " +
                     "A 3-file change is solo work, not a swarm. A focused code review is a " +
                     "sub-agent, not a team. Match the tool to the actual complexity.");
@@ -153,7 +153,7 @@ public sealed class SystemPromptBuilder
     /// indicating the orchestration strategy section should be included.
     /// </summary>
     private static bool HasOrchestrationTools(IReadOnlyList<ToolDefinition> tools) =>
-        tools.Any(t => t.Name is "Agent" or "Swarm" or "TeamCreate" or "TeamRun" or "Mission");
+        tools.Any(t => t.Name is "Agent" or "Swarm" or "TeamCreate" or "TeamRun" or "Workflow");
 
     private static bool HasArtifactTool(IReadOnlyList<ToolDefinition> tools) =>
         tools.Any(t => t.Name == "Artifact");

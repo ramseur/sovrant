@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Users;
@@ -11,12 +11,12 @@ namespace Sovrant.Runtime.CommandCenter;
 /// <summary>
 /// Phase 90 / Phase 89 MVP — read-only aggregator that flattens
 /// "what is the engine doing right now?" across four sources:
-/// missions, team runs, agent runs, and chat sessions.
+/// workflows, team runs, agent runs, and chat sessions.
 /// Pure-read; never mutates state. The cockpit polls this every ~2s.
 /// </summary>
 public sealed class CommandCenterAggregator
 {
-    private readonly IMissionStore _missions;
+    private readonly IWorkflowStore _missions;
     private readonly IAgentRunStore _runs;
     private readonly ISessionStore _sessions;
     private readonly IClawConnectionMonitor _claws;
@@ -24,14 +24,14 @@ public sealed class CommandCenterAggregator
     private readonly ILogger<CommandCenterAggregator> _logger;
 
     public CommandCenterAggregator(
-        IMissionStore missions,
+        IWorkflowStore workflows,
         IAgentRunStore runs,
         ISessionStore sessions,
         ILogger<CommandCenterAggregator> logger,
         IClawConnectionMonitor? claws = null,
         IUserService? users = null)
     {
-        _missions = missions;
+        _missions = workflows;
         _runs = runs;
         _sessions = sessions;
         _claws = claws ?? NullClawConnectionMonitor.Instance;
@@ -40,7 +40,7 @@ public sealed class CommandCenterAggregator
     }
 
     /// <summary>
-    /// Returns the current cockpit state — every active mission, team run,
+    /// Returns the current cockpit state — every active workflow, team run,
     /// agent run, and recent chat session. "Active" means in flight; we also
     /// surface the top few recently-ended rows per source so the cockpit
     /// shows continuity instead of going empty between turns.
@@ -73,14 +73,14 @@ public sealed class CommandCenterAggregator
                         || string.Equals(c.Status, "running", StringComparison.OrdinalIgnoreCase))),
                 StringComparer.Ordinal);
 
-        var missionsSnapshot = await SafeListMissionsAsync(ownerUserId, ct).ConfigureAwait(false);
-        var activeMissions = 0;
+        var missionsSnapshot = await SafeListWorkflowsAsync(ownerUserId, ct).ConfigureAwait(false);
+        var activeWorkflows = 0;
         foreach (var m in missionsSnapshot)
         {
-            var isActive = m.Status is MissionStatus.Planning
-                                    or MissionStatus.Running
-                                    or MissionStatus.AwaitingHuman;
-            if (isActive) activeMissions++;
+            var isActive = m.Status is WorkflowStatus.Planning
+                                    or WorkflowStatus.Running
+                                    or WorkflowStatus.AwaitingHuman;
+            if (isActive) activeWorkflows++;
             else if (m.UpdatedAt < now.AddDays(-30)) continue;
 
             var stepCount = TryCountPlanSteps(m.PlanJson);
@@ -91,7 +91,7 @@ public sealed class CommandCenterAggregator
             var title = masked ? "(private)" : rawTitle;
 
             rows.Add(new CommandCenterRow(
-                Kind: "mission",
+                Kind: "workflow",
                 Id: m.Id,
                 Title: title,
                 Status: m.Status.ToString(),
@@ -100,7 +100,7 @@ public sealed class CommandCenterAggregator
                 OwnerLabel: m.OwnerUserId,
                 Preview: null,
                 CostUsd: null,
-                DetailRoute: masked ? null : $"/missions/{m.Id}",
+                DetailRoute: masked ? null : $"/workflows/{m.Id}",
                 WorkspaceId: m.WorkspaceId,
                 ProjectId: m.ProjectId,
                 IsPrivate: m.IsPrivate,
@@ -201,7 +201,7 @@ public sealed class CommandCenterAggregator
 
         return new CommandCenterState(
             GeneratedAt: now,
-            ActiveMissions: activeMissions,
+            ActiveWorkflows: activeWorkflows,
             ActiveTeamRuns: activeTeamRuns,
             ActiveAgentRuns: activeAgentRuns,
             ActiveSessions: sessionRows.Count,
@@ -252,12 +252,12 @@ public sealed class CommandCenterAggregator
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Cockpit aggregator must degrade gracefully if any one source fails — partial state is preferable to an exception propagating to the UI poll loop.")]
-    private async Task<IReadOnlyList<Mission>> SafeListMissionsAsync(string? ownerUserId, CancellationToken ct)
+    private async Task<IReadOnlyList<Workflow>> SafeListWorkflowsAsync(string? ownerUserId, CancellationToken ct)
     {
         try { return await _missions.ListAsync(ownerUserId, status: null, limit: 50, ct).ConfigureAwait(false); }
         catch (Exception ex)
         {
-            LogSourceFailed(_logger, "missions", ex.Message);
+            LogSourceFailed(_logger, "workflows", ex.Message);
             return [];
         }
     }
@@ -348,9 +348,9 @@ public sealed class CommandCenterAggregator
     }
 
     /// <summary>
-    /// Best-effort step count from a mission's PlanJson. Looks for a top-level
+    /// Best-effort step count from a workflow's PlanJson. Looks for a top-level
     /// "steps" array; returns 0 on any parse failure or shape mismatch. Used
-    /// only to enrich mission row titles, never to drive logic.
+    /// only to enrich workflow row titles, never to drive logic.
     /// </summary>
     private static int TryCountPlanSteps(string? planJson)
     {

@@ -158,10 +158,10 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         using var conn = factory.CreateConnection();
         using var cmd = conn.CreateCommand();
         if (ownerUserId is null)
-            cmd.CommandText = "SELECT session_id, title, updated_at, user_id FROM sessions ORDER BY updated_at DESC";
+            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, folder_id, agent_name FROM sessions ORDER BY updated_at DESC";
         else
         {
-            cmd.CommandText = "SELECT session_id, title, updated_at, user_id FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC";
+            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, folder_id, agent_name FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC";
             cmd.Parameters.AddWithValue(ownerUserId);
         }
         return await ReadSessionItemsAsync(cmd, ct).ConfigureAwait(false);
@@ -283,14 +283,22 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         var items = new List<SessionListItem>();
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
+            // Search selects only the first three columns; list adds owner, folder, and agent.
             items.Add(new SessionListItem(
                 SessionId: reader.GetString(0),
                 Title: await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
                 UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
-                OwnerUserId: await reader.IsDBNullAsync(3, ct).ConfigureAwait(false) ? null : reader.GetString(3)));
+                OwnerUserId: await OptionalStringAsync(reader, 3, ct).ConfigureAwait(false),
+                FolderId: await OptionalStringAsync(reader, 4, ct).ConfigureAwait(false),
+                AgentName: await OptionalStringAsync(reader, 5, ct).ConfigureAwait(false)));
         }
         return items;
     }
+
+    private static async Task<string?> OptionalStringAsync(NpgsqlDataReader reader, int ordinal, CancellationToken ct) =>
+        ordinal < reader.FieldCount && !await reader.IsDBNullAsync(ordinal, ct).ConfigureAwait(false)
+            ? reader.GetString(ordinal)
+            : null;
 
     public async Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default)
     {

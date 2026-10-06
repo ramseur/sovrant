@@ -1,14 +1,26 @@
 @using Sovrant.Runtime.Session
 @using Sovrant.Web.Services
 @inject IJSRuntime JS
+@inject IServiceProvider Services
 @implements IDisposable
 
 <aside class="sidebar">
-    <div class="sidebar-scroll">
-        <!-- Search -->
-        <div class="sidebar-search">
-            <input type="text" placeholder="Search conversations..." @bind="_searchText" @bind:event="oninput" @bind:after="FilterSessions" />
+    <div class="sidebar-scroll" @ondragend="EndDrag">
+        <!-- Search + new folder -->
+        <div class="sf-bar">
+            <div class="sidebar-search">
+                <input type="text" placeholder="Search conversations..." @bind="_searchText" @bind:event="oninput" />
+            </div>
+            <button class="sf-icon-btn" title="New folder" aria-label="New folder" @onclick="() => NewFolder(null)"><SovrantIcon Name="@IconNames.NewFolder" /></button>
         </div>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="sf-error sf-error-inline" role="alert">
+                <span>@_error</span>
+                <button class="sf-error-x" aria-label="Dismiss" @onclick="() => _error = null">&times;</button>
+            </div>
+        }
 
         <!-- Active background sessions -->
         @if (_activeSessions.Count > 0)
@@ -25,11 +37,11 @@
                             }
                             else if (session.Status == ActiveSessionStatus.Completed)
                             {
-                                <span class="active-done" title="Completed">&#10003;</span>
+                                <span class="active-done" title="Completed"><SovrantIcon Name="@IconNames.Done" Size="13" /></span>
                             }
                             else
                             {
-                                <span class="active-failed" title="@session.Error">&#9888;</span>
+                                <span class="active-failed" title="@session.Error"><SovrantIcon Name="@IconNames.Failed" Size="13" /></span>
                             }
                             @session.Title
                         </div>
@@ -37,74 +49,506 @@
                     </button>
                     @if (session.Status == ActiveSessionStatus.Running)
                     {
-                        <button class="session-delete" @onclick="() => CancelSession(session.SessionId)" title="Cancel">&#x25FC;</button>
+                        <button class="session-delete" @onclick="() => CancelSession(session.SessionId)" title="Cancel" aria-label="Cancel"><SovrantIcon Name="@IconNames.Stop" Size="11" /></button>
                     }
                     else
                     {
-                        <button class="session-delete" @onclick="() => DismissSession(session.SessionId)" title="Dismiss">&#x2715;</button>
+                        <button class="session-delete" @onclick="() => DismissSession(session.SessionId)" title="Dismiss" aria-label="Dismiss"><SovrantIcon Name="@IconNames.Close" Size="12" /></button>
                     }
                 </div>
             }
         }
 
-        <!-- Recent conversations -->
-        <div class="nav-section-header">RECENT</div>
-        @if (_filteredSessions.Count == 0)
+        @if (!string.IsNullOrWhiteSpace(_searchText))
         {
-            <div class="no-sessions">No recent conversations</div>
+            var results = SessionFolderTree.SearchRows(_folders, _sessions, _searchText);
+            <div class="nav-section-header">RESULTS</div>
+            @if (results.Count == 0)
+            {
+                <div class="no-sessions">No matching conversations</div>
+            }
+            @foreach (var row in results)
+            {
+                @RowMarkup(row)
+            }
         }
-        @foreach (var session in _filteredSessions)
+        else
         {
-            var isActive = ActiveSessions.HasSession(session.Id);
-            <div class="session-item @(isActive ? "session-item--active-badge" : "")">
-                <button class="session-btn" @onclick="() => ResumeSession(session.Id)">
-                    <div class="session-label">
-                        @if (isActive)
-                        {
-                            <span class="active-badge">ACTIVE</span>
-                        }
-                        @session.Label
-                    </div>
-                    <div class="session-time">@session.Timestamp.ToString("MMM d, HH:mm")</div>
-                </button>
-                <button class="session-delete" @onclick="() => DeleteSession(session.Id)" title="Delete session">&#x2715;</button>
+            @if (_folders.Count > 0)
+            {
+                <div class="nav-section-header sf-drop-head @HeadDropClass("top")"
+                     @ondragenter="() => DragEnterHead(TopKey)" @ondragover:preventDefault="true" @ondrop="() => DropOnHead(TopKey)">
+                    FOLDERS
+                    @if (_dropKey == TopKey && _dropRefusal is not null)
+                    {
+                        <span class="sf-why">@_dropRefusal</span>
+                    }
+                </div>
+                @foreach (var row in SessionFolderTree.FolderRows(_folders, _sessions, _expanded))
+                {
+                    @RowMarkup(row)
+                }
+            }
+
+            <div class="nav-section-header sf-drop-head @HeadDropClass("unfiled")"
+                 @ondragenter="() => DragEnterHead(UnfiledKey)" @ondragover:preventDefault="true" @ondrop="() => DropOnHead(UnfiledKey)">
+                @(_folders.Count > 0 ? "UNFILED" : "RECENT")
+                @if (_dropKey == UnfiledKey && _dropRefusal is not null)
+                {
+                    <span class="sf-why">@_dropRefusal</span>
+                }
             </div>
+            var unfiled = SessionFolderTree.UnfiledRows(_folders, _sessions);
+            @if (unfiled.Count == 0)
+            {
+                <div class="no-sessions">@(_sessions.Count == 0 ? "No recent conversations" : "Everything is filed")</div>
+            }
+            @foreach (var row in unfiled)
+            {
+                @RowMarkup(row)
+            }
         }
     </div>
+
+    @if (_menu is { } menuRow)
+    {
+        var isFolderMenu = menuRow.Kind == SessionTreeRowKind.Folder;
+        <div class="sf-menu-backdrop" @onclick="CloseMenu"></div>
+        <div class="sf-menu" style="@_menuStyle" @onclick:stopPropagation="true">
+            @if (isFolderMenu)
+            {
+                <button disabled="@(DepthOf(menuRow.Id) >= SessionFolderRules.MaxDepth)"
+                        title="@(DepthOf(menuRow.Id) >= SessionFolderRules.MaxDepth ? SessionFolderRules.Describe(SessionFolderError.TooDeep) : null)"
+                        @onclick="() => NewFolder(menuRow.Id)"><SovrantIcon Name="@IconNames.NewFolder" /> New subfolder</button>
+                <button @onclick="() => RenameFolder(menuRow)"><SovrantIcon Name="@IconNames.Rename" /> Rename</button>
+                <button @onclick="() => MoveFolder(menuRow)"><SovrantIcon Name="@IconNames.Folder" /> Move to…</button>
+                <div class="sf-sep"></div>
+                <button class="danger" @onclick="() => DeleteFolder(menuRow)"><SovrantIcon Name="@IconNames.Delete" /> Delete folder</button>
+                <div class="sf-hint">Conversations and subfolders inside move up to @ParentLabel(menuRow.FolderId). No conversation is ever deleted.</div>
+            }
+            else
+            {
+                <button @onclick="() => MoveSession(menuRow)"><SovrantIcon Name="@IconNames.Folder" /> Move to folder…</button>
+                <button @onclick="() => RenameSession(menuRow)"><SovrantIcon Name="@IconNames.Rename" /> Rename</button>
+                <div class="sf-sep"></div>
+                <button class="danger" @onclick="() => DeleteSession(menuRow.Id)"><SovrantIcon Name="@IconNames.Delete" /> Delete conversation</button>
+            }
+        </div>
+    }
 </aside>
+
+<SessionMoveDialog @ref="_moveDialog" OnMoved="ReloadAsync" />
+<FolderNameDialog @ref="_nameDialog" />
 
 @code {
     [Parameter] public EventCallback<string> OnNavigate { get; set; }
 
-    [Inject] private ISessionStore SessionStore { get; set; } = default!;
     [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private ActiveSessionsService ActiveSessions { get; set; } = default!;
 
+    private const string TopKey = "head:top";
+    private const string UnfiledKey = "head:unfiled";
+
     private string _searchText = string.Empty;
-
-    private record SessionItem(string Id, string Label, DateTimeOffset Timestamp);
-
-    private List<SessionItem> _recentSessions = [];
-    private List<SessionItem> _filteredSessions = [];
+    private string? _error;
+    private IReadOnlyList<SessionFolder> _folders = [];
+    private IReadOnlyList<SessionListItem> _sessions = [];
+    private HashSet<string> _expanded = new(StringComparer.Ordinal);
     private List<ActiveSessionInfo> _activeSessions = [];
+
+    // ⋯ menu: the row it belongs to.
+    private SessionTreeRow? _menu;
+
+    // Drag and drop: what's being dragged, the row/heading under it, and why a drop there is refused.
+    private SessionTreeRow? _drag;
+    private string? _dropKey;
+    private string? _dropRefusal;
+    private CancellationTokenSource? _hoverExpandCts;
+
+    private SessionMoveDialog? _moveDialog;
+    private FolderNameDialog? _nameDialog;
 
     // 1-second tick to refresh elapsed time while any sessions are running.
     private CancellationTokenSource? _timerCts;
 
+    private SessionSidebarService Folders => SessionSidebarService.From(Services);
+    private static string Me => Sovrant.Web.Program.SovrantUserId;
+
+    // ── rows ────────────────────────────────────────────────────────────────
+
+    private RenderFragment RowMarkup(SessionTreeRow row) => __builder =>
+    {
+        var isFolder = row.Kind == SessionTreeRowKind.Folder;
+        var isCurrent = !isFolder && row.Id == ActiveContext.CurrentSessionId;
+        var isRunning = !isFolder && ActiveSessions.HasSession(row.Id);
+        var key = RowKey(row);
+        var dropClass = _drag is null || _dropKey != key ? "" : _dropRefusal is null ? "drop" : "nodrop";
+        <div class="sf-row @(isCurrent ? "on" : "") @(_drag is not null && RowKey(_drag) == key ? "dragging" : "") @dropClass @(_menu is not null && RowKey(_menu) == key ? "menu" : "")"
+             id="@RowElementId(row)" style="--d:@row.Depth"
+             draggable="true" data-sf-drag
+             title="@(isFolder ? null : row.Text)"
+             @ondragstart="() => StartDrag(row)"
+             @ondragenter="() => DragEnterRow(row)"
+             @ondragover:preventDefault="true"
+             @ondrop="() => DropOnRow(row)"
+             @onclick="() => ActivateRow(row)">
+            @if (isFolder)
+            {
+                <span class="sf-tw @(row.IsExpanded ? "open" : "")" @onclick="() => ToggleFolder(row)" @onclick:stopPropagation="true"><SovrantIcon Name="@IconNames.Expand" StrokeWidth="2.4" /></span>
+                <span class="sf-ico"><SovrantIcon Name="@IconNames.Folder" /></span>
+            }
+            else
+            {
+                <span class="sf-tw"></span>
+                <span class="sf-dot @(isRunning ? "live" : "")"></span>
+            }
+            <span class="sf-tx">
+                <span class="sf-name">@row.Text</span>
+                @if (!string.IsNullOrEmpty(row.Meta))
+                {
+                    <span class="sf-meta @(row.MetaActive ? "active" : "")">@row.Meta</span>
+                }
+                @if (_dropKey == key && _dropRefusal is not null)
+                {
+                    <span class="sf-why">@_dropRefusal</span>
+                }
+            </span>
+            @if (isFolder)
+            {
+                <span class="sf-count">@row.Count</span>
+            }
+            <button class="sf-more" title="More" aria-label="More actions" @onclick="() => OpenMenu(row)" @onclick:stopPropagation="true"><SovrantIcon Name="@IconNames.More" StrokeWidth="2.4" /></button>
+        </div>
+    };
+
+    private static string RowKey(SessionTreeRow row) => $"{row.Kind}:{row.Id}";
+
+    private string HeadDropClass(string which)
+    {
+        var key = which == "top" ? TopKey : UnfiledKey;
+        if (_drag is null || _dropKey != key) return "";
+        return _dropRefusal is null ? "drop" : "nodrop";
+    }
+
+    private int DepthOf(string folderId) => SessionFolderRules.DepthOf(_folders, folderId);
+
+    private string ParentLabel(string? parentId) =>
+        parentId is null ? "the top level" : $"“{_folders.FirstOrDefault(f => f.FolderId == parentId)?.Name ?? "its parent"}”";
+
+    private async Task ActivateRow(SessionTreeRow row)
+    {
+        if (_menu is not null) { CloseMenu(); return; }
+        if (row.Kind == SessionTreeRowKind.Folder)
+            await ToggleFolder(row);
+        else
+            await ResumeSession(row.Id);
+    }
+
+    private async Task ToggleFolder(SessionTreeRow row)
+    {
+        if (!_expanded.Add(row.Id))
+            _expanded.Remove(row.Id);
+        await SaveExpandedAsync();
+    }
+
+    /// <summary>
+    /// Opens the ⋯ menu beside its row. The menu is rendered outside the scrolling list
+    /// (so the list can't clip it) at a fixed position, opening upward near the window's bottom.
+    /// </summary>
+    private async Task OpenMenu(SessionTreeRow row)
+    {
+        if (_menu is not null && RowKey(_menu) == RowKey(row))
+        {
+            CloseMenu();
+            return;
+        }
+        _menu = row;
+        _menuStyle = "visibility:hidden";
+        try
+        {
+            var r = await JS.InvokeAsync<double[]>("sovrantInterop.rectOf", RowElementId(row));
+            if (r is { Length: 5 })
+            {
+                double top = r[0], bottom = r[1], right = r[3], viewport = r[4];
+                var menuHeight = row.Kind == SessionTreeRowKind.Folder ? 210 : 130;
+                var y = bottom + menuHeight + 8 > viewport ? Math.Max(8, top - menuHeight - 2) : bottom + 2;
+                var x = Math.Max(8, right - 40);
+                _menuStyle = FormattableString.Invariant($"top:{y:0}px;left:{x:0}px");
+            }
+        }
+        catch (JSException) { _menuStyle = "top:80px;left:80px"; }
+        catch (InvalidOperationException) { _menuStyle = "top:80px;left:80px"; }
+    }
+
+    private string _menuStyle = string.Empty;
+
+    private static string RowElementId(SessionTreeRow row) =>
+        $"sf-{(row.Kind == SessionTreeRowKind.Folder ? "f" : "s")}-{row.Id}";
+
+    private void CloseMenu() => _menu = null;
+
+    // ── folder and conversation actions ─────────────────────────────────────
+
+    private async Task NewFolder(string? parentId)
+    {
+        CloseMenu();
+        if (_nameDialog is null) return;
+        var heading = parentId is null ? "New folder" : $"New folder in {ParentLabel(parentId)}";
+        await _nameDialog.OpenAsync(heading, "Create", string.Empty, async name =>
+        {
+            await Folders.CreateFolderAsync(Me, name, parentId);
+            if (parentId is not null)
+                _expanded.UnionWith(SessionFolderTree.AncestorsOf(_folders, parentId));
+            await SaveExpandedAsync();
+            await ReloadAsync();
+        });
+    }
+
+    private async Task RenameFolder(SessionTreeRow row)
+    {
+        CloseMenu();
+        if (_nameDialog is null) return;
+        await _nameDialog.OpenAsync("Rename folder", "Rename", row.Text, async name =>
+        {
+            await Folders.RenameFolderAsync(Me, row.Id, name);
+            await ReloadAsync();
+        });
+    }
+
+    private async Task MoveFolder(SessionTreeRow row)
+    {
+        CloseMenu();
+        if (_moveDialog is not null)
+            await _moveDialog.OpenForFolderAsync(row.Id, row.Text, row.FolderId);
+    }
+
+    private async Task DeleteFolder(SessionTreeRow row)
+    {
+        CloseMenu();
+        await Run(async () =>
+        {
+            await Folders.DeleteFolderAsync(Me, row.Id);
+            _expanded.Remove(row.Id);
+            await SaveExpandedAsync();
+        });
+    }
+
+    private async Task MoveSession(SessionTreeRow row)
+    {
+        CloseMenu();
+        if (_moveDialog is not null)
+            await _moveDialog.OpenForSessionAsync(row.Id, row.Text, row.FolderId);
+    }
+
+    private async Task RenameSession(SessionTreeRow row)
+    {
+        CloseMenu();
+        if (_nameDialog is null) return;
+        var store = Services.GetRequiredService<ISessionStore>();
+        var current = row.Text == SessionFolderTree.UntitledText ? string.Empty : row.Text;
+        await _nameDialog.OpenAsync("Rename conversation", "Rename", current, async name =>
+        {
+            await store.SetTitleAsync(row.Id, SessionFolderRules.NormalizeName(name), ownerUserId: Me);
+            await ReloadAsync();
+        });
+    }
+
+    private async Task DeleteSession(string sessionId)
+    {
+        CloseMenu();
+        await Run(async () =>
+        {
+            await Services.GetRequiredService<ISessionStore>().DeleteAsync(sessionId, ownerUserId: Me);
+        });
+    }
+
+    /// <summary>Runs a folder/conversation change, shows a refusal inline, and refreshes everyone.</summary>
+    private async Task Run(Func<Task> change)
+    {
+        try
+        {
+            _error = null;
+            await change();
+        }
+        catch (SessionFolderException ex)
+        {
+            _error = ex.Message;
+        }
+        await ReloadAsync();
+    }
+
+    // ── drag and drop ───────────────────────────────────────────────────────
+
+    private void StartDrag(SessionTreeRow row)
+    {
+        CloseMenu();
+        _drag = row;
+        _dropKey = null;
+        _dropRefusal = null;
+    }
+
+    private void DragEnterRow(SessionTreeRow row)
+    {
+        if (_drag is null) return;
+        CancelHoverExpand();
+        if (row.Kind != SessionTreeRowKind.Folder)
+        {
+            // Conversation rows aren't drop targets.
+            _dropKey = null;
+            _dropRefusal = null;
+            return;
+        }
+
+        _dropKey = RowKey(row);
+        _dropRefusal = RefusalFor(row.Id);
+
+        // Hovering a collapsed folder for ~500 ms expands it so you can drop deeper.
+        if (!row.IsExpanded && row.HasChildren)
+        {
+            var cts = _hoverExpandCts = new CancellationTokenSource();
+            _ = InvokeAsync(async () =>
+            {
+                try { await Task.Delay(500, cts.Token); }
+                catch (TaskCanceledException) { return; }
+                if (_drag is null || _dropKey != RowKey(row)) return;
+                _expanded.Add(row.Id);
+                StateHasChanged();
+            });
+        }
+    }
+
+    private void DragEnterHead(string key)
+    {
+        if (_drag is null) return;
+        CancelHoverExpand();
+        _dropKey = key;
+        _dropRefusal = key == TopKey
+            ? (_drag.Kind == SessionTreeRowKind.Folder ? RefusalFor(null) : "Drop conversations on a folder, or on Unfiled.")
+            : (_drag.Kind == SessionTreeRowKind.Session ? null : "Drop folders on another folder, or on the Folders heading.");
+    }
+
+    /// <summary>Why dropping the dragged item into <paramref name="targetFolderId"/> isn't allowed, or null.</summary>
+    private string? RefusalFor(string? targetFolderId)
+    {
+        if (_drag is null) return null;
+        if (_drag.Kind == SessionTreeRowKind.Session)
+            return null;
+        return SessionFolderRules.CheckMove(_folders, _drag.Id, targetFolderId) is { } e ? SessionFolderRules.Describe(e) : null;
+    }
+
+    private async Task DropOnRow(SessionTreeRow row)
+    {
+        if (_drag is null || row.Kind != SessionTreeRowKind.Folder) { EndDrag(); return; }
+        await DropAsync(row.Id);
+    }
+
+    private async Task DropOnHead(string key)
+    {
+        if (_drag is null) { EndDrag(); return; }
+        if ((key == TopKey && _drag.Kind != SessionTreeRowKind.Folder) || (key == UnfiledKey && _drag.Kind != SessionTreeRowKind.Session))
+        {
+            EndDrag();
+            return;
+        }
+        await DropAsync(null);
+    }
+
+    private async Task DropAsync(string? targetFolderId)
+    {
+        var drag = _drag!;
+        var refusal = RefusalFor(targetFolderId);
+        EndDrag();
+        if (refusal is not null || drag.FolderId == targetFolderId)
+            return; // refused while dragging, or a no-op drop on its current folder
+        await Run(async () =>
+        {
+            if (drag.Kind == SessionTreeRowKind.Folder)
+                await Folders.MoveFolderAsync(Me, drag.Id, targetFolderId);
+            else
+                await Folders.MoveSessionAsync(Me, drag.Id, targetFolderId);
+            if (targetFolderId is not null)
+            {
+                _expanded.UnionWith(SessionFolderTree.AncestorsOf(_folders, targetFolderId));
+                await SaveExpandedAsync();
+            }
+        });
+    }
+
+    private void EndDrag()
+    {
+        CancelHoverExpand();
+        _drag = null;
+        _dropKey = null;
+        _dropRefusal = null;
+    }
+
+    private void CancelHoverExpand()
+    {
+        _hoverExpandCts?.Cancel();
+        _hoverExpandCts?.Dispose();
+        _hoverExpandCts = null;
+    }
+
+    // ── loading ─────────────────────────────────────────────────────────────
+
     protected override void OnInitialized()
     {
         ActiveContext.OnDataChanged += OnDataChanged;
+        ActiveContext.OnChanged += OnContextChanged;
         ActiveSessions.OnChanged += OnActiveSessionsChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Sovrant.Web.Program.RuntimeReady.Task;
+        try { _expanded = await Folders.LoadExpandedAsync(Me); } catch (Exception ex) when (ex is not OperationCanceledException) { }
+        await LoadAsync();
+        _activeSessions = ActiveSessions.GetAll().ToList();
+        StateHasChanged();
+    }
+
+    private async Task ReloadAsync()
+    {
+        await LoadAsync();
+        ActiveContext.NotifyDataChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var snapshot = await Folders.LoadAsync(Me);
+            _folders = snapshot.Folders;
+            _sessions = snapshot.Sessions;
+
+            // Keep the open conversation visible: expand the folders it lives in.
+            var current = _sessions.FirstOrDefault(s => s.SessionId == ActiveContext.CurrentSessionId);
+            if (current?.FolderId is { } folderId)
+                _expanded.UnionWith(SessionFolderTree.AncestorsOf(_folders, folderId));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _error = $"Couldn't load conversations: {ex.Message}";
+        }
+    }
+
+    private async Task SaveExpandedAsync()
+    {
+        try { await Folders.SaveExpandedAsync(Me, _expanded); }
+        catch (Exception ex) when (ex is not OperationCanceledException) { /* remembering open folders is best-effort */ }
     }
 
     private void OnDataChanged()
     {
         InvokeAsync(async () =>
         {
-            await LoadSessionsAsync();
+            await LoadAsync();
             StateHasChanged();
         });
     }
+
+    private void OnContextChanged() => InvokeAsync(StateHasChanged);
 
     private void OnActiveSessionsChanged()
     {
@@ -121,7 +565,8 @@
             try
             {
                 if (needsAttention)
-                    await JS.InvokeVoidAsync("sovrantInterop.setTabTitlePrefix", "● ");
+                    // A browser tab title is plain text, so this dot cannot be a SovrantIcon. icon-scan:allow
+                    await JS.InvokeVoidAsync("sovrantInterop.setTabTitlePrefix", "\u25CF ");
                 else
                     await JS.InvokeVoidAsync("sovrantInterop.clearTabTitlePrefix");
             }
@@ -154,47 +599,10 @@
     public void Dispose()
     {
         ActiveContext.OnDataChanged -= OnDataChanged;
+        ActiveContext.OnChanged -= OnContextChanged;
         ActiveSessions.OnChanged -= OnActiveSessionsChanged;
         StopTimer();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-        await Sovrant.Web.Program.RuntimeReady.Task;
-        await LoadSessionsAsync();
-        _activeSessions = ActiveSessions.GetAll().ToList();
-        StateHasChanged();
-    }
-
-    private async Task LoadSessionsAsync()
-    {
-        try
-        {
-            var ids = await SessionStore.ListAsync(ownerUserId: Sovrant.Web.Program.SovrantUserId);
-            var items = new List<SessionItem>();
-            foreach (var id in ids.Take(20))
-            {
-                var entries = await SessionStore.LoadAsync(id, ownerUserId: Sovrant.Web.Program.SovrantUserId);
-                var firstUser = entries.FirstOrDefault(e => e.Role == "user");
-                var label = firstUser?.Content ?? id;
-                if (label.Length > 40) label = string.Concat(label.AsSpan(0, 37), "...");
-                items.Add(new SessionItem(id, label,
-                    entries.Count > 0 ? entries[^1].Timestamp : DateTimeOffset.MinValue));
-            }
-            _recentSessions = items.OrderByDescending(s => s.Timestamp).ToList();
-            _filteredSessions = _recentSessions;
-        }
-        catch { /* best effort */ }
-    }
-
-    private void FilterSessions()
-    {
-        _filteredSessions = string.IsNullOrWhiteSpace(_searchText)
-            ? _recentSessions
-            : _recentSessions.Where(s =>
-                s.Label.Contains(_searchText, StringComparison.OrdinalIgnoreCase)
-            ).ToList();
+        CancelHoverExpand();
     }
 
     private async Task ResumeSession(string sessionId)
@@ -202,12 +610,6 @@
         try { await JS.InvokeVoidAsync("sovrantInterop.clearTabTitlePrefix"); } catch { }
         ActiveContext.ResumeSession(sessionId);
         await OnNavigate.InvokeAsync("/");
-    }
-
-    private async Task DeleteSession(string sessionId)
-    {
-        await SessionStore.DeleteAsync(sessionId, ownerUserId: Sovrant.Web.Program.SovrantUserId);
-        _recentSessions.RemoveAll(s => s.Id == sessionId);
     }
 
     private void CancelSession(string sessionId) => ActiveSessions.Cancel(sessionId);

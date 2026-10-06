@@ -45,6 +45,14 @@ public static class BootstrapConfigLoader
 
     // ── .env file ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Phase 144 — loads <c>.env</c> from the working directory into the process environment.
+    /// Call it first thing in <c>Main</c>, before anything reads an environment variable, so every
+    /// documented variable works from <c>.env</c> (not only from the shell or container env).
+    /// Safe to call repeatedly; values already in the environment are never overwritten.
+    /// </summary>
+    public static void EnsureDotEnvLoaded() => LoadDotEnvFile();
+
     private static void LoadDotEnvFile()
     {
         var path = Path.Combine(Directory.GetCurrentDirectory(), ".env");

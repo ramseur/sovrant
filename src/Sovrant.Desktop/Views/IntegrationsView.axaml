@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
              xmlns:conv="using:Sovrant.Desktop.Converters"
@@ -83,7 +84,7 @@
                                         </Border>
                                         <StackPanel Spacing="2">
                                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <TextBlock Text="{Binding Icon}" FontSize="15" VerticalAlignment="Center" />
+                                                <ctrl:SovrantIcon IconName="{Binding Icon}" Size="15" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondary}" />
                                                 <TextBlock Text="{Binding Name}"
                                                            FontSize="13" FontWeight="SemiBold"
                                                            Foreground="{DynamicResource BrandPrimary}"
@@ -147,6 +148,16 @@
                                                                        IsVisible="{Binding !IsConnected}" />
                                                         </Panel>
                                                     </Border>
+                                                    <!-- Phase 139 — Unavailable badge -->
+                                                    <Border DockPanel.Dock="Right" Padding="6,2" CornerRadius="4" Margin="0,0,6,0"
+                                                            IsVisible="{Binding IsUnavailable}"
+                                                            Classes.warn="{Binding IsNetworkFailure}" Classes.fail="{Binding IsCredentialFailure}">
+                                                        <Border.Styles>
+                                                            <Style Selector="Border.warn"><Setter Property="Background" Value="{DynamicResource StatusWarn}" /></Style>
+                                                            <Style Selector="Border.fail"><Setter Property="Background" Value="{DynamicResource StatusFail}" /></Style>
+                                                        </Border.Styles>
+                                                        <TextBlock Text="UNAVAILABLE" FontSize="9.5" FontWeight="Bold" Foreground="White" />
+                                                    </Border>
                                                     <TextBlock Text="{Binding Name}"
                                                                FontSize="13" FontWeight="SemiBold"
                                                                FontFamily="Consolas,Menlo,monospace"
@@ -156,6 +167,8 @@
                                                     <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
                                                         <Run Text="{Binding ToolCount}" /><Run Text=" tools" />
                                                     </TextBlock>
+                                                    <TextBlock Text="{Binding RowStatus}" FontSize="10" IsVisible="{Binding IsUnavailable}"
+                                                               Foreground="{DynamicResource TextMuted}" />
                                                     <TextBlock Text="OAuth" FontSize="10"
                                                                Foreground="{DynamicResource BrandPrimary}"
                                                                FontWeight="SemiBold"
@@ -208,7 +221,7 @@
 
                                 <!-- Header -->
                                 <StackPanel Spacing="4">
-                                    <TextBlock Text="{Binding SelectedCatalogEntry.Icon}" FontSize="32" />
+                                    <ctrl:SovrantIcon IconName="{Binding SelectedCatalogEntry.Icon}" Size="32" StrokeWidth="1.6" HorizontalAlignment="Left" Foreground="{DynamicResource TextSecondary}" />
                                     <TextBlock Text="{Binding SelectedCatalogEntry.Name}"
                                                FontSize="20" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextPrimary}" />
@@ -275,9 +288,13 @@
                                                 Background="{DynamicResource SurfaceBackground}"
                                                 BorderBrush="{DynamicResource BrandPrimary}"
                                                 BorderThickness="1">
-                                            <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
-                                                       TextWrapping="Wrap"
-                                                       Text="🔄 Browser opened. Waiting for authorization... (times out after 2 min)" />
+                                            <DockPanel>
+                                                <ctrl:SovrantIcon DockPanel.Dock="Left" IconName="{x:Static ui:IconNames.Refresh}" Size="13"
+                                                      Foreground="{DynamicResource BrandPrimary}" VerticalAlignment="Top" Margin="0,2,6,0" />
+                                                <TextBlock FontSize="12" Foreground="{DynamicResource BrandPrimary}"
+                                                           TextWrapping="Wrap"
+                                                           Text="Browser opened. Waiting for authorization... (times out after 2 min)" />
+                                            </DockPanel>
                                         </Border>
 
                                         <StackPanel Spacing="4">
@@ -524,6 +541,52 @@
                                                VerticalAlignment="Center" TextWrapping="Wrap" />
                                 </DockPanel>
 
+                                <!-- Phase 139 — why it isn't connected, in one sentence, and what happens next -->
+                                <StackPanel Spacing="8" IsVisible="{Binding SelectedServer.IsUnavailable, FallbackValue=False}">
+                                    <Border CornerRadius="10" Padding="14,12" BorderThickness="1"
+                                            Classes.warn="{Binding SelectedServer.IsNetworkFailure, FallbackValue=False}"
+                                            Classes.fail="{Binding SelectedServer.IsCredentialFailure, FallbackValue=False}">
+                                        <Border.Styles>
+                                            <Style Selector="Border.warn"><Setter Property="BorderBrush" Value="{DynamicResource StatusWarn}" /><Setter Property="Background" Value="#17FF9800" /></Style>
+                                            <Style Selector="Border.fail"><Setter Property="BorderBrush" Value="{DynamicResource StatusFail}" /><Setter Property="Background" Value="#14F44336" /></Style>
+                                        </Border.Styles>
+                                        <DockPanel>
+                                            <Panel DockPanel.Dock="Left" Margin="0,1,11,0" VerticalAlignment="Top">
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="16" Foreground="{DynamicResource StatusWarn}"
+                                                                  IsVisible="{Binding SelectedServer.IsNetworkFailure, FallbackValue=False}" />
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="16" Foreground="{DynamicResource StatusFail}"
+                                                                  IsVisible="{Binding SelectedServer.IsCredentialFailure, FallbackValue=False}" />
+                                            </Panel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding SelectedServer.FailureReason}" FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding SelectedServer.FailureNextStep}" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding SelectedServer.RetryNote}" FontSize="11.5"
+                                                           Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Content="Update key" Command="{Binding StartEditEnvCommand}"
+                                                IsVisible="{Binding SelectedServer.IsCredentialFailure, FallbackValue=False}"
+                                                Padding="14,7" CornerRadius="6" Background="{DynamicResource BrandPrimary}" Foreground="White" />
+                                        <Button Command="{Binding RetryServerCommand}" CommandParameter="{Binding SelectedServer}"
+                                                IsEnabled="{Binding !SelectedServer.IsRetrying, FallbackValue=True}"
+                                                Padding="14,7" CornerRadius="6"
+                                                Classes.primary="{Binding SelectedServer.IsNetworkFailure, FallbackValue=False}">
+                                            <Button.Styles>
+                                                <Style Selector="Button.primary"><Setter Property="Background" Value="{DynamicResource BrandPrimary}" /><Setter Property="Foreground" Value="White" /></Style>
+                                            </Button.Styles>
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Refresh}" Size="13" VerticalAlignment="Center" />
+                                                <TextBlock Text="Retry now" VerticalAlignment="Center" IsVisible="{Binding SelectedServer.IsNetworkFailure, FallbackValue=False}" />
+                                                <TextBlock Text="Retry" VerticalAlignment="Center" IsVisible="{Binding SelectedServer.IsCredentialFailure, FallbackValue=False}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </StackPanel>
+
                                 <!-- Server markdown -->
                                 <ctrl:SafeMarkdownPresenter Markdown="{Binding SelectedServer.Markdown}" />
 
@@ -572,14 +635,15 @@
                                             <ItemsControl.ItemTemplate>
                                                 <DataTemplate DataType="vm:EnvVarRowViewModel">
                                                     <Grid ColumnDefinitions="Auto,8,*,12,2*" Margin="0,0,0,4">
-                                                        <Button Grid.Column="0"
-                                                                Content="✕"
-                                                                Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).RemoveEnvRowCommand}"
+                                                        <Button AutomationProperties.Name="Remove variable" ToolTip.Tip="Remove variable" Grid.Column="0"
+                                                                                                                                Command="{Binding $parent[ItemsControl].((vm:IntegrationsViewModel)DataContext).RemoveEnvRowCommand}"
                                                                 CommandParameter="{Binding}"
                                                                 Padding="6,4" CornerRadius="4"
                                                                 Background="#33F44336"
                                                                 Foreground="{DynamicResource StatusFail}"
-                                                                FontSize="10" />
+                                                                FontSize="10">
+                                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Close}" Size="11" />
+                                                        </Button>
                                                         <TextBox Grid.Column="2"
                                                                  Text="{Binding Key}"
                                                                  Watermark="KEY"
@@ -642,12 +706,13 @@
                                                         BorderThickness="1" CornerRadius="6"
                                                         Padding="10,6" Margin="0,0,0,4">
                                                     <DockPanel>
-                                                        <Button DockPanel.Dock="Right"
-                                                                Content="✕"
-                                                                Command="{Binding RemoveCommand}"
+                                                        <Button AutomationProperties.Name="Remove rule" ToolTip.Tip="Remove rule" DockPanel.Dock="Right"
+                                                                                                                                Command="{Binding RemoveCommand}"
                                                                 Padding="6,3" CornerRadius="4"
                                                                 Background="#33F44336" Foreground="{DynamicResource StatusFail}"
-                                                                FontSize="10" />
+                                                                FontSize="10">
+                                                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Close}" Size="11" />
+                                                        </Button>
                                                         <Border DockPanel.Dock="Right"
                                                                 Background="{Binding ActionBadgeColor}"
                                                                 CornerRadius="8" Padding="7,2"

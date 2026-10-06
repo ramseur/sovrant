@@ -1,5 +1,7 @@
 import { parseSSEStream } from "./sse.js";
 import type {
+  GenerateWorkflowPlanRequest,
+  WorkflowPlanStep,
   AddProjectMemberRequest,
   AddTeamMemberRequest,
   AddTeamMemberResponse,
@@ -32,7 +34,7 @@ import type {
   CostDisabled,
   CostSummary,
   CreateInviteRequest,
-  CreateMissionRequest,
+  CreateWorkflowRequest,
   CreateProjectRequest,
   CreateTeamRequest,
   CreateUserRequest,
@@ -43,8 +45,8 @@ import type {
   EvalSuite,
   IssueTokenRequest,
   IssueTokenResponse,
-  Mission,
-  MissionEvent,
+  Workflow,
+  WorkflowEvent,
   ModelsResponse,
   Project,
   ProjectMember,
@@ -56,6 +58,9 @@ import type {
   SessionConfigUpdate,
   SessionDetail,
   SessionListResponse,
+  SessionFolder,
+  CreateSessionFolderRequest,
+  UpdateSessionFolderRequest,
   SkillDetail,
   SkillSummary,
   SovrantClientOptions,
@@ -332,6 +337,45 @@ export class SovrantClient {
       `/v1/sessions/${encodeURIComponent(sessionId)}`,
       { method: "DELETE" }
     );
+  }
+
+  // ── Conversation folders (Phase 133) ─────────────────────────────────
+
+  /** List the caller's whole folder tree (folders are private to their owner). */
+  async listSessionFolders(): Promise<{ folders: SessionFolder[] }> {
+    const res = await this.fetchWithRetry("/v1/session-folders");
+    return (await res.json()) as { folders: SessionFolder[] };
+  }
+
+  /** Create a folder; pass `parent_folder_id` to nest it (max 5 levels). */
+  async createSessionFolder(request: CreateSessionFolderRequest): Promise<SessionFolder> {
+    const res = await this.fetchWithRetry("/v1/session-folders", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as SessionFolder;
+  }
+
+  /** Rename and/or move a folder. `parent_folder_id: null` moves it to the top level. */
+  async updateSessionFolder(folderId: string, request: UpdateSessionFolderRequest): Promise<SessionFolder> {
+    const res = await this.fetchWithRetry(`/v1/session-folders/${encodeURIComponent(folderId)}`, {
+      method: "PATCH",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as SessionFolder;
+  }
+
+  /** Delete a folder. Its conversations and subfolders move up to its parent — nothing else is deleted. */
+  async deleteSessionFolder(folderId: string): Promise<void> {
+    await this.fetchWithRetry(`/v1/session-folders/${encodeURIComponent(folderId)}`, { method: "DELETE" });
+  }
+
+  /** File a conversation into a folder, or pass `null` to unfile it. */
+  async moveSessionToFolder(sessionId: string, folderId: string | null): Promise<void> {
+    await this.fetchWithRetry(`/v1/sessions/${encodeURIComponent(sessionId)}/folder`, {
+      method: "PUT",
+      body: JSON.stringify({ folder_id: folderId }),
+    });
   }
 
   /** Get session-level config overrides (model, permission mode). */
@@ -1031,61 +1075,99 @@ export class SovrantClient {
     return (await res.json()) as { runs: AgentRun[] };
   }
 
-  // ── Missions ──────────────────────────────────────────────────────────
+  // ── Workflows ─────────────────────────────────────────────────────────
 
-  /** Create a mission. */
-  async createMission(request: CreateMissionRequest): Promise<Mission> {
-    const res = await this.fetchWithRetry("/v1/missions", {
+  /** Create a workflow. */
+  async createWorkflow(request: CreateWorkflowRequest): Promise<Workflow> {
+    const res = await this.fetchWithRetry("/v1/workflows", {
       method: "POST",
       body: JSON.stringify(request),
     });
-    return (await res.json()) as Mission;
+    return (await res.json()) as Workflow;
   }
 
-  /** List missions with optional filters. */
-  async listMissions(options?: {
+  /** List workflows with optional filters. */
+  async listWorkflows(options?: {
     ownerUserId?: string;
     status?: string;
     limit?: number;
-  }): Promise<{ missions: Mission[] }> {
+  }): Promise<{ workflows: Workflow[] }> {
     const params = new URLSearchParams();
     if (options?.ownerUserId) params.set("ownerUserId", options.ownerUserId);
     if (options?.status) params.set("status", options.status);
     if (options?.limit !== undefined) params.set("limit", String(options.limit));
     const qs = params.toString();
-    const res = await this.fetchWithRetry(`/v1/missions${qs ? `?${qs}` : ""}`);
-    return (await res.json()) as { missions: Mission[] };
+    const res = await this.fetchWithRetry(`/v1/workflows${qs ? `?${qs}` : ""}`);
+    return (await res.json()) as { workflows: Workflow[] };
   }
 
-  /** Get a mission by ID. */
-  async getMission(missionId: string): Promise<Mission> {
-    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}`);
-    return (await res.json()) as Mission;
+  /** Get a workflow by ID. */
+  async getWorkflow(workflowId: string): Promise<Workflow> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}`);
+    return (await res.json()) as Workflow;
   }
 
-  /** Drive a mission forward one engine cycle. */
-  async runMission(missionId: string): Promise<Mission> {
-    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/run`, {
+  /** Drive a workflow forward one engine cycle. */
+  async runWorkflow(workflowId: string): Promise<Workflow> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/run`, {
       method: "POST",
     });
-    return (await res.json()) as Mission;
+    return (await res.json()) as Workflow;
   }
 
-  /** Get the full event journal for a mission. */
-  async getMissionEvents(missionId: string): Promise<{ events: MissionEvent[] }> {
-    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/events`);
-    return (await res.json()) as { events: MissionEvent[] };
+  /**
+   * Create a workflow and have the model plan it, without running it (2.0). The workflow comes
+   * back as "awaitingHuman" with its plan in plan_json; edit it with saveWorkflowPlan, then
+   * runWorkflow runs that exact plan.
+   */
+  async planWorkflow(request: GenerateWorkflowPlanRequest): Promise<Workflow> {
+    const res = await this.fetchWithRetry("/v1/workflows/plan", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as Workflow;
   }
 
-  /** Export a mission as markdown or JSON. */
-  async exportMission(missionId: string, format: "markdown" | "json" = "markdown"): Promise<string> {
+  /** Replace a workflow's plan with edited steps (2.0). Fails with 409 once the workflow has run. */
+  async saveWorkflowPlan(workflowId: string, steps: WorkflowPlanStep[]): Promise<Workflow> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/plan`, {
+      method: "PUT",
+      body: JSON.stringify({ steps }),
+    });
+    return (await res.json()) as Workflow;
+  }
+
+  /** Cancel a workflow that hasn't finished (2.0). Fails with 409 if it already completed, failed or was cancelled. */
+  async cancelWorkflow(workflowId: string): Promise<Workflow> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/cancel`, {
+      method: "POST",
+    });
+    return (await res.json()) as Workflow;
+  }
+
+  /** Make one of your workflows private or public (owner only). */
+  async setWorkflowPrivacy(workflowId: string, isPrivate: boolean): Promise<void> {
+    await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/privacy`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPrivate }),
+    });
+  }
+
+  /** Get the full event journal for a workflow. */
+  async getWorkflowEvents(workflowId: string): Promise<{ events: WorkflowEvent[] }> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/events`);
+    return (await res.json()) as { events: WorkflowEvent[] };
+  }
+
+  /** Export a workflow as markdown or JSON. */
+  async exportWorkflow(workflowId: string, format: "markdown" | "json" = "markdown"): Promise<string> {
     if (!ALLOWED_EXPORT_FORMATS.includes(format)) {
       throw new Error(
         `Invalid export format "${format}". Allowed: ${ALLOWED_EXPORT_FORMATS.join(", ")}`
       );
     }
     const qs = format === "json" ? `?format=${encodeURIComponent(format)}` : "";
-    const res = await this.fetchWithRetry(`/v1/missions/${encodeURIComponent(missionId)}/export${qs}`);
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/export${qs}`);
     return res.text();
   }
 
@@ -1306,7 +1388,7 @@ export class SovrantClient {
 
   /**
    * Get the current Command Center cockpit state (GET /v1/command-center/state).
-   * Returns active missions, team runs, agent runs, sessions, and a flat row list.
+   * Returns active workflows, team runs, agent runs, sessions, and a flat row list.
    * Non-admin callers are automatically scoped to their own identity on the server.
    */
   async getCommandCenterState(options?: {
@@ -1321,10 +1403,36 @@ export class SovrantClient {
 
   // ── MCP Servers ───────────────────────────────────────────────────────
 
-  /** List connected and configured MCP servers (GET /v1/mcp/servers). */
+  /** List configured MCP servers with their connection state (GET /v1/mcp/servers). */
   async listMcpServers(): Promise<{ servers: McpServerEntry[] }> {
     const res = await this.fetchWithRetry("/v1/mcp/servers");
     return (await res.json()) as { servers: McpServerEntry[] };
+  }
+
+  /** Retry connecting to an MCP server now (admin; 2.0). Returns its new status. */
+  async retryMcpServer(name: string): Promise<McpServerEntry> {
+    const res = await this.fetchWithRetry(`/v1/mcp/servers/${encodeURIComponent(name)}/retry`, {
+      method: "POST",
+    });
+    return (await res.json()) as McpServerEntry;
+  }
+
+  // ── Privacy ───────────────────────────────────────────────────────────
+
+  /** Make one of your conversations private or public (owner only). */
+  async setSessionPrivacy(sessionId: string, isPrivate: boolean): Promise<void> {
+    await this.fetchWithRetry(`/v1/sessions/${encodeURIComponent(sessionId)}/privacy`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPrivate }),
+    });
+  }
+
+  /** Make one of your agent runs private or public (owner only). */
+  async setAgentRunPrivacy(runId: string, isPrivate: boolean): Promise<void> {
+    await this.fetchWithRetry(`/v1/agent-runs/${encodeURIComponent(runId)}/privacy`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPrivate }),
+    });
   }
 
   // ── Knowledge Authoring ───────────────────────────────────────────────

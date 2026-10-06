@@ -2,7 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Sovrant.Runtime.CommandCenter;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.Users;
@@ -15,7 +15,7 @@ namespace Sovrant.Runtime.UserDashboard;
 /// <see cref="CommandCenterAggregator"/> but applies the per-user
 /// visibility rule:
 /// <para>
-/// For each source (missions, agent runs incl. team runs, sessions), keep a
+/// For each source (workflows, agent runs incl. team runs, sessions), keep a
 /// record when <c>UserId == userId</c> OR
 /// (<c>!IsPrivate</c> AND the record's <c>WorkspaceId</c> is one the user
 /// belongs to). Other users' private rows are excluded entirely — no masked
@@ -30,7 +30,7 @@ namespace Sovrant.Runtime.UserDashboard;
 /// </summary>
 public sealed class UserDashboardAggregator
 {
-    private readonly IMissionStore _missions;
+    private readonly IWorkflowStore _missions;
     private readonly IAgentRunStore _runs;
     private readonly ISessionStore _sessions;
     private readonly IClawConnectionMonitor _claws;
@@ -39,7 +39,7 @@ public sealed class UserDashboardAggregator
     private readonly ILogger<UserDashboardAggregator> _logger;
 
     public UserDashboardAggregator(
-        IMissionStore missions,
+        IWorkflowStore workflows,
         IAgentRunStore runs,
         ISessionStore sessions,
         IWorkspaceService workspaces,
@@ -47,7 +47,7 @@ public sealed class UserDashboardAggregator
         IClawConnectionMonitor? claws = null,
         IUserService? users = null)
     {
-        _missions = missions;
+        _missions = workflows;
         _runs = runs;
         _sessions = sessions;
         _workspaces = workspaces;
@@ -69,25 +69,25 @@ public sealed class UserDashboardAggregator
         var workspaceIds = await SafeListWorkspaceIdsAsync(userId, ct).ConfigureAwait(false);
 
         var rows = new List<UserDashboardRow>();
-        var ownMissions = 0;
+        var ownWorkflows = 0;
         var ownTeamRuns = 0;
         var ownAgentRuns = 0;
         var ownSessions = 0;
         var othersPublic = 0;
 
-        // ── Missions ───────────────────────────────────────────────────────
-        var missionsSnapshot = await SafeListMissionsAsync(ct).ConfigureAwait(false);
+        // ── Workflows ───────────────────────────────────────────────────────
+        var missionsSnapshot = await SafeListWorkflowsAsync(ct).ConfigureAwait(false);
         foreach (var m in missionsSnapshot)
         {
             if (!IsVisible(m.OwnerUserId, m.WorkspaceId, m.IsPrivate, userId, workspaceIds))
                 continue;
 
             var isOwn = string.Equals(m.OwnerUserId, userId, StringComparison.Ordinal);
-            // Own missions: show full history. Others' public: 30-day window (skip inactive old items).
+            // Own workflows: show full history. Others' public: 30-day window (skip inactive old items).
             if (!isOwn && m.UpdatedAt < now.AddDays(-30)
-                && m.Status is not (MissionStatus.Planning or MissionStatus.Running or MissionStatus.AwaitingHuman))
+                && m.Status is not (WorkflowStatus.Planning or WorkflowStatus.Running or WorkflowStatus.AwaitingHuman))
                 continue;
-            if (isOwn) ownMissions++; else othersPublic++;
+            if (isOwn) ownWorkflows++; else othersPublic++;
 
             var stepCount = TryCountPlanSteps(m.PlanJson);
             var title = stepCount > 0
@@ -95,7 +95,7 @@ public sealed class UserDashboardAggregator
                 : Truncate(m.Goal, 120);
 
             rows.Add(new UserDashboardRow(
-                Kind: "mission",
+                Kind: "workflow",
                 Id: m.Id,
                 Title: title,
                 Status: m.Status.ToString(),
@@ -104,7 +104,7 @@ public sealed class UserDashboardAggregator
                 OwnerLabel: m.OwnerUserId,
                 Preview: null,
                 CostUsd: null,
-                DetailRoute: $"/missions/{m.Id}",
+                DetailRoute: $"/workflows/{m.Id}",
                 WorkspaceId: m.WorkspaceId,
                 ProjectId: m.ProjectId,
                 IsOwn: isOwn,
@@ -218,7 +218,7 @@ public sealed class UserDashboardAggregator
 
         return new UserDashboardState(
             GeneratedAt: now,
-            OwnMissions: ownMissions,
+            OwnWorkflows: ownWorkflows,
             OwnTeamRuns: ownTeamRuns,
             OwnAgentRuns: ownAgentRuns,
             OwnSessions: ownSessions,
@@ -267,12 +267,12 @@ public sealed class UserDashboardAggregator
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Dashboard aggregator must degrade gracefully if any one source fails — partial state is preferable to an exception propagating to the UI poll loop.")]
-    private async Task<IReadOnlyList<Mission>> SafeListMissionsAsync(CancellationToken ct)
+    private async Task<IReadOnlyList<Workflow>> SafeListWorkflowsAsync(CancellationToken ct)
     {
         try { return await _missions.ListAsync(ownerUserId: null, status: null, limit: 200, ct).ConfigureAwait(false); }
         catch (Exception ex)
         {
-            LogSourceFailed(_logger, "missions", ex.Message);
+            LogSourceFailed(_logger, "workflows", ex.Message);
             return [];
         }
     }

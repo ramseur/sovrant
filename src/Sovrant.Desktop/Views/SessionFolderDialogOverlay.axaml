@@ -1,0 +1,131 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             x:Class="Sovrant.Desktop.Views.SessionFolderDialogOverlay"
+             x:DataType="vm:SessionFolderDialogViewModel"
+             IsVisible="{Binding IsOpen}">
+
+    <!-- Phase 133 — Move-to-folder picker and the one-field name prompt, over the whole
+         window like the design mock's Move dialog (and like CommandPaletteOverlay). -->
+    <UserControl.Styles>
+        <Style Selector="Button.pick">
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="MinHeight" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Padding" Value="0,0,6,0" />
+        </Style>
+        <Style Selector="Button.pick.on">
+            <Setter Property="Background" Value="{DynamicResource BrandPrimarySoft}" />
+        </Style>
+        <Style Selector="Button.pick.on TextBlock.pickname">
+            <Setter Property="Foreground" Value="{DynamicResource BrandPrimary}" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </UserControl.Styles>
+
+    <Panel>
+        <Border Background="#80000000" PointerPressed="OnBackdropPressed" />
+
+        <!-- Move picker -->
+        <Border IsVisible="{Binding IsMoveOpen}" Width="420" MaxHeight="520"
+                VerticalAlignment="Center" HorizontalAlignment="Center"
+                CornerRadius="12" Background="{DynamicResource SurfaceCard}"
+                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                BoxShadow="0 16 40 0 #40000000">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Top" Margin="18,16,18,10" Spacing="4">
+                    <TextBlock Text="{Binding Heading}" FontSize="15" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding Subheading}" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextMuted}" />
+                </StackPanel>
+
+                <DockPanel DockPanel.Dock="Bottom" Margin="14,12">
+                    <Button DockPanel.Dock="Left" Background="Transparent" Command="{Binding StartCreateFolderCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.NewFolder}" Size="13"
+                                  Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+                            <TextBlock Text="New folder" FontSize="12.5" Foreground="{DynamicResource TextSecondary}" />
+                        </StackPanel>
+                    </Button>
+                    <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                        <Button Content="Cancel" Command="{Binding CloseCommand}" CornerRadius="8" Padding="13,7" />
+                        <Button Content="Move here" Command="{Binding ConfirmMoveCommand}" IsEnabled="{Binding CanMove}"
+                                Background="{DynamicResource BrandPrimary}" Foreground="White" FontWeight="SemiBold"
+                                CornerRadius="8" Padding="13,7" />
+                    </StackPanel>
+                </DockPanel>
+
+                <TextBlock DockPanel.Dock="Bottom" Text="{Binding Error}" IsVisible="{Binding HasError}"
+                           Foreground="{DynamicResource StatusFail}" FontSize="12" TextWrapping="Wrap" Margin="18,8,18,0" />
+
+                <Border BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="0,1">
+                    <ScrollViewer>
+                        <StackPanel Margin="6" Spacing="2">
+                            <!-- Unfiled / Top level -->
+                            <Button Classes="pick" Classes.on="{Binding IsRootSelected}" Command="{Binding SelectRootCommand}">
+                                <DockPanel Margin="10,0,0,0">
+                                    <TextBlock DockPanel.Dock="Right" Text="CURRENT" IsVisible="{Binding IsRootCurrent}"
+                                               FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                    <TextBlock Classes="pickname" Text="{Binding RootLabel}" FontSize="13"
+                                               Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center" />
+                                </DockPanel>
+                            </Button>
+                            <ItemsControl ItemsSource="{Binding PickRows}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:FolderPickRowViewModel">
+                                        <Button Classes="pick" Classes.on="{Binding IsSelected}" Margin="0,1"
+                                                IsEnabled="{Binding IsEnabled}" ToolTip.Tip="{Binding Refusal}"
+                                                Command="{Binding $parent[UserControl].((vm:SessionFolderDialogViewModel)DataContext).SelectFolderCommand}"
+                                                CommandParameter="{Binding}">
+                                            <DockPanel Margin="{Binding Indent}">
+                                                <TextBlock DockPanel.Dock="Right" Text="CURRENT" IsVisible="{Binding IsCurrent}"
+                                                           FontSize="10" FontWeight="Bold" Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Folder}" Size="15" Margin="0,0,7,0"
+                                                      Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                                                <TextBlock Classes="pickname" Text="{Binding Name}" FontSize="13"
+                                                           Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <DockPanel IsVisible="{Binding IsCreatingFolder}" Margin="6">
+                                <Button DockPanel.Dock="Right" Content="Create" Margin="6,0,0,0" CornerRadius="8"
+                                        Command="{Binding CreateFolderCommand}" Background="{DynamicResource BrandPrimary}" Foreground="White" />
+                                <TextBox Text="{Binding NewFolderName}" Watermark="Folder name" MaxLength="100" />
+                            </DockPanel>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Border>
+            </DockPanel>
+        </Border>
+
+        <!-- Name prompt: New folder / New subfolder / Rename -->
+        <Border IsVisible="{Binding IsNameOpen}" Width="360"
+                VerticalAlignment="Center" HorizontalAlignment="Center"
+                CornerRadius="12" Background="{DynamicResource SurfaceCard}"
+                BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                BoxShadow="0 16 40 0 #40000000">
+            <StackPanel Margin="18,16,18,12" Spacing="12">
+                <TextBlock Text="{Binding Heading}" FontSize="15" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" />
+                <TextBox x:Name="NameInput" Text="{Binding NameValue}" Watermark="Name" MaxLength="100" />
+                <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}"
+                           Foreground="{DynamicResource StatusFail}" FontSize="12" TextWrapping="Wrap" />
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
+                    <Button Content="Cancel" Command="{Binding CloseCommand}" CornerRadius="8" Padding="13,7" />
+                    <Button Content="{Binding ActionText}" Command="{Binding ConfirmNameCommand}" IsDefault="True"
+                            Background="{DynamicResource BrandPrimary}" Foreground="White" FontWeight="SemiBold"
+                            CornerRadius="8" Padding="13,7" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </Panel>
+</UserControl>

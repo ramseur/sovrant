@@ -16,35 +16,54 @@
     @if (!string.IsNullOrEmpty(_pageError))
     {
         <div class="chat-error-banner" role="alert">
-            <span class="chat-error-banner-icon">&#9888;</span>
+            <span class="chat-error-banner-icon"><SovrantIcon Name="@IconNames.Warning" Size="16" StrokeWidth="2" /></span>
             <span class="chat-error-banner-text">@_pageError</span>
             <button class="chat-error-banner-close" @onclick="DismissPageError" aria-label="Dismiss">&times;</button>
         </div>
     }
 
+    @if (_messages.Count > 0)
+    {
+        <!-- Phase 133 — where this conversation is filed, its links, and Move -->
+        <SessionFolderHeader SessionId="@_sessionId" />
+    }
+
     <!-- Messages area -->
-    <div class="chat-messages" id="chat-messages">
+    <div class="chat-messages @(_messages.Count == 0 && !_isSending ? "is-empty" : "")" id="chat-messages">
         @if (_messages.Count == 0 && !_isSending)
         {
             <!-- Hero state -->
             <div class="hero-state">
                 <div class="hero-logo">
-                    <span>&#9889;</span>
+                    <SovrantIcon Name="@IconNames.Chat" StrokeWidth="1.7" />
                 </div>
                 @if (_agentName is not null)
                 {
-                    <div class="agent-scope-badge">&#x1F916; Chatting with <strong>@_agentName</strong></div>
+                    <div class="agent-scope-badge">
+                        <SovrantIcon Name="@IconNames.Agents" Size="14" />
+                        Chatting with <strong>@_agentName</strong>
+                    </div>
                 }
                 <h1 class="hero-title">@(_agentName is not null ? $"Ask {_agentName} anything" : "What are you working on?")</h1>
-                <p class="hero-subtitle">Create agents, build teams, and orchestrate missions to automate your work.</p>
+                <p class="hero-subtitle">Chat with any model, or put agents, teams and workflows to work. Pick a starting point, or just type below.</p>
                 <div class="hero-suggestions">
                     @foreach (var s in _suggestions)
                     {
                         <button class="suggestion-card" @onclick="() => SendSuggestion(s)">
-                            <span class="suggestion-icon">@s.Icon</span>
+                            <span class="suggestion-icon"><SovrantIcon Name="@s.Icon" /></span>
                             <span>@s.Text</span>
                         </button>
                     }
+                </div>
+                @* Phase 140 — a compact "What Sovrant can do" strip; same areas as the Welcome page. *@
+                <div class="hero-caps">
+                    <div class="hero-caps-label"><span>What Sovrant can do</span><a href="/dashboard">See everything on Home →</a></div>
+                    <div class="hero-caps-row">
+                        @foreach (var (icon, title, desc, href) in _capabilities)
+                        {
+                            <a class="hero-cap" href="@href"><SovrantIcon Name="@icon" Size="16" /><b>@title</b><span>@desc</span></a>
+                        }
+                    </div>
                 </div>
             </div>
         }
@@ -66,7 +85,16 @@
         <button class="privacy-toggle @(_isPrivate ? "private" : "public")"
                 title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to admins")"
                 @onclick="TogglePrivacyAsync">
-            <span class="privacy-icon">@(_isPrivate ? "🔒" : "🔓")</span>
+            <span class="privacy-icon">
+                @if (_isPrivate)
+                {
+                    <SovrantIcon Name="@IconNames.Private" Size="12" StrokeWidth="2" />
+                }
+                else
+                {
+                    <SovrantIcon Name="@IconNames.Public" Size="12" StrokeWidth="2" />
+                }
+            </span>
             <span class="privacy-label">@(_isPrivate ? "Private" : "Public")</span>
         </button>
         <button class="remember-btn" title="Save a note to memory — injected into every future chat session" @onclick="() => _showRemember = !_showRemember">
@@ -90,7 +118,7 @@
             <div class="remember-form-actions">
                 <label class="remember-privacy-label">
                     <input type="checkbox" @bind="_rememberPrivate" />
-                    🔒 Private
+                    Private
                 </label>
                 @if (!string.IsNullOrEmpty(_rememberStatus))
                 {
@@ -104,23 +132,32 @@
     }
 
     <!-- Input bar -->
+    @* Phase 137 — one composer box; the brand Send button becomes Stop in place while a
+       reply streams. The textarea is readonly (not disabled) while sending so it keeps
+       focus and Esc can stop the turn. *@
     <div class="chat-input-bar">
-        <div class="input-wrapper">
+        <div class="composer-box @(_isSending ? "busy" : "")">
             <textarea @ref="_inputRef"
                       @bind="_inputText"
                       @bind:event="oninput"
                       @onkeydown="HandleKeyDown"
-                      placeholder="Type a message or / for commands..."
-                      disabled="@_isSending"></textarea>
+                      placeholder="@(_isSending ? "Generating a reply…" : "Type a message or / for commands...")"
+                      readonly="@_isSending"></textarea>
+            <div class="composer-bar">
+                @if (_isSending)
+                {
+                    <button class="composer-send stop" title="Stop generating (Esc)" aria-label="Stop generating" @onclick="StopAsync">
+                        <SovrantIcon Name="@IconNames.Stop" Size="14" StrokeWidth="2.6" />
+                    </button>
+                }
+                else
+                {
+                    <button class="composer-send" title="Send message (Enter)" aria-label="Send message" @onclick="SendAsync" disabled="@(!CanSend)">
+                        <SovrantIcon Name="@IconNames.Send" Size="16" StrokeWidth="2" />
+                    </button>
+                }
+            </div>
         </div>
-        @if (_isSending)
-        {
-            <button class="btn-stop send-btn" @onclick="StopAsync">Stop</button>
-        }
-        else
-        {
-            <button class="btn-primary send-btn" @onclick="SendAsync" disabled="@(!CanSend)">Send</button>
-        }
     </div>
 </div>
 
@@ -183,15 +220,33 @@
         "Weighing the options...", "Mulling it over...",
     ];
 
+    // Icon is an IconNames value (Phase 136).
     private record Suggestion(string Icon, string Text);
+
+    // Phase 140 — the chat welcome's capabilities strip. Integrations and Trust Boundary are
+    // admin-only pages, so members get Projects and the Privacy card instead.
+    private IEnumerable<(string Icon, string Title, string Desc, string Href)> _capabilities =>
+    [
+        (IconNames.Agents, "Agents", "Your own assistants", "/agents"),
+        (IconNames.Team, "Teams & Swarms", "Agents working together", "/orchestration"),
+        (IconNames.Workflow, "Workflows", "Planned, scheduled work", "/workflows"),
+        (IconNames.Knowledge, "Knowledge", "Skills, memory, docs", "/skills"),
+        .. (Session.IsAdmin
+            ? new[] { (IconNames.Integrations, "Integrations", "MCP tools and platforms", "/admin/integrations"),
+                      (IconNames.Trust, "Trust Boundary", "Redaction and controls", "/trust-boundary") }
+            : new[] { (IconNames.Projects, "Projects", "Files and chats together", "/projects"),
+                      (IconNames.Private, "Privacy", "You choose what teammates see", "/dashboard") }),
+    ];
+
+
     private static readonly Suggestion[] _suggestions =
     [
-        new("🤖", "Create a custom agent with tools for web research and summarization"),
-        new("🤝", "Create a team that researches a topic and produces a structured report"),
-        new("🌀", "Build a best-practice swarm that parallelizes tasks across agents"),
-        new("🎯", "Set up a mission that monitors a project and sends daily updates"),
-        new("🎼", "Orchestrate a multi-agent pipeline for code review and testing"),
-        new("🔗", "Connect an MCP server and create an agent that uses its tools"),
+        new(IconNames.Agents, "Create a custom agent with tools for web research and summarization"),
+        new(IconNames.Team, "Create a team that researches a topic and produces a structured report"),
+        new(IconNames.Swarm, "Build a best-practice swarm that parallelizes tasks across agents"),
+        new(IconNames.Workflow, "Set up a workflow that monitors a project and sends daily updates"),
+        new(IconNames.Orchestration, "Orchestrate a multi-agent pipeline for code review and testing"),
+        new(IconNames.Integrations, "Connect an MCP server and create an agent that uses its tools"),
     ];
 
     private bool CanSend => !_isSending && !string.IsNullOrWhiteSpace(_inputText);
@@ -211,6 +266,7 @@
         ActiveContext.OnChanged += OnContextChanged;
         ActiveContext.OnSessionResume += OnSessionResume;
         ActiveContext.OnNewSession += OnNewSession;
+        ActiveContext.SetCurrentSession(_sessionId);
 
         // Resume from ?session=<id> in the URL (Command Center deep-link).
         var uri = new Uri(Nav.Uri);
@@ -258,6 +314,7 @@
         InvokeAsync(async () =>
         {
             _sessionId = sessionId;
+            ActiveContext.SetCurrentSession(_sessionId);
             _messages.Clear();
             _tokenCount = 0;
             _sessionCost = 0;
@@ -414,6 +471,7 @@
         _tokenCount = 0;
         _sessionCost = 0;
         _sessionId = $"session-{Guid.NewGuid():N}";
+        ActiveContext.SetCurrentSession(_sessionId);
         _agentName = null;
         _agentSystemPrompt = null;
         ActiveContext.SetActiveAgent(null);
@@ -520,6 +578,7 @@
                 _tokenCount = 0;
             _sessionCost = 0;
                 _sessionId = $"session-{Guid.NewGuid():N}";
+                ActiveContext.SetCurrentSession(_sessionId);
                 return;
             }
 

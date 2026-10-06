@@ -5,7 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Sovrant.Runtime.Auth;
 using Sovrant.Runtime.Governance;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.UserDashboard;
@@ -22,7 +22,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 {
     private readonly UserDashboardAggregator _aggregator;
     private readonly IPrincipalAccessor _principal;
-    private readonly IMissionStore _missionStore;
+    private readonly IWorkflowStore _workflowStore;
     private readonly IAgentRunStore _runStore;
     private readonly ISessionStore _sessionStore;
     private readonly IAuditStore _auditStore;
@@ -31,7 +31,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 
     [ObservableProperty] private bool _isLoading;
     [ObservableProperty] private string _errorMessage = string.Empty;
-    [ObservableProperty] private int _ownMissions;
+    [ObservableProperty] private int _ownWorkflows;
     [ObservableProperty] private int _ownTeamRuns;
     [ObservableProperty] private int _ownAgentRuns;
     [ObservableProperty] private int _ownSessions;
@@ -73,14 +73,16 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
     public UserDashboardViewModel(
         UserDashboardAggregator aggregator,
         IPrincipalAccessor principal,
-        IMissionStore missionStore,
+        IWorkflowStore workflowStore,
         IAgentRunStore runStore,
         ISessionStore sessionStore,
-        IAuditStore auditStore)
+        IAuditStore auditStore,
+        HomeGuideViewModel guide)
     {
+        Guide = guide;
         _aggregator = aggregator;
         _principal = principal;
-        _missionStore = missionStore;
+        _workflowStore = workflowStore;
         _runStore = runStore;
         _sessionStore = sessionStore;
         _auditStore = auditStore;
@@ -92,6 +94,39 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
     }
 
     public event EventHandler<CommandCenterRowSelectedEventArgs>? RowSelected;
+
+    /// <summary>Phase 141 — Home's greeting, Get started checklist and What Sovrant can do.</summary>
+    public HomeGuideViewModel Guide { get; }
+
+    /// <summary>Phase 142 — Overview (the guide) or Activity (the report). Home always opens on Overview.</summary>
+    [ObservableProperty] private bool _isOverview = true;
+
+    /// <summary>Phase 142 — Overview's at-a-glance pills.</summary>
+    public ObservableCollection<GlanceItem> Glance { get; } = [];
+
+    [RelayCommand] private void ShowOverview() => IsOverview = true;
+    [RelayCommand] private void ShowActivity() => IsOverview = false;
+
+    private void RefreshGlance()
+    {
+        Glance.Clear();
+        Glance.Add(new GlanceItem(OwnWorkflows, Plural("workflow", OwnWorkflows)));
+        Glance.Add(new GlanceItem(OwnTeamRuns, Plural("team run", OwnTeamRuns)));
+        Glance.Add(new GlanceItem(OwnAgentRuns, Plural("agent run", OwnAgentRuns)));
+        Glance.Add(new GlanceItem(OwnSessions, Plural("session", OwnSessions)));
+        Glance.Add(new GlanceItem(OthersPublicRows, "shared"));
+        Glance.Add(new GlanceItem(Claws, Plural("claw", Claws)));
+    }
+
+    private static string Plural(string word, int n) => n == 1 ? word : word + "s";
+
+    private async Task LoadGuideAsync(string userId)
+    {
+        var email = (_principal as Sovrant.Desktop.Auth.DesktopPrincipalAccessor)?.Email ?? userId;
+        var workspaceId = (_principal as Sovrant.Desktop.Auth.DesktopPrincipalAccessor)?.WorkspaceId;
+        await Dispatcher.UIThread.InvokeAsync(() => Guide.LoadAsync(userId, Sovrant.Runtime.Onboarding.OnboardingService.DisplayName(email),
+            _principal.IsAdmin, workspaceId));
+    }
 
     [RelayCommand]
     private void SelectRow(UserDashboardRowViewModel? row)
@@ -116,9 +151,9 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         {
             switch (row.Kind)
             {
-                case "mission":
-                    await _missionStore.UpdatePrivacyAsync(row.Id, userId, newValue).ConfigureAwait(false);
-                    await _auditStore.LogPrivacyChangeAsync(userId, "mission", row.Id, newValue).ConfigureAwait(false);
+                case "workflow":
+                    await _workflowStore.UpdatePrivacyAsync(row.Id, userId, newValue).ConfigureAwait(false);
+                    await _auditStore.LogPrivacyChangeAsync(userId, "workflow", row.Id, newValue).ConfigureAwait(false);
                     break;
                 case "agent-run":
                 case "team-run":
@@ -146,14 +181,16 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         {
             IsLoading = true;
             var state = await _aggregator.GetStateAsync(userId).ConfigureAwait(false);
+            await LoadGuideAsync(userId).ConfigureAwait(false);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                OwnMissions = state.OwnMissions;
+                OwnWorkflows = state.OwnWorkflows;
                 OwnTeamRuns = state.OwnTeamRuns;
                 OwnAgentRuns = state.OwnAgentRuns;
                 OwnSessions = state.OwnSessions;
                 OthersPublicRows = state.OthersPublicRows;
                 Claws = state.Claws;
+                RefreshGlance();
                 LastRefreshed = state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture);
                 Rows.Clear();
                 foreach (var r in state.Rows)
@@ -161,7 +198,6 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
                     Rows.Add(new UserDashboardRowViewModel
                     {
                         Kind = r.Kind,
-                        KindIcon = KindIcon(r.Kind),
                         Id = r.Id,
                         Title = r.Title,
                         Status = r.Status,
@@ -195,15 +231,6 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         }
     }
 
-    private static string KindIcon(string kind) => kind switch
-    {
-        "mission" => "\U0001F3AF",
-        "team-run" => "\U0001F465",
-        "agent-run" => "\U0001F916",
-        "session" => "\U0001F4AC",
-        "claw" => "\U0001F517",
-        _ => "•",
-    };
 
     private static string FormatRelative(DateTimeOffset when)
     {
@@ -228,7 +255,6 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
 public partial class UserDashboardRowViewModel : ViewModelBase
 {
     [ObservableProperty] private string _kind = string.Empty;
-    [ObservableProperty] private string _kindIcon = string.Empty;
     [ObservableProperty] private string _id = string.Empty;
     [ObservableProperty] private string _title = string.Empty;
     [ObservableProperty] private string _status = string.Empty;
@@ -240,3 +266,6 @@ public partial class UserDashboardRowViewModel : ViewModelBase
     [ObservableProperty] private bool _isOwn;
     [ObservableProperty] private bool _isPrivate;
 }
+
+/// <summary>Phase 142 — one at-a-glance pill on Home's Overview ("14 sessions").</summary>
+public sealed record GlanceItem(int Value, string Label);

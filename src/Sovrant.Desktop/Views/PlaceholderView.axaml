@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              x:Class="Sovrant.Desktop.Views.PlaceholderView"
              x:DataType="vm:PlaceholderViewModel"
@@ -8,9 +10,7 @@
     <StackPanel HorizontalAlignment="Center"
                 VerticalAlignment="Center"
                 Spacing="16">
-        <TextBlock Text="{Binding Icon}"
-                   FontSize="48"
-                   HorizontalAlignment="Center" />
+        <ctrl:SovrantIcon IconName="{Binding Icon}" Size="48" HorizontalAlignment="Center" />
 
         <TextBlock Text="{Binding Title}"
                    FontSize="28" FontWeight="Bold"

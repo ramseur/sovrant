@@ -242,11 +242,77 @@ OpenAI-compatible model list built from known providers.
 
 ### Sessions — `GET /v1/sessions`
 
-Lists saved session IDs. Non-admin callers see only sessions they own; admin callers see all sessions.
+Lists saved sessions, newest first. Non-admin callers see only sessions they own; admin callers see all sessions. Internal system sessions (workflow planner, context compactor) are never listed.
 
 ```json
-{ "sessions": [{ "id": "abc123" }, { "id": "def456" }] }
+{
+  "sessions": [
+    {
+      "id": "abc123",
+      "session_id": "abc123",
+      "title": "Proposal draft v2",
+      "updated_at": "2026-10-02T09:15:00.0000000+00:00",
+      "folder_id": "fld-…",
+      "agent_name": "proposal-writer",
+      "is_private": false,
+      "labels": [{ "text": "Agent · proposal-writer", "is_active": false }]
+    }
+  ]
+}
 ```
+
+`id` is kept for older clients; Phase 133 added the other fields. `folder_id` is the conversation folder it's filed in (`null` = unfiled). `labels` are derived from the conversation's live links — attached agent, linked workflow and its status, swarm/team runs it launched, webhook source — never stored; `is_active` marks something running right now.
+
+---
+
+## Conversation Folders
+
+Phase 133. Folders are per user (across every workspace), nest up to 5 levels, and hold conversations only. Every call acts on the **caller's own** tree — admins included — and another user's folder or conversation is indistinguishable from one that doesn't exist (`404`). Refusals carry a machine-readable `code`:
+
+| Status | `code` | When |
+|---|---|---|
+| 400 | `invalid_name` | Name empty, longer than 100 characters, or contains control characters |
+| 400 | `too_deep` | The change would put a folder below level 5 |
+| 400 | `cycle` | Moving a folder into itself or one of its own subfolders |
+| 404 | `not_found` | Folder (or target parent) missing or not yours |
+| 409 | `duplicate_name` | A folder with that name (ignoring case) already exists at that level |
+
+### List folders — `GET /v1/session-folders`
+
+```json
+{ "folders": [{ "folder_id": "fld-…", "parent_folder_id": null, "name": "Client A", "sort_order": 0, "created_at": "…", "updated_at": "…" }] }
+```
+
+### Create a folder — `POST /v1/session-folders`
+
+```json
+{ "name": "Proposals", "parent_folder_id": "fld-…" }
+```
+
+Omit `parent_folder_id` (or send `null`) for a top-level folder. Returns `201` with the folder.
+
+### Rename and/or move — `PATCH /v1/session-folders/{id}`
+
+```json
+{ "name": "Bids" }
+{ "parent_folder_id": "fld-…" }
+{ "parent_folder_id": null }
+```
+
+`parent_folder_id` is a move only when the property is present: `null` moves the folder to the top level; absent leaves it where it is.
+
+### Delete — `DELETE /v1/session-folders/{id}`
+
+Returns `204`. The folder's conversations and subfolders move up to its parent in the same transaction — no conversation is ever deleted. A moved subfolder whose name clashes at the new level gets a `" (2)"`, `" (3)"`, … suffix.
+
+### File a conversation — `PUT /v1/sessions/{id}/folder`
+
+```json
+{ "folder_id": "fld-…" }
+{ "folder_id": null }
+```
+
+`null` unfiles it. Returns `204`; `404` without a `code` when the conversation isn't yours, `404` with `code: not_found` when the folder isn't.
 
 ---
 
@@ -373,7 +439,7 @@ The server defaults to `DontAsk` — tools run without interactive prompts. This
 > | **Safe** | Auto-approve | Read, Glob, Grep, LS, WebFetch, WebSearch, Sleep, AskUserQuestion |
 > | **Moderate** | Auto-approve | Write, Edit, NotebookEdit, TodoWrite, Skill, Artifact, McpProxy |
 > | **Dangerous** | Require confirmation | Bash, PowerShell, REPL |
-> | **Escalation** | Always show plan | Agent, TeamDelegate, Swarm, Mission |
+> | **Escalation** | Always show plan | Agent, TeamDelegate, Swarm, Workflow |
 >
 > To restore the old behavior (auto-approve everything), set `SOVRANT_UNSAFE_DONTASK=true`.
 
@@ -853,7 +919,7 @@ Returns the run result with `run_id`, `status`, `output`, and `tokens_used`.
 
 ## Run Endpoints
 
-Agent runs are recorded for teams, swarms, and missions.
+Agent runs are recorded for teams, swarms, and workflows.
 
 ### Get Run — `GET /v1/runs/{id}`
 
@@ -882,33 +948,72 @@ Response: `{ "text": "...", "tool_calls": [...], "errors": [] }`.
 
 ---
 
-## Mission Endpoints
+## Workflow Endpoints
 
-Missions are goal-driven, multi-step agent tasks tracked through their lifecycle.
+Workflows (formerly "missions") are goal-driven, multi-step agent tasks tracked through their lifecycle. The `/v1/missions*` paths were replaced by `/v1/workflows*` in Phase 129 with no alias. `Sovrant.Server` also runs `WorkflowSchedulerService`, which advances `Planning`/`Running` workflows in the background (`SOVRANT_WORKFLOW_POLL_SECONDS`, default 20; `SOVRANT_WORKFLOW_MAX_CONCURRENT`, default 3).
 
-### Create Mission — `POST /v1/missions`
+### Create Workflow — `POST /v1/workflows`
 
 ```json
-{ "goal": "Migrate to v2 API", "workspace_id": "ws_...", "project_id": "proj_..." }
+{ "goal": "Migrate to v2 API", "session_id": "optional", "workspace_id": "ws_...", "project_id": "proj_..." }
 ```
 
-### List Missions — `GET /v1/missions`
+If `session_id` is omitted, the workflow gets its own linked chat session (id = workflow id), seeded with the goal.
+
+### List Workflows — `GET /v1/workflows`
 
 Query params: `ownerUserId`, `status`, `limit`.
 
-### Get Mission — `GET /v1/missions/{id}`
+### Get Workflow — `GET /v1/workflows/{id}`
 
-### Run Mission — `POST /v1/missions/{id}/run`
+### Run Workflow — `POST /v1/workflows/{id}/run`
 
-Drives the mission forward one engine cycle.
+Drives the workflow forward one engine cycle.
 
-### Get Events — `GET /v1/missions/{id}/events`
+### Get Events — `GET /v1/workflows/{id}/events`
 
 Returns the full event journal.
 
-### Export Mission — `GET /v1/missions/{id}/export`
+### Export Workflow — `GET /v1/workflows/{id}/export`
 
 Query param: `format` (`markdown` default, or `json`).
+
+### Plan a Workflow — `POST /v1/workflows/plan` (2.0)
+
+Creates a workflow and has the model plan it **without running it**. Body: `goal` (required), and optional `session_id`, `workspace_id`, `project_id`. Returns `201` with the workflow in `awaitingHuman` and its plan in `plan_json`. Review or edit it with `PUT …/plan`, then `POST …/run` runs that exact plan. If planning fails, the response is `422` (not 5xx, so clients don't retry and create duplicates).
+
+### Edit a Plan — `PUT /v1/workflows/{id}/plan` (2.0)
+
+Replaces the plan with edited steps before the workflow runs. Body: `{ "steps": [ { "intent": "…", "expected_outcome": "…", "tier": "high|standard|fast" } ] }`; `expected_outcome` and `tier` are optional. Steps without an intent are dropped; `400` if none remain. `409` once the workflow has run (its plan is history by then). Owner or admin.
+
+### Cancel a Workflow — `POST /v1/workflows/{id}/cancel` (2.0)
+
+Journals a `cancelled` event and moves the workflow to `cancelled`. `409` if it already completed, failed or was cancelled. Owner or admin.
+
+### Workflow Privacy — `PATCH /v1/workflows/{id}/privacy`
+
+Body: `{ "isPrivate": true|false }`. Owner only. (Sessions and agent runs have the same route: `PATCH /v1/sessions/{id}/privacy`, `PATCH /v1/agent-runs/{id}/privacy`.)
+
+---
+
+## MCP Servers
+
+### List MCP Servers — `GET /v1/mcp/servers`
+
+Names and connection status only; configuration (commands, headers, env) is never returned. Each entry:
+
+| Field | Meaning |
+|---|---|
+| `name` | Server name |
+| `connected` | Whether a client is connected right now |
+| `state` | `connected`, `connecting` or `unavailable` (2.0) |
+| `message` | When unavailable: one friendly sentence, e.g. "Couldn't reach api.example.com. Check your internet connection. Retrying automatically." (2.0) |
+| `kind` | When unavailable: `dns`, `unreachable`, `credentials`, `tls` or `other` (2.0) |
+| `retrying` / `next_retry_at` | Whether an automatic retry is scheduled (after 10 s, 1 min, 5 min; never for `credentials`) (2.0) |
+
+### Retry an MCP Server — `POST /v1/mcp/servers/{name}/retry` (2.0)
+
+Admin only. Connects now (cancelling any scheduled retry) and returns the server's new status in the same shape. `404` for an unknown server.
 
 ---
 
@@ -996,7 +1101,7 @@ Aggregates everything currently in flight for the Command Center cockpit (Web `/
 
 ```json
 {
-  "active_missions": 1,
+  "active_workflows": 1,
   "active_team_runs": 0,
   "active_agent_runs": 2,
   "active_sessions": 3,
@@ -1035,7 +1140,7 @@ Aggregates the signed-in user's cross-workspace activity. Differs from Command C
 
 ```json
 {
-  "active_missions": 1,
+  "active_workflows": 1,
   "active_team_runs": 0,
   "active_agent_runs": 2,
   "active_sessions": 3,

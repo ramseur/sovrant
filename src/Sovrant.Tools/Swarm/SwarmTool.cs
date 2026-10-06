@@ -4,6 +4,9 @@ using System.Text.Json;
 using Sovrant.Agents.Swarm;
 using Sovrant.Agents.Swarm.Bus;
 using Sovrant.Api.Types;
+using Sovrant.Runtime.Conversation;
+using Sovrant.Runtime.Storage;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Tools.Swarm;
 
@@ -26,6 +29,7 @@ public sealed class SwarmTool : ITool
     private readonly SwarmQualityGate _qualityGate;
     private readonly ISwarmStateTracker _stateTracker;
     private readonly ISwarmProgressReporter _progress;
+    private readonly IAgentRunStore? _runStore;
 
     public SwarmTool(
         SwarmConfig config,
@@ -33,7 +37,8 @@ public sealed class SwarmTool : ITool
         ISwarmOrchestrator orchestrator,
         SwarmQualityGate qualityGate,
         ISwarmStateTracker stateTracker,
-        ISwarmProgressReporter progress)
+        ISwarmProgressReporter progress,
+        IAgentRunStore? runStore = null)
     {
         _config = config;
         _decomposer = decomposer;
@@ -41,6 +46,7 @@ public sealed class SwarmTool : ITool
         _qualityGate = qualityGate;
         _stateTracker = stateTracker;
         _progress = progress;
+        _runStore = runStore;
     }
 
     public ToolDefinition Definition => s_definition;
@@ -79,7 +85,18 @@ public sealed class SwarmTool : ITool
             return FormatDryRun(plan);
 
         // Phase 2: Execute
-        var result = await _orchestrator.ExecuteAsync(plan, config, onEvent: _progress.Report, ct: ct).ConfigureAwait(false);
+        var runId = await RecordRunStartAsync(prompt, ct).ConfigureAwait(false);
+        SwarmResult result;
+        try
+        {
+            result = await _orchestrator.ExecuteAsync(plan, config, onEvent: _progress.Report, ct: ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            await RecordRunEndAsync(runId, succeeded: false).ConfigureAwait(false);
+            throw;
+        }
+        await RecordRunEndAsync(runId, succeeded: result.Status == SwarmStatus.Completed).ConfigureAwait(false);
 
         // Phase 3: Quality gate (optional)
         if (config.QualityGateEnabled && result.Status == SwarmStatus.Completed)
@@ -95,6 +112,57 @@ public sealed class SwarmTool : ITool
         }
 
         return FormatResult(result);
+    }
+
+    /// <summary>
+    /// Phase 133 — when the swarm is launched from a chat, records a <c>swarm</c>
+    /// run linked to that conversation so its sidebar row can show "Swarm · n runs".
+    /// Best-effort: a ledger failure never blocks or fails the swarm itself.
+    /// </summary>
+    private async Task<string?> RecordRunStartAsync(string prompt, CancellationToken ct)
+    {
+        if (_runStore is null || TurnContext.Current is not { } turn)
+            return null;
+        try
+        {
+            var userId = turn.OwnerUserId is { Length: > 0 } u ? u : WorkspaceIdentity.CurrentUserId;
+            var runId = $"run-{Guid.NewGuid():N}";
+            await _runStore.CreateAsync(new AgentRunRecord(
+                RunId: runId,
+                ParentRunId: null,
+                TeamId: null,
+                MemberId: null,
+                WorkspaceId: Environment.GetEnvironmentVariable("SOVRANT_WORKSPACE_ID") ?? WorkspaceIdentity.DefaultPersonalFor(userId),
+                ProjectId: null,
+                UserId: userId,
+                Kind: "swarm",
+                Status: "running",
+                StartedAt: DateTimeOffset.UtcNow,
+                Prompt: prompt.Length > 120 ? prompt[..117] + "…" : prompt,
+                SessionId: turn.SessionId), ct).ConfigureAwait(false);
+            return runId;
+        }
+#pragma warning disable CA1031 // best-effort ledger write: never fail the swarm over it
+        catch (Exception)
+        {
+            return null;
+        }
+#pragma warning restore CA1031
+    }
+
+    private async Task RecordRunEndAsync(string? runId, bool succeeded)
+    {
+        if (_runStore is null || runId is null)
+            return;
+        try
+        {
+            await _runStore.UpdateStatusAsync(runId, succeeded ? "succeeded" : "failed", ct: CancellationToken.None).ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // best-effort ledger write: never fail the swarm over it
+        catch (Exception)
+        {
+        }
+#pragma warning restore CA1031
     }
 
     private static SwarmConfig MergeFederation(SwarmConfig base_, string? federationRaw, string? parentSwarmId)

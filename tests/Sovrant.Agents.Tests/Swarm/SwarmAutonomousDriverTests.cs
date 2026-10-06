@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Sovrant.Agents.Swarm;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Storage;
 
 namespace Sovrant.Agents.Tests.Swarm;
@@ -9,14 +9,14 @@ public sealed class SwarmAutonomousDriverTests : IAsyncDisposable
 {
     private readonly string _dbPath;
     private readonly SqliteStorageProvider _provider;
-    private readonly SqliteMissionStore _store;
+    private readonly SqliteWorkflowStore _store;
 
     public SwarmAutonomousDriverTests()
     {
         _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_swarm_driver_{Guid.NewGuid():N}.db");
         _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
         _provider.InitializeAsync().GetAwaiter().GetResult();
-        _store = new SqliteMissionStore(_provider);
+        _store = new SqliteWorkflowStore(_provider);
     }
 
     public async ValueTask DisposeAsync()
@@ -103,21 +103,21 @@ public sealed class SwarmAutonomousDriverTests : IAsyncDisposable
 
         var updated = await driver.AdvanceAsync(mission.Id);
 
-        Assert.Equal(MissionStatus.Completed, updated.Status);
+        Assert.Equal(WorkflowStatus.Completed, updated.Status);
         Assert.NotNull(updated.CompletedAt);
         Assert.Equal(1, decomposer.Calls);
         Assert.Equal(1, orchestrator.Calls);
 
         var events = await _store.GetEventsAsync(mission.Id);
         var types = events.Select(e => e.EventType).ToList();
-        Assert.Contains(MissionEventTypes.PlanRevised, types);
-        Assert.Contains(MissionEventTypes.RunStarted, types);
-        Assert.Contains(MissionEventTypes.RunCompleted, types);
-        Assert.Contains(MissionEventTypes.Completed, types);
+        Assert.Contains(WorkflowEventTypes.PlanRevised, types);
+        Assert.Contains(WorkflowEventTypes.RunStarted, types);
+        Assert.Contains(WorkflowEventTypes.RunCompleted, types);
+        Assert.Contains(WorkflowEventTypes.Completed, types);
     }
 
     [Fact]
-    public async Task AdvanceAsync_ProjectsSwarmEvents_ToMissionJournal()
+    public async Task AdvanceAsync_ProjectsSwarmEvents_ToWorkflowJournal()
     {
         var mission = await _store.CreateAsync("projected events");
         var orchestrator = new FakeOrchestrator { Result = MakeResult() };
@@ -144,9 +144,9 @@ public sealed class SwarmAutonomousDriverTests : IAsyncDisposable
 
         var updated = await driver.AdvanceAsync(mission.Id);
 
-        Assert.Equal(MissionStatus.Failed, updated.Status);
+        Assert.Equal(WorkflowStatus.Failed, updated.Status);
         var events = await _store.GetEventsAsync(mission.Id);
-        Assert.Contains(MissionEventTypes.Failed, events.Select(e => e.EventType));
+        Assert.Contains(WorkflowEventTypes.Failed, events.Select(e => e.EventType));
     }
 
     [Fact]
@@ -158,14 +158,14 @@ public sealed class SwarmAutonomousDriverTests : IAsyncDisposable
 
         var updated = await driver.AdvanceAsync(mission.Id);
 
-        Assert.Equal(MissionStatus.Failed, updated.Status);
+        Assert.Equal(WorkflowStatus.Failed, updated.Status);
     }
 
     [Fact]
-    public async Task AdvanceAsync_TerminalMission_IsNoOp()
+    public async Task AdvanceAsync_TerminalWorkflow_IsNoOp()
     {
         var mission = await _store.CreateAsync("already done");
-        await _store.UpdateStateAsync(mission.Id, MissionStatus.Completed, completedAt: DateTimeOffset.UtcNow);
+        await _store.UpdateStateAsync(mission.Id, WorkflowStatus.Completed, completedAt: DateTimeOffset.UtcNow);
 
         var decomposer = new FakeDecomposer();
         var orchestrator = new FakeOrchestrator { Result = MakeResult() };
@@ -173,13 +173,13 @@ public sealed class SwarmAutonomousDriverTests : IAsyncDisposable
 
         var updated = await driver.AdvanceAsync(mission.Id);
 
-        Assert.Equal(MissionStatus.Completed, updated.Status);
+        Assert.Equal(WorkflowStatus.Completed, updated.Status);
         Assert.Equal(0, decomposer.Calls);
         Assert.Equal(0, orchestrator.Calls);
     }
 
     [Fact]
-    public async Task AdvanceAsync_UnknownMissionId_Throws()
+    public async Task AdvanceAsync_UnknownWorkflowId_Throws()
     {
         var driver = CreateDriver(new FakeDecomposer(), new FakeOrchestrator { Result = MakeResult() });
         await Assert.ThrowsAsync<InvalidOperationException>(() => driver.AdvanceAsync("does-not-exist"));

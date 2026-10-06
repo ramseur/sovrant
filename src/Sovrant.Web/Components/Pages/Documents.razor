@@ -69,8 +69,10 @@ else
 
             <!-- Primary action: chat to create -->
             <button class="btn-primary doc-chat-btn"
-                    @onclick="() => ChatToCreate(context)">
-                💬 Chat to create this document
+                    @onclick="() => ChatToCreate(context)"
+                    style="display:inline-flex;align-items:center;gap:8px">
+                <SovrantIcon Name="@IconNames.Chat" Size="15" />
+                Chat to create this document
             </button>
             <p class="text-muted text-sm" style="margin:4px 0 16px;">
                 The AI will ask for the information it needs and generate the document for you.

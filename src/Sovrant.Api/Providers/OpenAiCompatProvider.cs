@@ -130,6 +130,13 @@ public class OpenAiCompatProvider : ILlmProvider
             {
                 if (item.Data is "[DONE]" or "") continue;
 
+                // OpenRouter (and other OpenAI-compatible gateways) can answer HTTP 200 and then
+                // report the real failure inside the stream, e.g. a rate-limited or busy upstream
+                // for a :free model. Without this the chunk had no choices, was skipped, and the
+                // turn "completed" silently with an empty answer.
+                if (TryReadStreamError(item.Data) is { } streamError)
+                    throw new InvalidOperationException(streamError);
+
                 OpenAiSseChunk? chunk = null;
                 try { chunk = JsonSerializer.Deserialize(item.Data, SovrantJsonContext.Default.OpenAiSseChunk); }
                 catch (JsonException ex) { _logSseSkip(_logger, item.Data, ex); continue; }
@@ -252,6 +259,42 @@ public class OpenAiCompatProvider : ILlmProvider
             httpReq.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
         }
         return httpReq;
+    }
+
+    /// <summary>
+    /// Reads an <c>{"error": {...}}</c> object sent inside an SSE stream and formats it the way the
+    /// runtime's retry logic recognises ("Provider returned error 429: ..."), or returns null.
+    /// </summary>
+    internal static string? TryReadStreamError(string data)
+    {
+        if (!data.Contains("\"error\"", StringComparison.Ordinal))
+            return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(data);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object
+                || !doc.RootElement.TryGetProperty("error", out var err)
+                || err.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+                return null;
+
+            if (err.ValueKind == JsonValueKind.String)
+                return $"Provider returned error: {err.GetString()}";
+
+            var code = err.TryGetProperty("code", out var c) ? c.ToString() : null;
+            var message = err.TryGetProperty("message", out var m) && m.ValueKind == JsonValueKind.String ? m.GetString() : null;
+            // OpenRouter puts the upstream provider's own message in metadata.raw.
+            if (err.TryGetProperty("metadata", out var meta) && meta.ValueKind == JsonValueKind.Object
+                && meta.TryGetProperty("raw", out var raw) && raw.ValueKind == JsonValueKind.String
+                && !string.IsNullOrWhiteSpace(raw.GetString()))
+                message = $"{message} ({raw.GetString()})";
+            return string.IsNullOrEmpty(code)
+                ? $"Provider returned error: {message ?? "unknown error"}"
+                : $"Provider returned error {code}: {message ?? "unknown error"}";
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Returns true when the base URL points to OpenAI's official API (not OpenRouter, etc.).</summary>

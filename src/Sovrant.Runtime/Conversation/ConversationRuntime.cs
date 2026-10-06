@@ -246,6 +246,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             ? Knowledge.AttributionScope.Begin(_sessionId, turnIndex, _attributionStore)
             : null;
 
+        // Phase 133 — lets tools that start runs (TeamRun, Swarm) record which
+        // conversation launched them, for the sidebar's derived labels.
+        using var turnContextScope = TurnContext.Begin(_sessionId, _ownerUserId);
+
         var turnTimeoutSeconds = int.TryParse(
             Environment.GetEnvironmentVariable("SOVRANT_TURN_TIMEOUT_SECONDS"), out var tts) && tts > 0 ? tts : 300;
         var originalCt = ct;
@@ -403,6 +407,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 Tools = tools.Count > 0 ? tools : null,
                 Stream = true,   // runtime always uses streaming internally
             };
+
+            // Phase 138: no provider is active (e.g. the saved one isn't enabled for this
+            // workspace). Say so instead of sending the request to any endpoint.
+            if (_config.InactiveProviderReason is { } inactiveReason)
+            {
+                yield return new RuntimeEvent.RuntimeError(inactiveReason);
+                yield break;
+            }
 
             // RouteAsync can throw if all providers are unhealthy.
             // Catch outside yield (yield-in-try/catch is not permitted in iterators).
@@ -742,7 +754,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         return last;
     }
 
+    /// <summary>The model's reply had no content at all (no text, no tool calls, no output tokens).</summary>
+    internal const string EmptyResponseError =
+        "The model returned an empty response. This often happens when a free model is busy; please try again.";
+
     private static bool IsRetryableError(string message) =>
+        message.Contains(EmptyResponseError, StringComparison.Ordinal) ||
         message.Contains("429", StringComparison.Ordinal) ||
         message.Contains("500", StringComparison.Ordinal) ||
         message.Contains("502", StringComparison.Ordinal) ||
@@ -842,6 +859,16 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         {
             var inputElement = ParseToolInput(inputJson.ToString());
             blocks.Add(new OutputContentBlock.ToolUseBlock(id, name, inputElement));
+        }
+
+        // A call that "succeeds" with no text, no tool calls and no output tokens is a failed
+        // reply (seen with busy :free models), not an answer. Surface it as a retryable error
+        // instead of ending the turn silently, which looked like the prompt was ignored.
+        if (success && blocks.Count == 0 && outputTokens == 0)
+        {
+            success = false;
+            LogRequestFailed(_logger, EmptyResponseError);
+            events.Add(new RuntimeEvent.RuntimeError(FormatProviderError(EmptyResponseError, provider.Name, request.Model)));
         }
 
         var accumulated = new StreamAccumulation(success, stopReason, inputTokens, outputTokens, blocks);
@@ -1551,10 +1578,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     /// </summary>
     private static string FriendlyProviderName(Sovrant.Api.Providers.ILlmProvider provider)
     {
-        // Named providers (e.g. OllamaProvider) may use localhost, so check the provider
-        // name first to avoid misidentifying them as generic "Local".
-        if (string.Equals(provider.Name, "ollama", StringComparison.OrdinalIgnoreCase)) return "Ollama";
         var host = provider.BaseUrl.Host;
+        // Local endpoints are reached through the primary provider at the profile's URL (Phase 138);
+        // Ollama's and LM Studio's standard ports identify them.
+        if (provider.BaseUrl.IsLoopback && provider.BaseUrl.Port == 11434) return "Ollama";
+        if (provider.BaseUrl.IsLoopback && provider.BaseUrl.Port == 1234) return "LM Studio";
         if (host.Contains("openrouter", StringComparison.OrdinalIgnoreCase)) return "OpenRouter";
         if (host.Contains("openai", StringComparison.OrdinalIgnoreCase)) return "OpenAI";
         if (host.Contains("anthropic", StringComparison.OrdinalIgnoreCase)) return "Anthropic";

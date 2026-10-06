@@ -9,7 +9,7 @@
     else if (ToolUses.Count > 0)
     {
         <button type="button" class="work-strip-header @(ErrorCount > 0 ? "work-strip-header-error" : "")" @onclick="ToggleExpanded">
-            <span class="work-strip-caret">@(_expanded ? "▾" : "▸")</span>
+            <span class="work-strip-caret @(_expanded ? "open" : "")"><SovrantIcon Name="@IconNames.Expand" Size="12" StrokeWidth="2.4" /></span>
             <span class="work-strip-count">@ToolUses.Count action@(ToolUses.Count == 1 ? "" : "s")</span>
             @if (!string.IsNullOrEmpty(ActionSummary))
             {
@@ -28,7 +28,7 @@
             }
             @if (ErrorCount > 0)
             {
-                <span class="work-strip-warn-icon">&#9888;</span>
+                <span class="work-strip-warn-icon"><SovrantIcon Name="@IconNames.Warning" Size="13" /></span>
             }
         </button>
 
@@ -40,7 +40,7 @@
                     <div class="work-strip-row @(tool.IsError ? "work-strip-row-error" : "") @(_activeToolId == tool.ToolUseId ? "work-strip-row-active" : "")"
                          @onclick="() => ToggleDetail(tool.ToolUseId)">
                         <span class="work-strip-status-dot @StatusDotClass(tool)"></span>
-                        <span class="tool-icon">&#x1F527;</span>
+                        <span class="tool-icon"><SovrantIcon Name="@IconNames.Tool" Size="13" /></span>
                         <span class="work-strip-row-name">@ChatMessageModel.FriendlyToolLabel(tool.ToolName)</span>
                         <span class="work-strip-row-preview">@Preview(tool.Result)</span>
                     </div>

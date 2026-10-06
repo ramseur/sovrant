@@ -14,7 +14,7 @@
         "max_tools": 15
       },
       "reason": "OpenRouter /api/v1/models does not yet populate supported_parameters with tools/tool_choice for Gemma 4 entries. Max tools capped at 15 — Gemma 4 is prone to tool-call hallucination loops with large tool sets.",
-      "expires": "2026-07-01"
+      "expires": "2026-12-11"
     },
     {
       "pattern": "gemma4:*",
@@ -27,7 +27,7 @@
         "max_context": 262144
       },
       "reason": "Ollama v0.20.0 has a broken Gemma 4 chat template for tool calls. The workaround uses /api/generate with raw control tokens.",
-      "expires": "2026-07-01"
+      "expires": "2026-12-11"
     },
     {
       "pattern": "ollama/gemma4*",
@@ -40,7 +40,7 @@
         "max_context": 262144
       },
       "reason": "Same Ollama workaround as gemma4:* but with explicit ollama/ prefix.",
-      "expires": "2026-07-01"
+      "expires": "2026-12-11"
     },
 
     {

@@ -29,7 +29,7 @@
     @if (!string.IsNullOrEmpty(_error))
     {
         <div class="page-error-banner" role="alert">
-            <span>&#9888;</span>
+            <SovrantIcon Name="@IconNames.Warning" Size="15" StrokeWidth="2" />
             <span class="error-message">@_error</span>
         </div>
     }
@@ -84,7 +84,7 @@
             <div class="admin-config-panel">
                 <div class="config-panel-header">
                     <h4>Configure: @_configWorkspace.Name</h4>
-                    <button class="btn btn-sm" @onclick="() => _configWorkspace = null">✕ Close</button>
+                    <button class="btn btn-sm" @onclick="() => _configWorkspace = null"><SovrantIcon Name="@IconNames.Close" Size="13" Class="icon-inline icon-lead" />Close</button>
                 </div>
 
                 <h5>General Settings</h5>

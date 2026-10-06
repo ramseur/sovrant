@@ -1,0 +1,324 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using Sovrant.Runtime.Engine;
+using Sovrant.Runtime.Session;
+using Sovrant.Runtime.Workflows;
+using Sovrant.Runtime.Storage;
+
+namespace Sovrant.Runtime.Tests.Workflows;
+
+public sealed class LlmWorkflowExecutorTests : IAsyncDisposable
+{
+    private readonly string _dbPath;
+    private readonly SqliteStorageProvider _provider;
+    private readonly SqliteWorkflowStore _store;
+    private readonly InMemorySessionStore _sessionStore = new();
+    private readonly WorkflowSessionNotifier _notifier;
+
+    public LlmWorkflowExecutorTests()
+    {
+        _dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_mission_exec_{Guid.NewGuid():N}.db");
+        _provider = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, _dbPath);
+        _provider.InitializeAsync().GetAwaiter().GetResult();
+        _store = new SqliteWorkflowStore(_provider);
+        _notifier = new WorkflowSessionNotifier(_sessionStore, NullLogger<WorkflowSessionNotifier>.Instance);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await _provider.DisposeAsync();
+        if (File.Exists(_dbPath)) File.Delete(_dbPath);
+    }
+
+    // ── Fakes ────────────────────────────────────────────────────────────
+
+    private sealed class InMemorySessionStore : ISessionStore
+    {
+        public List<(string SessionId, SessionEntry Entry)> Appended { get; } = [];
+
+        public Task AppendAsync(string sessionId, SessionEntry entry, string? ownerUserId = null, CancellationToken ct = default)
+        {
+            Appended.Add((sessionId, entry));
+            return Task.CompletedTask;
+        }
+        public Task<IReadOnlyList<SessionEntry>> LoadAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionEntry>>([]);
+        public Task<IReadOnlyList<string>> ListAsync(string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>>([]);
+        public Task<bool> DeleteAsync(string sessionId, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult(true);
+        public Task<int> DeleteAllAsync(CancellationToken ct = default)
+            => Task.FromResult(0);
+        public Task<string?> GetOwnerAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+        public Task SetTitleAsync(string sessionId, string title, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string?> GetTitleAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+        public Task<IReadOnlyList<SessionListItem>> ListWithTitlesAsync(string? ownerUserId = null, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>([]);
+        public Task<IReadOnlyList<SessionListItem>> SearchAsync(string query, string? ownerUserId = null, int limit = 50, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<SessionListItem>>([]);
+        public Task<IReadOnlyList<string>?> GetMcpConnectionsAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<string>?>(null);
+        public Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task UpdatePrivacyAsync(string sessionId, string ownerUserId, bool isPrivate, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<bool?> GetIsPrivateAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<bool?>(null);
+        public Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default)
+            => Task.CompletedTask;
+        public Task<string?> GetAgentNameAsync(string sessionId, CancellationToken ct = default)
+            => Task.FromResult<string?>(null);
+    }
+
+    private sealed class CountingPlanner : IWorkflowPlanner
+    {
+        public int Calls { get; private set; }
+        public string Intent { get; init; } = "planner-generated step";
+
+        public Task<RuntimePlan> PlanAsync(Workflow mission, CancellationToken ct = default)
+        {
+            Calls++;
+            var step = new RuntimeStep(0, Intent, "goal satisfied", RuntimeModelTier.Standard);
+            return Task.FromResult(new RuntimePlan($"plan-{Guid.NewGuid():N}", 1, mission.Goal, [step], DateTimeOffset.UtcNow));
+        }
+    }
+
+    private sealed class FakeEngineExecutor : IExecutor
+    {
+        public ExecutionResult NextResult { get; set; } = default!;
+        public Exception? Throw { get; set; }
+        public int Calls { get; private set; }
+        public RuntimePlan? LastPlan { get; private set; }
+        public TimeSpan Delay { get; set; } = TimeSpan.Zero;
+
+        public async Task<ExecutionResult> ExecuteAsync(
+            RuntimePlan plan, EngineRunContext runContext, Replanner replanner, CancellationToken ct = default)
+        {
+            Calls++;
+            LastPlan = plan;
+            if (Delay > TimeSpan.Zero) await Task.Delay(Delay, ct).ConfigureAwait(false);
+            if (Throw is not null) throw Throw;
+            return NextResult;
+        }
+    }
+
+    private static ExecutionResult OneSuccessfulStep()
+    {
+        var now = DateTimeOffset.UtcNow;
+        return new ExecutionResult(
+            FinalPlan: new RuntimePlan("plan-x", 1, "g", Array.Empty<RuntimeStep>(), now),
+            Outcomes: new[]
+            {
+                new StepOutcome(0, StepStatus.Succeeded, "did it", null, true, now, now),
+            },
+            ReplanCount: 0,
+            TerminalState: ExecutionTerminalState.Completed);
+    }
+
+    private static ExecutionResult OneFailedStep() =>
+        new(FinalPlan: new RuntimePlan("plan-x", 1, "g", Array.Empty<RuntimeStep>(), DateTimeOffset.UtcNow),
+            Outcomes: new[]
+            {
+                new StepOutcome(0, StepStatus.Failed, "boom", null, false,
+                    DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, ErrorMessage: "boom"),
+            },
+            ReplanCount: 0,
+            TerminalState: ExecutionTerminalState.FailedAfterReplans);
+
+    // ── Tests ────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task RunAsync_HappyPath_CompletesWorkflowAndJournalsEveryTransition()
+    {
+        var workflow = await _store.CreateAsync("fix the bug");
+        var engine = new FakeEngineExecutor { NextResult = OneSuccessfulStep() };
+
+        var executor = new LlmWorkflowExecutor(
+            _store, new SimpleWorkflowPlanner(), engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        var updated = await executor.RunAsync(workflow.Id);
+
+        Assert.Equal(WorkflowStatus.Completed, updated.Status);
+        Assert.NotNull(updated.CompletedAt);
+        Assert.Equal(1, engine.Calls);
+
+        var events = await _store.GetEventsAsync(workflow.Id);
+        var types = events.Select(e => e.EventType).ToList();
+        Assert.Contains(WorkflowEventTypes.WorkflowCreated, types);
+        Assert.Contains(WorkflowEventTypes.PlanRevised, types);
+        Assert.Contains(WorkflowEventTypes.RunStarted, types);
+        Assert.Contains(WorkflowEventTypes.RunCompleted, types);
+        Assert.Contains(WorkflowEventTypes.AcceptanceApproved, types);
+        Assert.Contains(WorkflowEventTypes.Completed, types);
+        // Every workflow now gets a real session by default (its own id) --
+        // the notifier posts there even when the caller never supplied one.
+        var posted = Assert.Single(_sessionStore.Appended);
+        Assert.Equal(workflow.Id, posted.SessionId);
+    }
+
+    [Fact]
+    public async Task RunAsync_CompletesWithLinkedSession_PostsStatusMessageToThatSession()
+    {
+        var workflow = await _store.CreateAsync("fix the bug", sessionId: "chat-session-1");
+        var engine = new FakeEngineExecutor { NextResult = OneSuccessfulStep() };
+
+        var executor = new LlmWorkflowExecutor(
+            _store, new SimpleWorkflowPlanner(), engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        await executor.RunAsync(workflow.Id);
+
+        var posted = Assert.Single(_sessionStore.Appended);
+        Assert.Equal("chat-session-1", posted.SessionId);
+        Assert.Equal("assistant", posted.Entry.Role);
+        Assert.Contains("completed", posted.Entry.Content, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("fix the bug", posted.Entry.Content, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RunAsync_StepFailure_MarksWorkflowFailedAndJournalsRejection()
+    {
+        var workflow = await _store.CreateAsync("impossible goal");
+        var engine = new FakeEngineExecutor { NextResult = OneFailedStep() };
+
+        var executor = new LlmWorkflowExecutor(
+            _store, new SimpleWorkflowPlanner(), engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        var updated = await executor.RunAsync(workflow.Id);
+
+        Assert.Equal(WorkflowStatus.Failed, updated.Status);
+        var events = await _store.GetEventsAsync(workflow.Id);
+        var types = events.Select(e => e.EventType).ToList();
+        Assert.Contains(WorkflowEventTypes.AcceptanceRejected, types);
+        Assert.Contains(WorkflowEventTypes.Failed, types);
+    }
+
+    [Fact]
+    public async Task RunAsync_EngineThrows_MarksFailedWithErrorEvent()
+    {
+        var workflow = await _store.CreateAsync("will crash");
+        var engine = new FakeEngineExecutor { Throw = new InvalidOperationException("provider down") };
+
+        var executor = new LlmWorkflowExecutor(
+            _store, new SimpleWorkflowPlanner(), engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        var updated = await executor.RunAsync(workflow.Id);
+
+        Assert.Equal(WorkflowStatus.Failed, updated.Status);
+        var events = await _store.GetEventsAsync(workflow.Id);
+        Assert.Contains(events, e =>
+            e.EventType == WorkflowEventTypes.Failed
+            && e.PayloadJson.Contains("provider down", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task RunAsync_TwoConcurrentCallsOnSameWorkflow_OnlyOneActuallyRuns()
+    {
+        // Reproduces a live bug: a stale UI re-click (or the scheduler and a
+        // manual "Run now" landing at once) could fire two RunAsync calls
+        // for the same workflow before the first had written Status=Running,
+        // racing two full plan+execute+gate cycles against each other.
+        var workflow = await _store.CreateAsync("race me");
+        var engine = new FakeEngineExecutor { NextResult = OneSuccessfulStep(), Delay = TimeSpan.FromMilliseconds(200) };
+        var executor = new LlmWorkflowExecutor(
+            _store, new SimpleWorkflowPlanner(), engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        var run1 = executor.RunAsync(workflow.Id);
+        await Task.Delay(20); // let run1 pass its in-flight claim before run2 starts
+        var run2 = executor.RunAsync(workflow.Id);
+        await Task.WhenAll(run1, run2);
+
+        Assert.Equal(1, engine.Calls); // the second call was a no-op, not a second full run
+        var events = await _store.GetEventsAsync(workflow.Id);
+        Assert.Equal(1, events.Count(e => e.EventType == WorkflowEventTypes.RunStarted));
+    }
+
+    [Fact]
+    public async Task RunAsync_TerminalWorkflow_IsIdempotent()
+    {
+        var workflow = await _store.CreateAsync("already done");
+        await _store.UpdateStateAsync(
+            workflow.Id, WorkflowStatus.Completed, completedAt: DateTimeOffset.UtcNow);
+
+        var engine = new FakeEngineExecutor();  // would throw if called with no NextResult
+        var executor = new LlmWorkflowExecutor(
+            _store, new SimpleWorkflowPlanner(), engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        var updated = await executor.RunAsync(workflow.Id);
+
+        Assert.Equal(WorkflowStatus.Completed, updated.Status);
+        Assert.Equal(0, engine.Calls);
+    }
+
+    [Fact]
+    public async Task RunAsync_UnknownWorkflow_Throws()
+    {
+        var engine = new FakeEngineExecutor();
+        var executor = new LlmWorkflowExecutor(
+            _store, new SimpleWorkflowPlanner(), engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            executor.RunAsync("workflow-does-not-exist"));
+    }
+
+    [Fact]
+    public async Task RunAsync_ReviewedPlanAwaitingHuman_ReusesStoredPlanInsteadOfRePlanning()
+    {
+        var workflow = await _store.CreateAsync("reviewed goal");
+        var reviewedPlan = new RuntimePlan(
+            "plan-reviewed", 1, workflow.Goal,
+            [new RuntimeStep(0, "human-edited step", "goal satisfied", RuntimeModelTier.High)],
+            DateTimeOffset.UtcNow);
+        await _store.UpdateStateAsync(
+            workflow.Id, WorkflowStatus.AwaitingHuman, planJson: WorkflowPlanJson.Serialize(reviewedPlan));
+
+        var planner = new CountingPlanner { Intent = "planner would have overwritten this" };
+        var engine = new FakeEngineExecutor { NextResult = OneSuccessfulStep() };
+        var executor = new LlmWorkflowExecutor(
+            _store, planner, engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        var updated = await executor.RunAsync(workflow.Id);
+
+        Assert.Equal(0, planner.Calls); // never asked to (re)plan
+        Assert.Equal("human-edited step", engine.LastPlan?.Steps.Single().Intent);
+        Assert.Equal(WorkflowStatus.Completed, updated.Status);
+    }
+
+    [Fact]
+    public async Task RunAsync_AfterAcceptancePause_StillRePlansOnResume()
+    {
+        // A pause from a rejected acceptance decision is a different kind of
+        // AwaitingHuman than an unreviewed plan -- a RunStarted event already
+        // exists, so a resume must still re-plan, exactly as before this
+        // feature existed. Simulates that history directly rather than
+        // driving a full first RunAsync cycle to failure.
+        var workflow = await _store.CreateAsync("retry after rejection");
+        var priorPlan = new RuntimePlan(
+            "plan-prior", 1, workflow.Goal,
+            [new RuntimeStep(0, "the plan that already ran", "goal satisfied", RuntimeModelTier.Standard)],
+            DateTimeOffset.UtcNow);
+        await _store.UpdateStateAsync(
+            workflow.Id, WorkflowStatus.AwaitingHuman, planJson: WorkflowPlanJson.Serialize(priorPlan));
+        await _store.AppendEventAsync(workflow.Id, WorkflowEventTypes.RunStarted, "{}");
+
+        var planner = new CountingPlanner { Intent = "fresh re-plan" };
+        var engine = new FakeEngineExecutor { NextResult = OneSuccessfulStep() };
+        var executor = new LlmWorkflowExecutor(
+            _store, planner, engine, new AllStepsSucceededGate(), _notifier,
+            NullLogger<LlmWorkflowExecutor>.Instance);
+
+        await executor.RunAsync(workflow.Id);
+
+        Assert.Equal(1, planner.Calls);
+        Assert.Equal("fresh re-plan", engine.LastPlan?.Steps.Single().Intent);
+    }
+}

@@ -24,7 +24,7 @@ public sealed record CommandCenterRow(
 /// <summary>The aggregated cockpit state at a single point in time.</summary>
 public sealed record CommandCenterState(
     DateTimeOffset GeneratedAt,
-    int ActiveMissions,
+    int ActiveWorkflows,
     int ActiveTeamRuns,
     int ActiveAgentRuns,
     int ActiveSessions,

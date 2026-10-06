@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
              x:Class="Sovrant.Desktop.Views.AgentsView"
@@ -141,8 +142,9 @@
                                                     BorderThickness="0"
                                                     Cursor="Hand"
                                                     ToolTip.Tip="Click to toggle privacy">
-                                                <TextBlock Text="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
-                                                           FontSize="10" />
+                                                <ctrl:SovrantIcon IconName="{Binding IsPrivate, Converter={x:Static vm:BoolToLockIconConverter.Instance}}"
+                                                      Size="10"
+                                                      Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
                                             </Button>
                                         </StackPanel>
                                     </StackPanel>
@@ -161,7 +163,7 @@
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
                         BorderThickness="1" Padding="20,16"
-                        IsVisible="{Binding !SelectedTemplate}">
+                        IsVisible="{Binding ShowEmptyState}">
                     <TextBlock Text="Select an agent to view details"
                                FontSize="14" Foreground="{DynamicResource TextMuted}"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -172,7 +174,7 @@
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
                         BorderThickness="1" Padding="20,16"
-                        IsVisible="{Binding SelectedTemplate, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        IsVisible="{Binding ShowDetailPane}">
                     <Panel>
                     <ScrollViewer IsVisible="{Binding !IsEditing}">
                         <StackPanel Spacing="16">

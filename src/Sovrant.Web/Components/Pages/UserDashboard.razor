@@ -1,167 +1,352 @@
 @page "/dashboard"
 @using System.Globalization
 @using Sovrant.Runtime.UserDashboard
-@using Sovrant.Runtime.Missions
+@using Sovrant.Runtime.Workflows
 @using Sovrant.Runtime.Storage
 @using Sovrant.Runtime.Session
 @using Sovrant.Runtime.Governance
+@using Sovrant.Runtime.Onboarding
+@using Sovrant.Runtime.Config
+@inject SovrantConfig Config
 @using Sovrant.Web.Services
+@inject OnboardingService Onboarding
+@inject ActiveContextService ActiveContext
+@inject IJSRuntime JS
 @inject WebSessionService Session
 @inject UserDashboardAggregator Aggregator
-@inject IMissionStore MissionStore
+@inject IWorkflowStore WorkflowStore
 @inject IAgentRunStore RunStore
 @inject ISessionStore SessionStore
 @inject IAuditStore AuditStore
 @inject NavigationManager Nav
 @implements IDisposable
 
-<div class="settings-page cc-page">
-    <div class="diag-header">
-        <div>
-            <h1>Dashboard</h1>
-            <p class="text-secondary cc-subtitle">
-                Your activity across every workspace you belong to — plus your teammates' public activity.
-                <button type="button" class="btn-link cc-help-toggle" @onclick="() => _showHelp = !_showHelp">
-                    @(_showHelp ? "Hide guide" : "What are these?")
-                </button>
-            </p>
-        </div>
-        <div class="diag-header-right">
+@* Phase 142 — Home has two tabs. Overview (always opens first) is the guide, centred like the chat
+   welcome and sized to fit a laptop screen; Activity is the report (stats + table), unchanged.
+   See docs/design/web.html → Home. *@
+<div class="settings-page cc-page home-page">
+    <div class="home-tabs" role="tablist">
+        <button role="tab" aria-selected="@(_tab == "overview")" class="home-tab @(_tab == "overview" ? "on" : "")" @onclick='() => _tab = "overview"'>Overview</button>
+        <button role="tab" aria-selected="@(_tab == "activity")" class="home-tab @(_tab == "activity" ? "on" : "")" @onclick='() => _tab = "activity"'>Activity</button>
+        @if (_tab == "activity")
+        {
+            <span class="home-tabs-right">
+                @if (_state is not null)
+                {
+                    <span class="text-muted text-sm">Last updated: @_state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture)</span>
+                }
+                <button class="btn-secondary btn-sm" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
+            </span>
+        }
+    </div>
+
+    @if (_tab == "overview")
+    {
+        <div class="home-overview">
+            <div class="home-hero">
+                <h1>@_greeting</h1>
+                <p>@OnboardingService.Tagline</p>
+            </div>
+
             @if (_state is not null)
             {
-                <span class="text-muted text-sm">Last updated: @_state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture)</span>
+                <div class="home-glance">
+                    @foreach (var (label, value) in Glance(_state))
+                    {
+                        <button class="home-glance-pill" title="Open Activity" @onclick='() => _tab = "activity"'><b>@value</b><span>@label</span></button>
+                    }
+                </div>
             }
-            <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
-        </div>
-    </div>
 
-    @if (_showHelp)
-    {
-        <div class="cc-help-panel">
-            <dl class="cc-help-grid">
-                <dt>Missions</dt>
-                <dd>Long-running goals you own across all workspaces. A mission decomposes into team runs and agent runs until the goal is complete.</dd>
-
-                <dt>Team runs</dt>
-                <dd>Team executions you kicked off — a group of agents running together under a sequential, parallel, or swarm profile.</dd>
-
-                <dt>Agent runs</dt>
-                <dd>Solo agent runs you launched directly from the Agents page, or as individual members of a team run.</dd>
-
-                <dt>Sessions</dt>
-                <dd>Chat conversations you started. Private sessions are only visible to you; public ones are visible to workspace admins.</dd>
-
-                <dt>Shared</dt>
-                <dd>Your own items you've made public — missions, runs, and sessions with the 🔓 lock open. These are visible to workspace admins and teammates.</dd>
-
-                <dt>Claws</dt>
-                <dd>External MCP systems Sovrant is connected to (n8n, Zapier, custom servers). Sovrant monitors and steers them from the Command Center.</dd>
-            </dl>
-        </div>
-    }
-
-    @if (!string.IsNullOrEmpty(_error))
-    {
-        <div class="page-error-banner" role="alert">
-            <span>&#9888;</span><span class="error-message">@_error</span>
-        </div>
-    }
-
-    <div class="cc-stat-row">
-        <CcStat Label="Missions" Value="@(_state?.OwnMissions ?? 0)"
-                Tooltip="Long-running goals you own." />
-        <CcStat Label="Team runs" Value="@(_state?.OwnTeamRuns ?? 0)"
-                Tooltip="Team executions you kicked off." />
-        <CcStat Label="Agent runs" Value="@(_state?.OwnAgentRuns ?? 0)"
-                Tooltip="Solo agent runs you launched." />
-        <CcStat Label="Sessions" Value="@(_state?.OwnSessions ?? 0)"
-                Tooltip="Chat conversations you started." />
-        <CcStat Label="Shared" Value="@(_state?.OthersPublicRows ?? 0)"
-                Tooltip="Your items you've made public — visible to workspace teammates." />
-        <CcStat Label="Claws" Value="@(_state?.Claws ?? 0)"
-                Tooltip="External MCP systems Sovrant is connected to." />
-    </div>
-
-    @if (_state is null && _loading)
-    {
-        <div class="cc-empty"><p class="text-secondary">Loading…</p></div>
-    }
-    else if (_state is null || _state.Rows.Count == 0)
-    {
-        <div class="cc-empty">
-            <h2>Nothing yet</h2>
-            <p class="text-secondary">
-                Start a chat or run an agent template — your activity (and your teammates' public activity)
-                will appear here.
-            </p>
-            <div class="cc-empty-actions">
-                <a href="/" class="btn-primary">New chat</a>
-                <a href="/agents" class="btn-outline">Run an agent</a>
-            </div>
+            @if (_guide is { } guide)
+            {
+                var complete = guide.DoneCount == guide.Checklist.Count;
+                @if (complete && !_dismissed)
+                {
+                    <div class="home-allset">
+                        <span class="home-allset-tick"><SovrantIcon Name="@IconNames.Allow" Size="12" StrokeWidth="3" /></span>
+                        <span class="home-allset-text"><b>All set</b> — you've finished getting started.</span>
+                        <button class="btn-secondary btn-sm" @onclick="DismissAsync">Dismiss</button>
+                    </div>
+                }
+                @* Review 2026-10-06: the checklist runs across the container as step tiles, and
+                   What Sovrant can do sits below it, four across with full descriptions. *@
+                <div class="home-cols">
+                    @if (!complete)
+                    {
+                        <section class="home-col">
+                            <div class="home-sec-head">
+                                @* Admins set Sovrant up for everyone; members only ever see things they can do themselves. *@
+                                <h3>@(guide.IsAdmin ? "Set up Sovrant for your team" : "Get started")</h3>
+                                <span>@guide.DoneCount of @guide.Checklist.Count done</span>
+                            </div>
+                            <div class="wel-bar home-bar"><i style="width:@(Percent(guide))%"></i></div>
+                            <div class="home-steps" style="--n:@guide.Checklist.Count">
+                                @for (var n = 0; n < guide.Checklist.Count; n++)
+                                {
+                                    var item = guide.Checklist[n];
+                                    <div class="home-step @(item.Done ? "done" : "")">
+                                        <div class="home-step-top">
+                                            <span class="home-step-num">@if (item.Done) { <SovrantIcon Name="@IconNames.Allow" Size="12" StrokeWidth="3" /> } else { @(n + 1) }</span>
+                                            @if (item.Done) { <span class="wel-ok">Done</span> }
+                                        </div>
+                                        <b>@item.Title</b>
+                                        <span class="home-step-sub">@item.Subtitle</span>
+                                        @if (!item.Done && LinkFor(item.Target) is { } itemHref)
+                                        {
+                                            <a class="home-step-act" href="@itemHref">@item.ActionLabel →</a>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    }
+                    <section class="home-col">
+                        <div class="home-sec-head"><h3>What Sovrant can do</h3></div>
+                        <div class="home-cards">
+                            @foreach (var area in guide.Areas)
+                            {
+                                if (LinkFor(area.Target) is { } href)
+                                {
+                                    <a class="home-card" href="@href">
+                                        <span class="home-card-t"><span class="wel-icon"><SovrantIcon Name="@area.IconName" Size="14" /></span><b>@area.Title</b></span>
+                                        <span class="home-card-d">@area.Description</span>
+                                        <span class="home-card-go">@area.ActionLabel →</span>
+                                    </a>
+                                }
+                                else
+                                {
+                                    <div class="home-card managed">
+                                        <span class="home-card-t"><span class="wel-icon"><SovrantIcon Name="@area.IconName" Size="14" /></span><b>@area.Title</b></span>
+                                        <span class="home-card-d">@area.Description</span>
+                                        <span class="home-card-m">Managed by your admin</span>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    </section>
+                </div>
+            }
         </div>
     }
     else
     {
-        <div class="cc-grid cc-grid-dashboard">
-            <div class="cc-grid-header">
-                <div class="cc-col-kind">Kind</div>
-                <div class="cc-col-privacy"></div>
-                <div class="cc-col-title">Title</div>
-                <div class="cc-col-status">Status</div>
-                <div class="cc-col-owner">Owner</div>
-                <div class="cc-col-when">Last activity</div>
-                <div class="cc-col-cost">Cost</div>
-            </div>
-            @foreach (var row in _state.Rows.Skip(_dashPage * PageSize).Take(PageSize))
-            {
-                <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
-                    <div class="cc-col-kind">
-                        <span class="cc-kind-pill cc-kind-@(row.Kind)">@KindIcon(row.Kind) @row.Kind</span>
-                    </div>
-                    <div class="cc-col-privacy">
-                        @if (row.IsOwn)
-                        {
-                            <button class="privacy-toggle-mini @(row.IsPrivate ? "private" : "public")"
-                                    title="@(row.IsPrivate ? "Private — only you can see this. Click to make public." : "Public — visible to workspace admins. Click to make private.")"
-                                    @onclick="@(() => TogglePrivacyAsync(row))"
-                                    @onclick:stopPropagation="true"
-                                    @onclick:preventDefault="true">
-                                @(row.IsPrivate ? "🔒" : "🔓")
-                            </button>
-                        }
-                        else if (row.IsPrivate)
-                        {
-                            <span class="cc-badge-private" title="Private — only visible to you">&#x1F512;</span>
-                        }
-                    </div>
-                    <div class="cc-col-title">
-                        <span class="cc-title-text">@row.Title</span>
-                        @if (!string.IsNullOrEmpty(row.Preview))
-                        {
-                            <div class="cc-preview text-muted text-sm">@row.Preview</div>
-                        }
-                    </div>
-                    <div class="cc-col-status">
-                        <span class="cc-status cc-status-@row.Status.ToLowerInvariant()">@row.Status</span>
-                    </div>
-                    <div class="cc-col-owner text-sm text-muted">@(row.OwnerLabel ?? "—")</div>
-                    <div class="cc-col-when text-sm text-muted">@FormatRelative(row.LastActivity)</div>
-                    <div class="cc-col-cost text-sm text-muted">@(row.CostUsd is null ? "—" : $"${row.CostUsd:F4}")</div>
-                </a>
-            }
-        </div>
-        @if (_state.Rows.Count > PageSize)
+        <p class="text-secondary cc-subtitle home-act-sub">
+            Your activity across every workspace you belong to — plus your teammates' public activity.
+            <button type="button" class="btn-link cc-help-toggle" @onclick="() => _showHelp = !_showHelp">
+                @(_showHelp ? "Hide guide" : "What are these?")
+            </button>
+        </p>
+
+        @if (_showHelp)
         {
-            <div class="cc-pager">
-                <button class="btn-secondary cc-pager-btn" disabled="@(_dashPage == 0)" @onclick="() => _dashPage--">← Prev</button>
-                <span class="text-muted text-sm">@(_dashPage * PageSize + 1)–@(Math.Min((_dashPage + 1) * PageSize, _state.Rows.Count)) of @_state.Rows.Count</span>
-                <button class="btn-secondary cc-pager-btn" disabled="@((_dashPage + 1) * PageSize >= _state.Rows.Count)" @onclick="() => _dashPage++">Next →</button>
+            <div class="cc-help-panel">
+                <dl class="cc-help-grid">
+                    <dt>Workflows</dt>
+                    <dd>Long-running goals you own across all workspaces. A workflow decomposes into team runs and agent runs until the goal is complete.</dd>
+
+                    <dt>Team runs</dt>
+                    <dd>Team executions you kicked off — a group of agents running together under a sequential, parallel, or swarm profile.</dd>
+
+                    <dt>Agent runs</dt>
+                    <dd>Solo agent runs you launched directly from the Agents page, or as individual members of a team run.</dd>
+
+                    <dt>Sessions</dt>
+                    <dd>Chat conversations you started. Private sessions are only visible to you; public ones are visible to workspace admins.</dd>
+
+                    <dt>Shared</dt>
+                    <dd>Your own items you've made public — workflows, runs, and sessions with the privacy toggle set to public. These are visible to workspace admins and teammates.</dd>
+
+                    <dt>Claws</dt>
+                    <dd>External MCP systems Sovrant is connected to (n8n, Zapier, custom servers). Sovrant monitors and steers them from the Command Center.</dd>
+                </dl>
             </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="page-error-banner" role="alert">
+                <SovrantIcon Name="@IconNames.Warning" Size="15" StrokeWidth="2" />
+                <span class="error-message">@_error</span>
+            </div>
+        }
+
+        <div class="cc-stat-row">
+            <CcStat Label="Workflows" Value="@(_state?.OwnWorkflows ?? 0)"
+                    Tooltip="Long-running goals you own." />
+            <CcStat Label="Team runs" Value="@(_state?.OwnTeamRuns ?? 0)"
+                    Tooltip="Team executions you kicked off." />
+            <CcStat Label="Agent runs" Value="@(_state?.OwnAgentRuns ?? 0)"
+                    Tooltip="Solo agent runs you launched." />
+            <CcStat Label="Sessions" Value="@(_state?.OwnSessions ?? 0)"
+                    Tooltip="Chat conversations you started." />
+            <CcStat Label="Shared" Value="@(_state?.OthersPublicRows ?? 0)"
+                    Tooltip="Your items you've made public — visible to workspace teammates." />
+            <CcStat Label="Claws" Value="@(_state?.Claws ?? 0)"
+                    Tooltip="External MCP systems Sovrant is connected to." />
+        </div>
+
+        @if (_state is null && _loading)
+        {
+            <div class="cc-empty"><p class="text-secondary">Loading…</p></div>
+        }
+        else if (_state is null || _state.Rows.Count == 0)
+        {
+            <div class="cc-empty">
+                <h2>Nothing yet</h2>
+                <p class="text-secondary">
+                    Start a chat or run an agent template — your activity (and your teammates' public activity)
+                    will appear here.
+                </p>
+                <div class="cc-empty-actions">
+                    <a href="/" class="btn-primary">New chat</a>
+                    <a href="/agents" class="btn-outline">Run an agent</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="cc-grid cc-grid-dashboard">
+                <div class="cc-grid-header">
+                    <div class="cc-col-kind">Kind</div>
+                    <div class="cc-col-privacy"></div>
+                    <div class="cc-col-title">Title</div>
+                    <div class="cc-col-status">Status</div>
+                    <div class="cc-col-owner">Owner</div>
+                    <div class="cc-col-when">Last activity</div>
+                    <div class="cc-col-cost">Cost</div>
+                </div>
+                @foreach (var row in _state.Rows.Skip(_dashPage * PageSize).Take(PageSize))
+                {
+                    <a class="cc-grid-row" href="@(row.DetailRoute ?? "#")">
+                        <div class="cc-col-kind">
+                            <span class="cc-kind-pill cc-kind-@(row.Kind)">@row.Kind</span>
+                        </div>
+                        <div class="cc-col-privacy">
+                            @if (row.IsOwn)
+                            {
+                                <button class="privacy-toggle-mini @(row.IsPrivate ? "private" : "public")"
+                                        title="@(row.IsPrivate ? "Private — only you can see this. Click to make public." : "Public — visible to workspace admins. Click to make private.")"
+                                        @onclick="@(() => TogglePrivacyAsync(row))"
+                                        @onclick:stopPropagation="true"
+                                        @onclick:preventDefault="true">
+                                    @if (row.IsPrivate)
+                                    {
+                                        <SovrantIcon Name="@IconNames.Private" Size="12" StrokeWidth="2" />
+                                    }
+                                    else
+                                    {
+                                        <SovrantIcon Name="@IconNames.Public" Size="12" StrokeWidth="2" />
+                                    }
+                                </button>
+                            }
+                            else if (row.IsPrivate)
+                            {
+                                <span class="cc-badge-private" title="Private — only visible to you">
+                                    <SovrantIcon Name="@IconNames.Private" Size="12" StrokeWidth="2" />
+                                </span>
+                            }
+                        </div>
+                        <div class="cc-col-title">
+                            <span class="cc-title-text">@row.Title</span>
+                            @if (!string.IsNullOrEmpty(row.Preview))
+                            {
+                                <div class="cc-preview text-muted text-sm">@row.Preview</div>
+                            }
+                        </div>
+                        <div class="cc-col-status">
+                            <span class="cc-status cc-status-@row.Status.ToLowerInvariant()">@row.Status</span>
+                        </div>
+                        <div class="cc-col-owner text-sm text-muted">@(row.OwnerLabel ?? "—")</div>
+                        <div class="cc-col-when text-sm text-muted">@FormatRelative(row.LastActivity)</div>
+                        <div class="cc-col-cost text-sm text-muted">@(row.CostUsd is null ? "—" : $"${row.CostUsd:F4}")</div>
+                    </a>
+                }
+            </div>
+            @if (_state.Rows.Count > PageSize)
+            {
+                <div class="cc-pager">
+                    <button class="btn-secondary cc-pager-btn" disabled="@(_dashPage == 0)" @onclick="() => _dashPage--">← Prev</button>
+                    <span class="text-muted text-sm">@(_dashPage * PageSize + 1)–@(Math.Min((_dashPage + 1) * PageSize, _state.Rows.Count)) of @_state.Rows.Count</span>
+                    <button class="btn-secondary cc-pager-btn" disabled="@((_dashPage + 1) * PageSize >= _state.Rows.Count)" @onclick="() => _dashPage++">Next →</button>
+                </div>
+            }
         }
     }
 </div>
 
 @code {
+    // Phase 141/142 — Home's greeting and guide. Overview always opens first ("home first").
+    private string _tab = "overview";
+    private WelcomeContent? _guide;
+    private bool _firstVisit;
+    private bool _dismissed;
+    private string _greeting = "Home";
+
+    private static int Percent(WelcomeContent g) =>
+        g.Checklist.Count == 0 ? 0 : (int)Math.Round(100.0 * g.DoneCount / g.Checklist.Count);
+
+    private void UpdateGreeting() =>
+        _greeting = OnboardingService.Greeting(OnboardingService.DisplayName(Session.Email ?? Session.UserId), _firstVisit);
+
+    private async Task LoadGuideAsync()
+    {
+        var userId = Session.UserId;
+        if (string.IsNullOrEmpty(userId)) return;
+        _guide = await Onboarding.GetWelcomeAsync(userId, Session.IsAdmin, ActiveContext.WorkspaceId);
+        _dismissed = await Onboarding.IsGetStartedDismissedAsync(userId);
+    }
+
+    private async Task DismissAsync()
+    {
+        if (Session.UserId is { Length: > 0 } userId)
+            await Onboarding.DismissGetStartedAsync(userId);
+        _dismissed = true;
+    }
+
+    /// <summary>Phase 142 — Overview's at-a-glance pills: the six stats, singular when the count is 1.</summary>
+    private static IEnumerable<(string Label, int Value)> Glance(UserDashboardState s) =>
+    [
+        (Plural("workflow", s.OwnWorkflows), s.OwnWorkflows),
+        (Plural("team run", s.OwnTeamRuns), s.OwnTeamRuns),
+        (Plural("agent run", s.OwnAgentRuns), s.OwnAgentRuns),
+        (Plural("session", s.OwnSessions), s.OwnSessions),
+        ("shared", s.OthersPublicRows),
+        (Plural("claw", s.Claws), s.Claws),
+    ];
+
+    private static string Plural(string word, int n) => n == 1 ? word : word + "s";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (_firstVisit && Session.UserId is { Length: > 0 } uid)
+            await Onboarding.MarkWelcomeSeenAsync(uid);
+    }
+
+    /// <summary>Web route for a guide link; null for admin-only pages when the user isn't an admin.</summary>
+    private string? LinkFor(WelcomeTarget? target)
+    {
+        if (target is not { } t || (OnboardingService.IsAdminOnly(t) && !Session.IsAdmin))
+            return null;
+        return t switch
+        {
+            WelcomeTarget.Chat or WelcomeTarget.Privacy => "/",
+            WelcomeTarget.Agents => "/agents",
+            WelcomeTarget.Orchestration => "/orchestration",
+            WelcomeTarget.Workflows => "/workflows",
+            WelcomeTarget.Knowledge => "/skills",
+            WelcomeTarget.Projects => "/projects",
+            WelcomeTarget.Integrations => "/admin/integrations",
+            WelcomeTarget.TrustBoundary => "/trust-boundary",
+            WelcomeTarget.Workspaces => "/admin/workspaces",
+            WelcomeTarget.Users => "/admin",
+            // First run (nothing configured yet) uses the setup page; afterwards, Admin → Providers.
+            WelcomeTarget.ProviderSetup => string.IsNullOrWhiteSpace(Config.ApiKey) && Config.BaseUrl is null ? "/setup" : "/admin/providers",
+            _ => null,
+        };
+    }
+
     private const int PageSize = 10;
     private int _dashPage;
 
@@ -179,6 +364,12 @@
             return;
         }
 
+        // Phase 141: first visit greets with "Welcome to Sovrant"; afterwards a time-of-day greeting.
+        // Decided here (prerender and live render both see "not seen"); recorded after the live render.
+        if (Session.UserId is { Length: > 0 } uid)
+            _firstVisit = !await Onboarding.HasSeenWelcomeAsync(uid);
+        UpdateGreeting();
+
         await LoadAsync();
         _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
             TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
@@ -187,6 +378,8 @@
     private async Task LoadAsync()
     {
         if (string.IsNullOrEmpty(Session.UserId)) return;
+
+        await LoadGuideAsync(); // Phase 141: checklist ticks refresh with the activity
 
         _loading = true;
         try
@@ -209,15 +402,6 @@
         }
     }
 
-    private static string KindIcon(string kind) => kind switch
-    {
-        "mission" => "\U0001F3AF",
-        "team-run" => "\U0001F465",
-        "agent-run" => "\U0001F916",
-        "session" => "\U0001F4AC",
-        "claw" => "\U0001F517",
-        _ => "•",
-    };
 
     private static string FormatRelative(DateTimeOffset when)
     {
@@ -237,9 +421,9 @@
         {
             switch (row.Kind)
             {
-                case "mission":
-                    await MissionStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
-                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "mission", row.Id, newValue);
+                case "workflow":
+                    await WorkflowStore.UpdatePrivacyAsync(row.Id, Session.UserId, newValue);
+                    await AuditStore.LogPrivacyChangeAsync(Session.UserId, "workflow", row.Id, newValue);
                     break;
                 case "agent-run":
                 case "team-run":

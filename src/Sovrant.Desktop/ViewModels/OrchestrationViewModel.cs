@@ -104,10 +104,18 @@ public partial class OrchestrationViewModel : ViewModelBase
     }
 
     [RelayCommand]
-    private void ToggleSwarmConfig()
+    private void ShowTeamView()
     {
-        ShowSwarmConfig = !ShowSwarmConfig;
-        if (ShowSwarmConfig) { SelectedTeam = null; IsCreating = false; }
+        ShowSwarmConfig = false;
+        IsCreating = false;
+    }
+
+    [RelayCommand]
+    private void ShowDefaultsView()
+    {
+        ShowSwarmConfig = true;
+        SelectedTeam = null;
+        IsCreating = false;
     }
 
     // ── Create team ────────────────────────────────────────────────────────

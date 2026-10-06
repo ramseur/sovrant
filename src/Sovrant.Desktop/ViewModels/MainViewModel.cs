@@ -42,6 +42,10 @@ public partial class MainViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsGovernanceGroup));
         OnPropertyChanged(nameof(IsAdminGroup));
         OnPropertyChanged(nameof(IsSettingsGroup));
+
+        // Phase 133 — pick up folder/conversation changes made on Web (same database).
+        if (value == "chat")
+            _ = Sidebar.RefreshFromOtherSurfacesAsync();
     }
 
     private readonly IServiceProvider _services;
@@ -58,7 +62,7 @@ public partial class MainViewModel : ViewModelBase
     private bool _isNavCollapsed;
 
     public bool IsNavExpanded => !IsNavCollapsed;
-    public double NavWidth => IsNavCollapsed ? 44 : 240;
+    public double NavWidth => IsNavCollapsed ? 76 : 300;
 
     partial void OnIsNavCollapsedChanged(bool value)
     {
@@ -87,13 +91,21 @@ public partial class MainViewModel : ViewModelBase
         sidebar.NavigationRequested += OnNavigationRequested;
         sidebar.SessionResumeRequested += OnSessionResumeRequested;
         commandPalette.CommandExecuted += OnCommandExecuted;
+
+        AppNav = new AppNavViewModel(this);
+
+        // Phase 141 — links in Home's guide open their page (and move the rail highlight).
+        dashboard.Guide.NavigateRequested += NavigateFromLink;
     }
+
+    /// <summary>Phase 135 — collapsible nav groups (expanded rail) and flyouts (collapsed rail).</summary>
+    public AppNavViewModel AppNav { get; }
 
     /// <summary>
     /// Bridge from the cockpit grid into the matching detail view. Sessions
     /// resume in chat; team runs open Orchestration; agent runs render inline
     /// inside the cockpit (no page swap) so /activity doesn't need to exist.
-    /// Missions/claws stay on the cockpit until a dedicated detail view exists.
+    /// Workflows/claws stay on the cockpit until a dedicated detail view exists.
     /// </summary>
     private async void OnCockpitRowSelected(object? sender, CommandCenterRowSelectedEventArgs e)
     {
@@ -115,7 +127,7 @@ public partial class MainViewModel : ViewModelBase
             case "team-run":
                 CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
                 break;
-            // mission/claw — no dedicated detail view yet; keep cockpit visible.
+            // workflow/claw — no dedicated detail view yet; keep cockpit visible.
             default:
                 break;
         }
@@ -141,7 +153,7 @@ public partial class MainViewModel : ViewModelBase
             case "team-run":
                 CurrentPage = _services.GetRequiredService<OrchestrationViewModel>();
                 break;
-            // mission/claw — no dedicated detail view yet
+            // workflow/claw — no dedicated detail view yet
             default:
                 break;
         }
@@ -173,7 +185,7 @@ public partial class MainViewModel : ViewModelBase
                 OnNavigationRequested(this, "Projects");
                 break;
             case "dashboard":
-                CurrentPage = _services.GetRequiredService<UserDashboardViewModel>();
+                CurrentPage = OpenHome();
                 break;
             case "settings":
                 Sidebar.SelectedNavItem = "Settings";
@@ -196,10 +208,19 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     internal void ResetForUser()
     {
-        SelectedGroup = "agents";
-        Sidebar.SelectedNavItem = "Agents";
-        OnNavigationRequested(this, "Agents");
+        GoHome();
         OnPropertyChanged(nameof(IsAdmin));
+    }
+
+    /// <summary>
+    /// Phase 141 — every launch and sign-in starts on Home, with the rail showing Home (it used to
+    /// land on Agents after a sign-in, and the rail started out highlighting Chat).
+    /// </summary>
+    public void GoHome()
+    {
+        SelectedGroup = "dashboard";
+        Sidebar.SelectedNavItem = "Dashboard";
+        OnNavigationRequested(this, "Dashboard");
     }
 
     private void OnCommandExecuted(object? sender, SlashCommandResult result)
@@ -238,12 +259,52 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Admin-only pages (the Admin nav group). Mirrors Web, where each page redirects non-admins.</summary>
+    private static readonly HashSet<string> AdminOnlyPages = new(StringComparer.Ordinal)
+    {
+        "CommandCenter", "Admin", "AdminWorkspaces", "AdminProviders", "Governance", "TrustBoundary",
+        "Diagnostics", "Integrations", "AdminPlatformIntegrations", "AdminSystemIntegrations",
+    };
+
+    /// <summary>
+    /// Phase 140 — navigation from an in-page link (Home's guide, chat welcome cards): moves the rail's
+    /// highlight to the page, then opens it. Admin pages are refused for non-admins here too.
+    /// </summary>
+    private void NavigateFromLink(string page)
+    {
+        if (IsAdminOnlyPage(page) && !_principal.IsAdmin) return;
+        // Highlight the page's group (setting SelectedGroup only updates the rail; it doesn't navigate).
+        if (AppNavViewModel.GroupForPage(page) is { } group)
+            SelectedGroup = group;
+        Sidebar.SelectedNavItem = page;
+        OnNavigationRequested(this, page);
+    }
+
+    /// <summary>Phase 142 — Home always opens on its Overview tab.</summary>
+    private UserDashboardViewModel OpenHome()
+    {
+        var home = _services.GetRequiredService<UserDashboardViewModel>();
+        home.IsOverview = true;
+        return home;
+    }
+
+    /// <summary>True for pages only admins may open (also used by tests).</summary>
+    public static bool IsAdminOnlyPage(string pageName) => AdminOnlyPages.Contains(pageName);
+
     private void OnNavigationRequested(object? sender, string pageName)
     {
+        // Phase 140: hiding the Admin group isn't enough. Any link (Home's guide, command
+        // palette, events) that names an admin page must not open it for a non-admin.
+        if (IsAdminOnlyPage(pageName) && !_principal.IsAdmin)
+            return;
         ParkCurrentChatIfRunning();
+        // Phase 140 — opening any Knowledge page ticks "Explore Knowledge" on the member checklist.
+        if (pageName is "Skills" or "Guidelines" or "Memory" or "Documents" or "Tools" && _principal.UserId is { Length: > 0 } uid)
+            _ = _services.GetService<Sovrant.Runtime.Onboarding.OnboardingService>()?.MarkKnowledgeVisitedAsync(uid);
         CurrentPage = pageName switch
         {
             "Chat" => CreateChatViewModel(),
+            "Dashboard" => OpenHome(),
             "Settings" => _services.GetRequiredService<SettingsViewModel>(),
             var s when s.StartsWith("Settings:", StringComparison.Ordinal) => ResolveSettings(s),
             "Diagnostics" => _services.GetRequiredService<DiagnosticsViewModel>(),
@@ -262,6 +323,7 @@ public partial class MainViewModel : ViewModelBase
             "Agents" => GetOrCreateAgentsViewModel(),
             "Automations" => _services.GetRequiredService<AutomationsViewModel>(),
             "Orchestration" => _services.GetRequiredService<OrchestrationViewModel>(),
+            "Workflows" => CreateWorkflowsViewModel(),
             "CommandCenter" => ResetCockpitToGrid(),
             "Admin" => ResolveAdmin("users"),
             "AdminWorkspaces" => ResolveAdmin("workspaces"),
@@ -290,6 +352,18 @@ public partial class MainViewModel : ViewModelBase
     {
         var vm = _services.GetRequiredService<AdminViewModel>();
         vm.Section = section;
+        return vm;
+    }
+
+    /// <summary>
+    /// Workflows is registered transient, so unlike the singleton widgets
+    /// wired up once in the constructor, its OpenSessionRequested event has
+    /// to be subscribed fresh on every navigation to the page.
+    /// </summary>
+    private WorkflowsViewModel CreateWorkflowsViewModel()
+    {
+        var vm = _services.GetRequiredService<WorkflowsViewModel>();
+        vm.OpenSessionRequested += OnSessionResumeRequested;
         return vm;
     }
 
@@ -325,7 +399,25 @@ public partial class MainViewModel : ViewModelBase
     {
         var chat = _services.GetRequiredService<ChatViewModel>();
         chat.TurnCompleted += () => _ = Sidebar.RefreshSessionsCommand.ExecuteAsync(null);
+        // Phase 140 — the chat welcome's capability strip (role-aware) links into each area.
+        chat.SetAdmin(_principal.IsAdmin);
+        chat.AreaRequested += page =>
+        {
+            NavigateFromLink(page);
+        };
+        // Phase 133 — keep the sidebar's open-conversation highlight and the chat header in sync.
+        chat.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(ChatViewModel.SessionId) && ReferenceEquals(CurrentPage, chat))
+                Sidebar.CurrentSessionId = chat.SessionId;
+        };
         return chat;
+    }
+
+    partial void OnCurrentPageChanged(ViewModelBase value)
+    {
+        if (value is ChatViewModel chat)
+            Sidebar.CurrentSessionId = chat.SessionId;
     }
 
     private AgentsViewModel GetOrCreateAgentsViewModel()

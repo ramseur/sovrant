@@ -4,6 +4,7 @@
     <!-- Brand -->
     <Color x:Key="BrandPrimaryColor">#6D52C6</Color>
     <SolidColorBrush x:Key="BrandPrimary" Color="#6D52C6" />
+    <SolidColorBrush x:Key="BrandPrimarySoft" Color="{StaticResource BrandPrimaryColor}" Opacity="0.16" />
 
     <!-- Surfaces -->
     <SolidColorBrush x:Key="SurfaceBackground" Color="#F5F5F5" />

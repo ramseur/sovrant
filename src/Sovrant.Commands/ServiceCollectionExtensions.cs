@@ -43,7 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISlashCommand, ToolsCommand>();
         services.AddSingleton<ISlashCommand, McpCommand>();
         services.AddSingleton<ISlashCommand, TasksCommand>();
-        services.AddSingleton<ISlashCommand, MissionCommand>();
+        services.AddSingleton<ISlashCommand, WorkflowCommand>();
         services.AddSingleton<ISlashCommand, ArtifactsCommand>();
         services.AddSingleton<ISlashCommand, ProjectCommand>();
 

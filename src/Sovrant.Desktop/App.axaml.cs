@@ -206,11 +206,13 @@ public partial class App : Application
         services.AddTransient<AgentsViewModel>();
         services.AddTransient<AutomationsViewModel>();
         services.AddTransient<OrchestrationViewModel>();
+        services.AddTransient<WorkflowsViewModel>();
         // Singleton: MainViewModel subscribes to RowSelected once at startup.
         services.AddSingleton<CommandCenterViewModel>();
         services.AddSingleton<UserDashboardViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
         services.AddTransient<LoginViewModel>();
+        services.AddSingleton<HomeGuideViewModel>();
         services.AddTransient<AdminViewModel>();
         services.AddTransient<SystemIntegrationsViewModel>();
 
@@ -281,7 +283,8 @@ public partial class App : Application
 
         // ── API key / setup wizard ────────────────────────────────────────────
         // Skip setup wizard in remote mode — the server handles LLM credentials.
-        if (!isRemote && string.IsNullOrWhiteSpace(config.ApiKey))
+        // "Set up" = a key, or a keyless local provider's base URL (Phase 138).
+        if (!isRemote && string.IsNullOrWhiteSpace(config.ApiKey) && config.BaseUrl is null)
         {
             await RunSetupWizardAsync(desktop, _serviceProvider).ConfigureAwait(true);
             // Wizard hot-swapped config; refresh sidebar so it shows the new provider
@@ -292,22 +295,18 @@ public partial class App : Application
             mutableAuth.BaseUrl = config.BaseUrl;
         }
 
-        // Refresh the auth provider's key and base URL (local mode only).
-        if (!isRemote && !string.IsNullOrWhiteSpace(config.ApiKey))
+        // Refresh the auth provider's key and base URL (local mode only). The base URL is applied
+        // even without a key: local providers (LM Studio, Ollama) need none (Phase 138).
+        if (!isRemote)
         {
-            mutableAuth.ApiKey = config.ApiKey!;
+            if (!string.IsNullOrWhiteSpace(config.ApiKey))
+                mutableAuth.ApiKey = config.ApiKey!;
             mutableAuth.BaseUrl = config.BaseUrl;
 
-            // Pin the SmartRouter to the provider matching config.BaseUrl so Ollama
-            // (cost=0) never silently wins over a configured cloud provider.
+            // Every profile is served by the router's primary provider at its own base URL.
             var router = _serviceProvider.GetService<Sovrant.Api.Routing.ISmartRouter>();
             if (router is not null)
-            {
-                bool isLocal = config.BaseUrl is not null &&
-                               (config.BaseUrl.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-                                config.BaseUrl.Host == "127.0.0.1");
-                await router.PinProviderAsync(isLocal ? "ollama" : "openai-compat").ConfigureAwait(true);
-            }
+                await Sovrant.Api.Routing.ActiveProfileRouting.PinActiveProfileAsync(router).ConfigureAwait(true);
         }
 
         // ── 401 monitoring in remote mode ─────────────────────────────────────
@@ -320,9 +319,13 @@ public partial class App : Application
                 await Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var principal = _serviceProvider.GetRequiredService<DesktopPrincipalAccessor>();
+                    var previousUser = principal.UserId;
                     MainWindow?.Hide();
                     var userId = await RunLoginWindowAsync(desktop, _serviceProvider, principal).ConfigureAwait(true);
                     SovrantUserId = userId;
+                    // Phase 141: a different user starts on Home; the same user re-authenticating keeps their place.
+                    if (!string.Equals(previousUser, userId, StringComparison.Ordinal))
+                        _serviceProvider.GetRequiredService<MainViewModel>().GoHome();
                     // Persist and hot-swap the new token.
                     var store = _serviceProvider.GetRequiredService<ICredentialStore>();
                     var remoteOpts = _serviceProvider.GetRequiredService<SovrantRemoteOptions>();
@@ -338,10 +341,13 @@ public partial class App : Application
         var window = new MainWindow { DataContext = mainVm };
         desktop.MainWindow = window;
         desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-        desktop.ShutdownRequested += (_, _) => Environment.Exit(0);
-        window.Closed += (_, _) => Environment.Exit(0);
+        desktop.ShutdownRequested += (_, _) => ExitApp();
+        window.Closed += (_, _) => ExitApp();
         MainWindow = window;
         window.Show();
+        // Phase 141: always start on Home, and load it now that someone is signed in rather than on its 30 s timer.
+        mainVm.GoHome();
+        _ = _serviceProvider.GetRequiredService<UserDashboardViewModel>().RefreshCommand.ExecuteAsync(null);
 
         // Background user/workspace seeding (local mode only — server handles this in remote mode).
         if (!isRemote)
@@ -374,6 +380,27 @@ public partial class App : Application
     }
 
     private const string StoredTokenKey = "sovrant.desktop.auth_token";
+
+    private static int s_exiting;
+
+    /// <summary>
+    /// Ends the process exactly once. Several events can ask to quit (main window Closed,
+    /// ShutdownRequested, the sign-in window), and Environment.Exit isn't safe to call twice.
+    /// A background watchdog ends the process if a clean exit stalls, so closing the app never
+    /// leaves a windowless process behind.
+    /// </summary>
+    internal static void ExitApp()
+    {
+        if (Interlocked.Exchange(ref s_exiting, 1) != 0)
+            return;
+        var watchdog = new Thread(() =>
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(5));
+            System.Diagnostics.Process.GetCurrentProcess().Kill();
+        }) { IsBackground = true, Name = "exit-watchdog" };
+        watchdog.Start();
+        Environment.Exit(0);
+    }
 
     /// <summary>
     /// Clears the stored session, hides the main window, re-runs the login flow,
@@ -416,6 +443,9 @@ public partial class App : Application
         await Services.GetRequiredService<SettingsViewModel>().HydrateFromStoresAsync().ConfigureAwait(true);
 
         MainWindow?.Show();
+        // Phase 141: the next user gets their own greeting and first-visit state on Home.
+        Services.GetRequiredService<HomeGuideViewModel>().Reset();
+        _ = Services.GetRequiredService<UserDashboardViewModel>().RefreshCommand.ExecuteAsync(null);
     }
 
     /// <summary>
@@ -507,11 +537,13 @@ public partial class App : Application
 
         var loginWindow = new LoginWindow { DataContext = loginVm };
 
-        // Prevent closing without completing login.
-        loginWindow.Closing += (_, e) =>
+        // Closing the sign-in window without signing in quits the app. This used to call
+        // desktop.Shutdown() from Closing, which closes every window, including this one, so
+        // Closing fired again and recursed until the process crashed with a stack overflow.
+        loginWindow.Closed += (_, _) =>
         {
             if (!tcs.Task.IsCompleted)
-                desktop.Shutdown();
+                ExitApp();
         };
 
         loginWindow.Show();
@@ -550,14 +582,12 @@ public partial class App : Application
         setupVm.SetupCompleted += () =>
             Dispatcher.UIThread.Post(() => wizardWindow.Close());
 
-        // Prevent user from closing without completing setup.
-        wizardWindow.Closing += (_, e) =>
+        // Closing the wizard without completing setup quits the app. Done from Closed, not Closing:
+        // desktop.Shutdown() inside Closing re-closed this window and recursed into a stack overflow.
+        wizardWindow.Closed += (_, _) =>
         {
             if (setupVm.IsVisible)
-            {
-                // Wizard not completed — exit the app instead.
-                desktop.Shutdown();
-            }
+                ExitApp();
         };
 
         wizardWindow.Show();

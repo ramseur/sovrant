@@ -15,7 +15,7 @@ using Sovrant.Tools.Tasks;
 using Sovrant.Tools.Todo;
 using Sovrant.Tools.Quality;
 using Sovrant.Tools.Shell;
-using Sovrant.Tools.Missions;
+using Sovrant.Tools.Workflows;
 using Sovrant.Tools.Coordination;
 using Sovrant.Tools.Swarm;
 using Sovrant.Tools.Team;
@@ -158,8 +158,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ITool, TeamRunTool>();
         services.AddSingleton<ITool, TeamPublishTool>();
 
-        // Mission tool — lets running agents spawn and drive sub-missions
-        services.AddSingleton<ITool, MissionTool>();
+        // Workflow tool — lets running agents spawn and drive sub-missions
+        services.AddSingleton<ITool, WorkflowTool>();
 
         // Artifact tools — agent-side producer interface (Phase 41)
         services.AddSingleton<ITool, ArtifactTool>();

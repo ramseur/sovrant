@@ -3,7 +3,129 @@
 All notable changes to Sovrant are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versions correspond to tags on the `development` branch.
+Versions correspond to tags on the `main` branch.
+
+---
+
+## [2.0.0] — 2026-10-06
+
+**A major release:** the app (`Directory.Build.props`) and the JS SDK (`@sovrant/sdk`) both move to **2.0.0**, because the Missions → Workflows rename removes the `/v1/missions*` API and the SDK's mission methods (see Breaking changes).
+
+Workflows that plan before they run (and run on their own on Sovrant.Server), a new **Home** page with first-run onboarding, conversation folders, a refreshed app shell (sidebar, chat, icons) on Web and Desktop, friendly MCP connection errors, Ollama only when you've actually set it up, environment configuration that works in containers, and an API and SDK that can do what the apps do.
+
+> **Migration notes:**
+> - **V047 (one-way rename):** renames `missions`→`workflows`, `mission_events`→`workflow_events` and `mission_scratchpad`→`workflow_scratchpad` (plus their indexes and the `mission_id`→`workflow_id` FK column) via `ALTER TABLE … RENAME`. No data loss: existing rows and their full event journals carry over. There is no realistic undo once written under the new names, so it was tested against a copy of a real dev database. `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/` carry the equivalent guarded rename (idempotent, safe to re-run).
+> - **V048 (additive):** new `session_folders` table, and new nullable `sessions.folder_id` and `agent_runs.session_id` columns. Existing rows are untouched (both columns start `NULL`). Verified against a snapshot of a real database. Postgres: `PostgresSchema.sql`; Supabase: `db/supabase/migrations/20261002000000_session_folders.sql`.
+> - No other schema changes. Onboarding state (`onboarding.*`) uses existing user preferences.
+
+### Breaking changes
+
+- **Missions are now Workflows, with no alias period:**
+  - **HTTP:** `/v1/missions*` → `/v1/workflows*`.
+  - **SDK** (`sdk/js`): `createMission`, `listMissions`, … → `createWorkflow`, `listWorkflows`, ….
+  - **CLI:** `/mission` → `/workflow`.
+  - **Agent tool:** `Mission` → `Workflow`. Built-in governance tiers were updated in lockstep; custom governance rules that name the `Mission` tool need updating.
+  - **Cockpit rows:** `Kind: "mission"` → `"workflow"`.
+  - **IDs:** new workflow IDs start with `workflow-`; existing `mission-` IDs keep working (IDs are opaque).
+- **Ollama is no longer always registered.** Sovrant only contacts Ollama when an admin has added an Ollama provider **and** enabled it for the workspace. Installs that relied on the implicit `localhost:11434` provider need to add it under Admin → Providers. `OLLAMA_BASE_URL` now only pre-fills that provider's address.
+- **`GET /v1/sessions` no longer lists system sessions** (it gained fields; see Changed).
+
+### Added
+
+- **Workflows (Phase 129):** give Sovrant a goal; it plans the steps and works through them.
+  - **Background scheduler (Sovrant.Server):** `WorkflowSchedulerService` advances Planning/Running workflows with bounded concurrency. Configure it with `SOVRANT_WORKFLOW_POLL_SECONDS` / `SOVRANT_WORKFLOW_MAX_CONCURRENT` or workspace settings. Web and Desktop in embedded mode don't run the scheduler: a workflow advances when you press Run now / Resume or ask the Workflow tool.
+  - **Workflows page (Web + Desktop):** goal, status, plan steps, event journal, and Run now / Resume / Cancel / Export. Plan and Journal are separate tabs, and the page refreshes live (every 4 s) while a workflow is planning or running.
+  - **Plan first, then run:** "Generate Plan first" has the selected model break the goal into steps, which you can review and edit (add, remove, rewrite, change tier) before running. An edited plan is no longer silently re-planned.
+  - **Real output:** the journal shows each step's actual output and artifact count, not just "Completed".
+  - **A linked chat for every workflow:** seeded with the goal at creation. When a workflow completes, fails or needs review, a status message is posted there, however it was advanced (you, the scheduler, or the Workflow tool).
+- **Home and first-run onboarding (Phases 140–142):** the Dashboard is now **Home**, on Web and Desktop.
+  - **Overview tab (opens first):**
+    - **Greeting:** "Welcome to Sovrant, <name>" on your first visit, then "Welcome back, <name>".
+    - **At a glance:** a row of your six stats; each opens Activity.
+    - **Get started checklist:** numbered steps across the page, ticked from real state. It collapses to "All set" with Dismiss when finished. Admins see "Set up Sovrant for your team" (connect a provider, enable providers for a workspace, invite your team, connect an integration, create an agent); members see "Get started" with only things they can do themselves (pick a model, first conversation, try an agent, explore Knowledge).
+    - **What Sovrant can do:** eight cards linking to each area. Integrations, Trust Boundary & Governance and Workspaces are described to members as "Managed by your admin", with no link.
+  - **Activity tab:** the stats and activity table.
+  - **First-run sign-up:** on a server with no accounts, the login screen explains that the first account becomes the administrator and offers "Create administrator account" (Enter submits). It also shows an approval note when new accounts need approval, a progress line while working, and success messages in the success style. Based on Rahul Singh's issue #27.
+  - **Starts on Home:** every launch and sign-in, including after first-run provider setup. `/welcome` redirects to Home; the nav item says Home (the URL is still `/dashboard`).
+  - **Bigger chat welcome:** the empty chat fills the main area, with a larger mark and title, a 3-column suggestion grid, and a "What Sovrant can do" strip linking to Home. Based on Rahul Singh's #28.
+- **Conversation folders (Phase 133):** file any conversation into a per-user folder tree, up to 5 levels deep and across all workspaces, on Web and Desktop.
+  - **Managing folders:** ⋯ menus (new subfolder, rename, move, delete), a Move dialog, a chat-header breadcrumb with Move, search across folders, and drag and drop that refuses invalid drops while you drag. Deleting a folder moves its contents up a level; no conversation is ever deleted.
+  - **Sidebar labels** (`Agent · x`, `Workflow · Running`, `Swarm · n runs`, `Team · n runs`, `Webhook · source`) are derived from live links, never stored.
+  - **API and SDK:** 5 endpoints (`/v1/session-folders`, `PUT /v1/sessions/{id}/folder`) and SDK methods (`listSessionFolders`, `createSessionFolder`, `updateSessionFolder`, `deleteSessionFolder`, `moveSessionToFolder`).
+  - **Every run gets a conversation:** swarm and team runs launched from a chat record it (`agent_runs.session_id`), and runs started elsewhere get their own, so every run can be found and filed. `POST /v1/swarm` now also records an `agent_runs` row.
+- **Friendly MCP connection errors (Phase 139):** when an MCP server can't connect, Sovrant says why in one sentence instead of printing stack traces.
+  - **Failure kinds:** couldn't resolve the host, not responding (timeout or refused), rejected credentials (401/403), or a certificate problem.
+  - **Integrations (Web + Desktop):** an **Unavailable** badge, the reason, what happens next, and **Retry now**, or **Update key** for rejected credentials.
+  - **Top bar:** the Integrations menu shows a warning with the reason on hover.
+  - **Automatic retries:** network failures retry in the background after 10 s, 1 min and 5 min, so a server that was down at startup comes back, tools included, without a restart. Credential errors aren't retried.
+  - **Console:** one line per failure. The full detail is in the log file.
+
+- **API & SDK parity for 2.0 (Phase 143):** the API and JS SDK can now do what the apps do.
+  - **Workflows:** `POST /v1/workflows/plan` (plan for review without running), `PUT /v1/workflows/{id}/plan` (edit the steps) and `POST /v1/workflows/{id}/cancel`.
+  - **MCP status:** `GET /v1/mcp/servers` reports each server's state, a friendly reason and the next automatic retry; `POST /v1/mcp/servers/{name}/retry` (admin).
+  - **SDK (`@sovrant/sdk` 2.0.0):** `planWorkflow`, `saveWorkflowPlan`, `cancelWorkflow`, `setWorkflowPrivacy`, `setSessionPrivacy`, `setAgentRunPrivacy` and `retryMcpServer`. `Workflow.status` now includes `awaitingHuman` and `cancelled`, and `Workflow` carries `plan_json`, `is_private` and `completed_at`.
+- **Environment configuration that works everywhere (Phase 144; GitHub #33, #34, #35):**
+  - **Provider keys from the environment:** `LLM_API_KEY` (alias `OPENAI_API_KEY`), `PROVIDER_API_KEY`, `OPENROUTER_API_KEY`, `BRAVE_API_KEY` and `FIRECRAWL_API_KEY` are imported into the encrypted credential store on first boot. After that the stored value wins, so changes made in the UI stick. `SOVRANT_ENV_KEYS_OVERRIDE=true` re-imports them on every start.
+  - **No setup for containers:** with `LLM_API_KEY` set, each signed-up user without a provider gets one for it, enabled for their personal workspace and active. `LLM_BASE_URL` sets its address (otherwise inferred from the key) and `SOVRANT_MODEL` the default model.
+  - **Web hosting:** `SOVRANT_WEB_PORT` (default 5100); `GET /health` and `GET /ready` (503 until start-up finishes) for container probes.
+  - **Reverse proxies (Web and Server):** `X-Forwarded-For/-Proto/-Host` are honoured from trusted proxies: loopback by default, plus `SOVRANT_TRUSTED_PROXIES` (IPs, CIDRs or `*`).
+
+### Changed
+
+- **App sidebar (Phase 135):** Conversations, with their folders, stay in the sidebar on every page.
+  - **Nav groups:** Knowledge, Agents and Admin are collapsible groups with their pages inline. One group is open at a time, and the current page's group opens automatically.
+  - **Collapsed rail:** opens a flyout of a group's pages on hover, click or Enter/Space. Chat's flyout lists the 5 most recent conversations.
+  - **Restyle:** the left nav has line icons, an accent bar for the active item, and Admin's pages grouped under Overview / Access / Safety / System. The old per-group side panels are gone.
+  - **Brand mark:** shown only in the browser tab (Web) and title bar (Desktop). The rail's brand row is gone, and the collapse toggle sits on the rail's edge.
+- **Chat (Phase 137):** user messages are right-aligned bubbles with an initials avatar; assistant replies sit flat beside a neutral avatar, with one model · elapsed · Copy line.
+  - **Layout:** the thread and composer share a centred column, capped at 760px.
+  - **Send/Stop:** one brand icon button is Send, and becomes Stop while a reply is generating. Esc stops a reply on Web too.
+- **Icons (Phase 136):** Web and Desktop share one Lucide icon vocabulary (`Sovrant.Api.Ui.IconNames`). Every emoji and hand-copied icon in the UI chrome is gone. Brands use a category icon until licensed logos are added. `IntegrationCatalog.Icon` now holds an icon name instead of an emoji.
+- **Model providers (Phase 138):**
+  - **Own address:** every provider profile, cloud or local, uses its own URL. LM Studio and other local endpoints are no longer sent to Ollama's port.
+  - **Workspace enablement:** a saved provider that isn't enabled for the current workspace is switched off, with a clear message, until it is.
+  - **Local providers:** first-run setup accepts an empty API key for Ollama and LM Studio.
+- **Orchestration:** the Swarm-defaults gear is now an explicit Team / Defaults toggle.
+- **Web favicon:** Web now has a favicon, the same mark as Desktop.
+- **`GET /v1/sessions` returns more per row:** `session_id`, `title`, `updated_at`, `folder_id`, `agent_name`, `is_private` and `labels`, alongside `id`.
+- **Faster Web sidebar:** it uses stored titles instead of loading every conversation's history.
+- **Desktop picks up changes made on Web** (same database): the conversation tree reloads when the Chat menu opens or the window regains focus.
+
+### Fixed
+
+- **Documented environment variables that did nothing:** `LLM_API_KEY`, `SOVRANT_MODEL`, `LLM_BASE_URL`, `OPENROUTER_API_KEY` and others were listed in `.env.example` but never read. All of them work now (Phase 144), and a test fails if `.env.example` documents a variable the code doesn't read.
+- **`.env` was loaded too late for some variables:** `SOVRANT_USER_ID` (Web, Desktop) and `SOVRANT_RUNTIME_MODE` (Web) were read before `.env` loaded. Every app now loads `.env` first.
+- **SDK `createWorkflow` ignored `session_id`, `workspace_id` and `project_id`:** the route didn't bind snake_case fields. It does now, like the other routes.
+- **Prompts sometimes needed sending twice:** OpenRouter (especially `:free` models) can answer HTTP 200 and then report a rate limit or busy upstream *inside* the stream, or close it empty. The turn "completed" in about 0.3 s with no reply.
+  - **In-stream errors:** now surfaced as provider errors.
+  - **Empty replies:** count as failures.
+  - **Retries:** both are retried by the existing 3-attempt backoff, and only shown in chat with Retry if every attempt fails.
+- **Desktop crashed when you closed the sign-in window or the setup wizard:** a shutdown loop ended in a stack overflow. Quitting now goes through one exit routine that runs once, with a watchdog so a stalled exit can't leave a process running.
+- **Desktop: "+ New" on the Agents page did nothing:** the editor was hidden along with the cleared selection.
+- **Desktop opened the Agents page after signing out and back in:** it now starts on Home.
+- **Desktop: admin pages could be opened by name:** in-app links naming an admin page opened it for non-admins, although the nav group was hidden. Desktop now refuses them, matching Web.
+- **Web: importing several MCP servers at once connected only the first:** the page updated from the wrong thread and the error was swallowed. The same mistake in the OAuth connect flow is fixed too.
+- **Workflows:**
+  - **Double runs:** clicking Run twice could start two full plan-and-execute cycles at once.
+  - **Leftover "mission" wording:** removed from Dashboard and journal labels.
+  - **Long titles:** long workflow and team titles now wrap instead of overflowing.
+- **Swarm file locks never applied to `Write`/`Edit`:** concurrent swarm workers could overwrite each other's files. Locks now apply under the real tool names, and `SwarmConfig.FileLocksEnabled` is honoured.
+- **13 built-in tools had no explicit governance tier:** they fell back to the default. Read-only tools are now Safe; artifact-writing ones are Moderate. A coverage test catches missing tiers.
+- **Isolated agents failed when the child process exited early:** a broken pipe on closing stdin failed the run. (From Rahul Singh's fork, PR #8.)
+- **Eval code graders ran only the first word of their command on Linux/macOS.**
+- **Artifact file URIs on Linux/macOS** were malformed (`file:////home/...`).
+- **Remote mode:** the session list read the wrong field and threw.
+- **Postgres:** session search failed (column mismatch).
+- **Desktop Orchestration buttons rendered transparent:** a brush lookup missed application resources.
+- **Desktop sign-in window ignored the theme:** its background pointed at a resource that didn't exist, and error text was hard-coded red. Both now use theme colours.
+- **Gemma 4 capability overrides had expired** (2026-07-01) and were being ignored; renewed.
+
+### Internal
+
+- New `Sovrant.Ui.Tests` project (xUnit v3 + Avalonia headless): icon vocabulary, no-emoji guard, headless render tests, and Desktop Home / Welcome / Integrations render tests.
+- Tests that change process environment variables now run in one non-parallel collection (fixes an intermittent `OllamaOptInTests` failure). The LSP Windows-path test is skipped on non-Windows hosts.
+- `docs/design/` (`web.html`, `desktop.html`, `README.md`) is the cross-platform design record; every UI phase is mocked there first.
+- Test suite: 2,474 tests (3 skipped on Windows).
 
 ---
 

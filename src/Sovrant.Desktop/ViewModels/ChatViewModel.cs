@@ -1,3 +1,4 @@
+using Sovrant.Api.Ui;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using Avalonia.Threading;
@@ -13,6 +14,9 @@ using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Desktop.ViewModels;
+
+/// <summary>Phase 140 — one card in the chat welcome's "What Sovrant can do" strip.</summary>
+public sealed record CapabilityCard(string IconName, string Title, string Description, string Page);
 
 public partial class ChatViewModel : ViewModelBase, IDisposable
 {
@@ -470,6 +474,49 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         SessionId = $"session-{Guid.NewGuid():N}";
     }
 
+    /// <summary>Raised with a page name when a capability card or "See everything on Home" is clicked.</summary>
+    public event Action<string>? AreaRequested;
+
+    /// <summary>
+    /// Phase 140 — the chat welcome's capability strip. Integrations and Trust Boundary are admin-only,
+    /// so members get Projects and the Privacy card (which opens Home) instead.
+    /// </summary>
+    public IReadOnlyList<CapabilityCard> Capabilities { get; private set; } = BuildCapabilities(isAdmin: false);
+
+    public void SetAdmin(bool isAdmin)
+    {
+        Capabilities = BuildCapabilities(isAdmin);
+        OnPropertyChanged(nameof(Capabilities));
+    }
+
+    public static IReadOnlyList<CapabilityCard> BuildCapabilities(bool isAdmin)
+    {
+        List<CapabilityCard> cards =
+        [
+            new(IconNames.Agents, "Agents", "Your own assistants", "Agents"),
+            new(IconNames.Team, "Teams & Swarms", "Agents working together", "Orchestration"),
+            new(IconNames.Workflow, "Workflows", "Planned, scheduled work", "Workflows"),
+            new(IconNames.Knowledge, "Knowledge", "Skills, memory, docs", "Skills"),
+        ];
+        if (isAdmin)
+        {
+            cards.Add(new(IconNames.Integrations, "Integrations", "MCP tools and platforms", "AdminPlatformIntegrations"));
+            cards.Add(new(IconNames.Trust, "Trust Boundary", "Redaction and controls", "TrustBoundary"));
+        }
+        else
+        {
+            cards.Add(new(IconNames.Projects, "Projects", "Files and chats together", "Projects"));
+            cards.Add(new(IconNames.Private, "Privacy", "You choose what teammates see", "Dashboard"));
+        }
+        return cards;
+    }
+
+    [RelayCommand]
+    private void OpenArea(string? page)
+    {
+        if (!string.IsNullOrEmpty(page)) AreaRequested?.Invoke(page);
+    }
+
     [RelayCommand]
     private void Suggestion(string text)
     {
@@ -540,7 +587,14 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         UpdateCommandSuggestions(value);
     }
 
-    partial void OnIsSendingChanged(bool value) => SendCommand.NotifyCanExecuteChanged();
+    partial void OnIsSendingChanged(bool value)
+    {
+        SendCommand.NotifyCanExecuteChanged();
+        OnPropertyChanged(nameof(InputWatermark));
+    }
+
+    /// <summary>Phase 137 — the composer placeholder; says a reply is generating while sending.</summary>
+    public string InputWatermark => IsSending ? "Generating a reply…" : "Type a message or / for commands...";
 
     [RelayCommand]
     private void AcceptSuggestion(CommandSuggestion suggestion)

@@ -186,4 +186,10 @@ public static class WorkspaceSettingsKeys
 
     /// <summary>JSON-encoded dict of task-type → agent-template overrides (e.g. <c>{"code_change":"coder"}</c>).</summary>
     public const string SwarmTemplateOverrides = "swarm.templates";
+
+    /// <summary>Seconds between WorkflowSchedulerService poll ticks (integer). Default 20.</summary>
+    public const string WorkflowPollSeconds = "workflow.poll_seconds";
+
+    /// <summary>Max workflows WorkflowSchedulerService advances concurrently per tick (integer). Default 3.</summary>
+    public const string WorkflowMaxConcurrent = "workflow.max_concurrent";
 }

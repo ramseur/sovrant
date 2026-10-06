@@ -255,7 +255,7 @@ public sealed partial class LocalArtifactStore : IArtifactStore
             return Task.FromResult<Uri?>(new Uri(url, kind));
         }
 
-        return Task.FromResult<Uri?>(new Uri($"file:///{fullPath.Replace('\\', '/')}"));
+        return Task.FromResult<Uri?>(new Uri(fullPath, UriKind.Absolute));
     }
 
     // ── Path helpers ────────────────────────────────────────────────────

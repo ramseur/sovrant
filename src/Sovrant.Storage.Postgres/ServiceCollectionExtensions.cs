@@ -11,7 +11,7 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers the Postgres/Supabase storage backend.
-    /// Replaces the SQLite session, credential, knowledge, and MCP trust stores
+    /// Replaces the SQLite session (and conversation-folder), credential, knowledge, and MCP trust stores
     /// with Npgsql-backed implementations.
     /// </summary>
     /// <param name="services">The service collection to register into.</param>
@@ -32,6 +32,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISchemaInitializer, PostgresSchemaInitializer>();
 
         services.AddSingleton<ISessionStore, PostgresSessionStore>();
+        services.AddSingleton<ISessionFolderStore, PostgresSessionFolderStore>();
 
         services.AddSingleton<ICredentialStore>(sp =>
             new PostgresCredentialStore(

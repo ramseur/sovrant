@@ -111,8 +111,10 @@
                 <div class="detail-header-row">
                     <h2>@context.Name</h2>
                     <div class="detail-actions">
-                        <button class="btn-primary btn-sm" @onclick="@(() => LaunchChat(context))" title="Open a chat session scoped to this agent">
-                            &#x1F4AC; Launch chat
+                        <button class="btn-primary btn-sm" @onclick="@(() => LaunchChat(context))" title="Open a chat session scoped to this agent"
+                                style="display:inline-flex;align-items:center;gap:6px">
+                            <SovrantIcon Name="@IconNames.Chat" Size="13" />
+                            Launch chat
                         </button>
                         @if (Session.IsAdmin)
                         {
@@ -200,7 +202,14 @@
                                     <button class="privacy-toggle-mini @(r.IsPrivate ? "private" : "public")"
                                             title="@(r.IsPrivate ? "Private — only you can see this run" : "Public — visible to admins")"
                                             @onclick="@(() => TogglePrivacyAsync(r))">
-                                        @(r.IsPrivate ? "🔒" : "🔓")
+                                        @if (r.IsPrivate)
+                                        {
+                                            <SovrantIcon Name="@IconNames.Private" Size="12" StrokeWidth="2" />
+                                        }
+                                        else
+                                        {
+                                            <SovrantIcon Name="@IconNames.Public" Size="12" StrokeWidth="2" />
+                                        }
                                     </button>
                                 </div>
                             </div>
@@ -252,7 +261,14 @@
                                 <button class="privacy-toggle-mini @(r.IsPrivate ? "private" : "public")"
                                         title="@(r.IsPrivate ? "Private — only you can see this run" : "Public — visible to admins")"
                                         @onclick="@(() => TogglePrivacyAsync(r))">
-                                    @(r.IsPrivate ? "🔒" : "🔓")
+                                    @if (r.IsPrivate)
+                                    {
+                                        <SovrantIcon Name="@IconNames.Private" Size="12" StrokeWidth="2" />
+                                    }
+                                    else
+                                    {
+                                        <SovrantIcon Name="@IconNames.Public" Size="12" StrokeWidth="2" />
+                                    }
                                 </button>
                             }
                         </div>

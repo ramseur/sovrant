@@ -52,6 +52,8 @@ public static class SovrantClientServiceExtensions
         // Remote service implementations.
         services.AddSingleton<IRuntimeSessionPool, RemoteRuntimeSessionPool>();
         services.AddSingleton<ISessionStore, RemoteSessionStore>();
+        services.AddSingleton<ISessionFolderStore, RemoteSessionFolderStore>();
+        services.AddSingleton<ISessionLinkResolver, RemoteSessionLinkResolver>();
         services.AddSingleton<IToolRegistry, RemoteToolRegistry>();
         services.AddSingleton<IArtifactStore, RemoteArtifactStore>();
 

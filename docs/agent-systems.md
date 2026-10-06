@@ -101,7 +101,7 @@ Phase 52 unified the two systems. The path followed was:
    - The CLI `sovrant swarm` command stays; swarms can now operate on whatever team the user has set up
 
 3. **✓ Single observability store**
-   - Both systems write to the `agent_runs` table (unified run ledger for delegations, swarm tasks, and mission steps)
+   - Both systems write to the `agent_runs` table (unified run ledger for delegations, swarm tasks, and workflow steps)
    - `swarm_events` extended with `kind` (discriminator) and `run_id` (link to `agent_runs`)
    - Per-user, per-workspace, per-project queries work uniformly via `GET /v1/runs`
 

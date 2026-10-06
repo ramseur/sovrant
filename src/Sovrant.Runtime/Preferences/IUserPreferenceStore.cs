@@ -34,6 +34,15 @@ public static class UserPreferenceKeys
     /// <summary>Default LLM model id (e.g. <c>gpt-5</c>, <c>claude-opus-4-7</c>).</summary>
     public const string Model = "llm.model";
 
+    /// <summary>Phase 140: "true" once the user has been shown the Welcome page.</summary>
+    public const string WelcomeSeen = "onboarding.welcome_seen";
+
+    /// <summary>Phase 140: "true" once the user has opened a Knowledge page (ticks the member checklist).</summary>
+    public const string KnowledgeVisited = "onboarding.knowledge_visited";
+
+    /// <summary>Phase 141 — "true" once the user dismissed Home's "All set" line.</summary>
+    public const string GetStartedDismissed = "onboarding.get_started_dismissed";
+
     /// <summary>Provider kind for the active profile (<c>OpenAI</c>, <c>OpenRouter</c>, …).</summary>
     public const string Provider = "llm.provider";
 

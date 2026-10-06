@@ -25,7 +25,7 @@ public sealed partial class HeuristicOrchestrationRouter : IOrchestrationRouter
         var hasDangerous = HasDangerousTools(plan);
         var hasHighTierSteps = plan.Steps.Any(s => s.ModelTier == RuntimeModelTier.High);
 
-        // ── Escalation guard: trivial tasks never get Swarm/Mission ────
+        // ── Escalation guard: trivial tasks never get Swarm/Workflow ────
         if (stepCount <= 2 && fileCount <= 1 && !hasEscalation)
         {
             return new OrchestrationRecommendation(
@@ -34,11 +34,11 @@ public sealed partial class HeuristicOrchestrationRouter : IOrchestrationRouter
                 0.95f);
         }
 
-        // ── Mission: open-ended goals with high-tier planning ──────────
+        // ── Workflow: open-ended goals with high-tier planning ──────────
         if (hasHighTierSteps && stepCount > 5 && hasEscalation)
         {
             return new OrchestrationRecommendation(
-                OrchestrationMode.Mission,
+                OrchestrationMode.Workflow,
                 $"Complex goal with {stepCount} steps, high-tier planning, and escalation tools — mission mode.",
                 0.7f);
         }

@@ -36,7 +36,8 @@ public sealed record AgentRunRecord(
     int OutputTokens = 0,
     decimal? CostUsd = null,
     string? Prompt = null,
-    bool IsPrivate = true);
+    bool IsPrivate = true,
+    string? SessionId = null);
 
 /// <summary>Filter for <see cref="IAgentRunStore.ListAsync"/>.</summary>
 public sealed record AgentRunFilter(

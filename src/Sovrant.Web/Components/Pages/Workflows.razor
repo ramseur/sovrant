@@ -1,0 +1,551 @@
+@page "/workflows"
+@using Sovrant.Runtime.Artifacts
+@using Sovrant.Runtime.Engine
+@using Sovrant.Runtime.Workflows
+@using Sovrant.Web.Services
+@implements IDisposable
+
+<div class="master-detail">
+    <div class="master-panel">
+        <div class="master-header">
+            <h1>Workflows</h1>
+            <div class="master-header-right">
+                <span class="item-count">@_filtered.Count</span>
+                <button class="btn-sm btn-primary" title="New workflow"
+                        @onclick="StartCreate">+ New</button>
+            </div>
+        </div>
+
+        <div class="master-search">
+            <input type="text" placeholder="Search workflows..."
+                   @bind="_search" @bind:event="oninput" @bind:after="ApplyFilter" />
+        </div>
+
+        <div class="master-list">
+            @if (_filtered.Count == 0)
+            {
+                <p class="text-secondary" style="padding:12px;">@EmptyMessage()</p>
+            }
+            else
+            {
+                @foreach (var item in _filtered)
+                {
+                    <button class="master-item @(ReferenceEquals(item, _selected) && !_isCreating ? "active" : "")"
+                            @onclick="() => Select(item)">
+                        <div class="item-title">
+                            <span class="cc-status cc-status-@item.Status.ToString().ToLowerInvariant()">@item.Status</span>
+                            <span>@Truncate(item.Goal, 48)</span>
+                        </div>
+                        <div class="item-subtitle">@Subtitle(item)</div>
+                    </button>
+                }
+            }
+        </div>
+    </div>
+
+    <div class="detail-panel">
+        @if (!string.IsNullOrEmpty(_status))
+        {
+            <div class="status-message" style="margin:16px 24px 0;">@_status</div>
+        }
+
+        @if (_isCreating)
+        {
+            <!-- ── New Workflow form ─────────────────────────────────── -->
+            <div class="detail-content">
+                <div class="orch-detail-header">
+                    <h2>New Workflow</h2>
+                    <button class="btn-sm btn-outline" @onclick="CancelCreate">Cancel</button>
+                </div>
+                <div class="gov-card orch-form" style="max-width:560px;">
+                    <div style="display:flex;flex-direction:column;gap:6px;">
+                        <span>Goal</span>
+                        <textarea class="gov-field-input" rows="3"
+                                  placeholder="Describe what you want accomplished…"
+                                  style="width:100%;resize:vertical;"
+                                  @bind="_createGoal" @bind:event="oninput"></textarea>
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;align-items:center;">
+                    <button class="btn-primary" style="max-width:180px;"
+                            disabled="@(string.IsNullOrWhiteSpace(_createGoal) || _isGeneratingPlan)"
+                            @onclick="ConfirmCreate">Create Workflow</button>
+                    <button class="btn-outline" style="max-width:200px;"
+                            disabled="@(string.IsNullOrWhiteSpace(_createGoal) || _isGeneratingPlan)"
+                            title="Ask the model to break this goal into steps you can review and edit before anything runs"
+                            @onclick="GeneratePlanAsync">@(_isGeneratingPlan ? "Generating…" : "Generate Plan first")</button>
+                    <button class="btn-outline btn-sm" @onclick="CancelCreate">Cancel</button>
+                </div>
+            </div>
+        }
+        else if (_selected is not null)
+        {
+            <div class="detail-content">
+                <div class="orch-detail-header">
+                    <div>
+                        <span class="cc-status cc-status-@_selected.Status.ToString().ToLowerInvariant()">@_selected.Status</span>
+                        <h2>@_selected.Goal</h2>
+                        @if (_artifactCount > 0)
+                        {
+                            <a href="/artifacts" class="text-muted text-sm" style="display:inline-block;margin-top:4px;"><SovrantIcon Name="@IconNames.Attach" Size="13" Class="icon-inline icon-lead" />@_artifactCount artifact@(_artifactCount == 1 ? "" : "s")</a>
+                        }
+                    </div>
+                    @if (!IsTerminal(_selected.Status))
+                    {
+                        <button class="btn-sm btn-danger" @onclick="CancelWorkflowAsync">Cancel</button>
+                    }
+                </div>
+
+                <!-- ── Tabs ──────────────────────────────────────────── -->
+                <div class="wf-tabs">
+                    <button class="wf-tab @(_activeTab == "plan" ? "active" : "")" @onclick='() => _activeTab = "plan"'>Plan</button>
+                    <button class="wf-tab @(_activeTab == "journal" ? "active" : "")" @onclick='() => _activeTab = "journal"'>Journal</button>
+                </div>
+
+                @if (_activeTab == "plan")
+                {
+                <div class="orch-detail-section">
+                    @if (IsPlanReview)
+                    {
+                        <p class="text-muted text-sm" style="margin-bottom:8px;">
+                            Awaiting your review. Edit the steps below, then Save, or Resume to run as-is.
+                        </p>
+                        @for (var i = 0; i < _editableSteps.Count; i++)
+                        {
+                            var idx = i;
+                            var step = _editableSteps[idx];
+                            <div class="gov-card" style="margin-bottom:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;">
+                                <div style="display:flex;gap:8px;align-items:center;">
+                                    <span class="text-muted text-sm" style="flex-shrink:0;">@(idx + 1).</span>
+                                    <input class="gov-field-input" style="flex:1;" placeholder="Intent"
+                                           value="@step.Intent" @oninput="e => step.Intent = (string)e.Value!" />
+                                    <select class="gov-field-input" style="max-width:110px;"
+                                            value="@step.Tier" @onchange="e => step.Tier = (string)e.Value!">
+                                        <option value="Standard">Standard</option>
+                                        <option value="High">High</option>
+                                        <option value="Fast">Fast</option>
+                                    </select>
+                                    <button class="btn-sm btn-outline" title="Remove step" aria-label="Remove step"
+                                            disabled="@(_editableSteps.Count <= 1)"
+                                            @onclick="() => RemoveStep(idx)"><SovrantIcon Name="@IconNames.Close" Size="12" /></button>
+                                </div>
+                                <input class="gov-field-input" placeholder="Expected outcome"
+                                       value="@step.Expected" @oninput="e => step.Expected = (string)e.Value!" />
+                            </div>
+                        }
+                        <div style="display:flex;gap:8px;margin-top:4px;">
+                            <button class="btn-outline btn-sm" @onclick="AddStep">+ Add step</button>
+                            <button class="btn-primary btn-sm" @onclick="SavePlanAsync" disabled="@_isSavingPlan">
+                                @(_isSavingPlan ? "Saving…" : "Save changes")
+                            </button>
+                        </div>
+                    }
+                    else if (_selectedPlan is null || _selectedPlan.Steps.Count == 0)
+                    {
+                        <p class="text-muted text-sm">No plan yet.</p>
+                    }
+                    else
+                    {
+                        @foreach (var step in _selectedPlan.Steps)
+                        {
+                            <div class="ma-member-card">
+                                <div class="ma-member-info">
+                                    <div>
+                                        <span class="ma-member-name">@(step.Index + 1). @step.Intent</span>
+                                    </div>
+                                    <div class="ma-member-meta"><span>@step.ExpectedOutcome</span></div>
+                                </div>
+                                <span class="ma-role-badge">@step.ModelTier</span>
+                            </div>
+                        }
+                    }
+                </div>
+                }
+                else
+                {
+                <!-- ── Event journal ─────────────────────────────────── -->
+                <div class="orch-detail-section">
+                    @if (!string.IsNullOrEmpty(_selected.SessionId))
+                    {
+                        <a href="@($"/?session={Uri.EscapeDataString(_selected.SessionId)}")" class="btn-outline btn-sm" style="display:inline-flex;margin-bottom:12px;">
+                            <SovrantIcon Name="@IconNames.Chat" Size="14" Class="icon-inline icon-lead" />Open chat session →
+                        </a>
+                        <p class="text-muted text-sm" style="margin:-8px 0 12px;">
+                            The real back-and-forth for every step happens there. This log is just the structural timeline.
+                        </p>
+                    }
+                    @if (_selectedEvents.Count == 0)
+                    {
+                        <p class="text-muted text-sm">No events yet.</p>
+                    }
+                    else
+                    {
+                        <div class="gov-card" style="padding:8px 16px;">
+                            @foreach (var e in _selectedEvents)
+                            {
+                                <div style="display:flex;gap:12px;padding:6px 0;font-size:12px;border-bottom:1px solid var(--surface-border);">
+                                    <span class="text-muted" style="font-family:monospace;flex-shrink:0;white-space:nowrap;">@e.Timestamp.ToLocalTime().ToString("HH:mm:ss")</span>
+                                    <span class="text-secondary">@HumanizeEventType(e.EventType)</span>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+                }
+
+                <!-- ── Actions ───────────────────────────────────────── -->
+                <div class="orch-detail-section" style="display:flex;gap:12px;align-items:center;">
+                    @if (_selected.Status == WorkflowStatus.Running)
+                    {
+                        <span class="text-muted text-sm">Already running — check back, or the scheduler will keep it moving.</span>
+                    }
+                    else if (!IsTerminal(_selected.Status))
+                    {
+                        <button class="btn-primary" style="max-width:180px;"
+                                disabled="@_isRunning"
+                                @onclick="RunNowAsync">
+                            @(_isRunning ? "Running…" : (_selected.Status == WorkflowStatus.AwaitingHuman ? "Resume" : "Run now"))
+                        </button>
+                    }
+                    <button class="btn-outline btn-sm" @onclick="ToggleExport">Export</button>
+                </div>
+
+                @if (_showExport)
+                {
+                    <div class="orch-run-output" style="margin-top:12px;">
+                        <pre style="white-space:pre-wrap;font-size:12px;margin:0;">@_exportText</pre>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="detail-empty">
+                <span class="text-muted">Select a workflow to view details</span>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Inject] private IWorkflowStore WorkflowStore { get; set; } = default!;
+    [Inject] private IWorkflowExecutor Executor { get; set; } = default!;
+    [Inject] private WorkflowPlanningService Planner { get; set; } = default!;
+    [Inject] private WorkflowSessionNotifier SessionNotifier { get; set; } = default!;
+    [Inject] private WorkflowExportService Exporter { get; set; } = default!;
+    [Inject] private IArtifactStore ArtifactStore { get; set; } = default!;
+    [Inject] private ActiveContextService ActiveContext { get; set; } = default!;
+    [Inject] private WebSessionService Session { get; set; } = default!;
+
+    private string _search = string.Empty;
+    private string _status = string.Empty;
+    private string _activeTab = "plan";
+
+    private List<Workflow> _all = [];
+    private List<Workflow> _filtered = [];
+    private Workflow? _selected;
+    private RuntimePlan? _selectedPlan;
+    private List<WorkflowEvent> _selectedEvents = [];
+    private int _artifactCount;
+    private readonly List<EditableStep> _editableSteps = [];
+
+    private bool _isCreating;
+    private string _createGoal = string.Empty;
+    private bool _isGeneratingPlan;
+    private bool _isSavingPlan;
+
+    private bool _isRunning;
+    private bool _showExport;
+    private string _exportText = string.Empty;
+
+    /// <summary>
+    /// True when the selected workflow has a plan waiting for human review
+    /// before it has ever run — as opposed to AwaitingHuman from a post-run
+    /// acceptance-gate pause, which shows the plan read-only like normal.
+    /// </summary>
+    private bool IsPlanReview =>
+        _selected?.Status == WorkflowStatus.AwaitingHuman
+        && !_selectedEvents.Any(e => e.EventType == WorkflowEventTypes.RunStarted);
+
+    private System.Threading.Timer? _pollTimer;
+
+    protected override async Task OnInitializedAsync() => await LoadAllAsync();
+
+    private async Task LoadAllAsync()
+    {
+        var ownerUserId = Session.IsAdmin ? null : Session.UserId;
+        var items = await WorkflowStore.ListAsync(ownerUserId, status: null, limit: 200);
+        _all = items.OrderByDescending(w => w.CreatedAt).ToList();
+        if (_selected is not null)
+            _selected = _all.FirstOrDefault(w => w.Id == _selected.Id);
+        ApplyFilter();
+        await LoadSelectedDetailAsync();
+        UpdatePolling();
+    }
+
+    /// <summary>
+    /// Live-refreshes the detail view while the selected workflow is
+    /// actively moving (Planning/Running) — otherwise watching a multi-minute
+    /// run means manually reloading the page repeatedly to see progress.
+    /// Stops itself once the workflow lands on a status that won't change
+    /// without a human action (AwaitingHuman, or terminal).
+    /// </summary>
+    private void UpdatePolling()
+    {
+        var shouldPoll = _selected is { Status: WorkflowStatus.Planning or WorkflowStatus.Running };
+        if (shouldPoll && _pollTimer is null)
+        {
+            _pollTimer = new System.Threading.Timer(_ => InvokeAsync(LoadAllAsync), null,
+                TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(4));
+        }
+        else if (!shouldPoll && _pollTimer is not null)
+        {
+            _pollTimer.Dispose();
+            _pollTimer = null;
+        }
+    }
+
+    public void Dispose() => _pollTimer?.Dispose();
+
+    private void ApplyFilter()
+    {
+        if (string.IsNullOrWhiteSpace(_search)) { _filtered = _all; return; }
+        var s = _search.Trim();
+        _filtered = _all.Where(w => w.Goal.Contains(s, StringComparison.OrdinalIgnoreCase)).ToList();
+    }
+
+    private async Task Select(Workflow item)
+    {
+        _isCreating = false;
+        _showExport = false;
+        _selected = item;
+        await LoadSelectedDetailAsync();
+        UpdatePolling();
+    }
+
+    private async Task LoadSelectedDetailAsync()
+    {
+        _selectedPlan = null;
+        _selectedEvents = [];
+        _artifactCount = 0;
+        _editableSteps.Clear();
+        if (_selected is null) return;
+
+        _selectedPlan = WorkflowPlanJson.TryDeserialize(_selected.PlanJson, _selected.Goal);
+        _selectedEvents = (await WorkflowStore.GetEventsAsync(_selected.Id)).ToList();
+        _artifactCount = await CountArtifactsAsync(_selected);
+
+        if (IsPlanReview && _selectedPlan is not null)
+        {
+            foreach (var step in _selectedPlan.Steps)
+                _editableSteps.Add(new EditableStep { Intent = step.Intent, Expected = step.ExpectedOutcome, Tier = step.ModelTier.ToString() });
+        }
+    }
+
+    private async Task<int> CountArtifactsAsync(Workflow workflow)
+    {
+        var scope = new ArtifactScope
+        {
+            WorkspaceId = workflow.WorkspaceId ?? ArtifactScope.DefaultWorkspaceFor(Session.UserId ?? "anon"),
+            ProjectId = workflow.ProjectId ?? ArtifactScope.DefaultProjectId,
+            RunId = workflow.SessionId ?? workflow.Id,
+        };
+        var count = 0;
+        await foreach (var _ in ArtifactStore.ListAsync(scope))
+            count++;
+        return count;
+    }
+
+    // ── Create ────────────────────────────────────────────────────────────
+
+    private void StartCreate()
+    {
+        _isCreating = true;
+        _selected = null;
+        _showExport = false;
+        _createGoal = string.Empty;
+        _status = string.Empty;
+        UpdatePolling();
+    }
+
+    private void CancelCreate() => _isCreating = false;
+
+    private async Task ConfirmCreate()
+    {
+        var goal = _createGoal.Trim();
+        if (string.IsNullOrEmpty(goal)) return;
+
+        var workflow = await WorkflowStore.CreateAsync(
+            goal,
+            workspaceId: ActiveContext.WorkspaceId,
+            projectId: string.IsNullOrEmpty(ActiveContext.ProjectId) ? null : ActiveContext.ProjectId,
+            ownerUserId: Session.UserId);
+        await SessionNotifier.NotifyCreatedAsync(workflow);
+
+        _isCreating = false;
+        _status = "Workflow created — the scheduler will pick it up on its next poll tick.";
+        await LoadAllAsync();
+        _selected = _all.FirstOrDefault(w => w.Id == workflow.Id);
+        await LoadSelectedDetailAsync();
+    }
+
+    private async Task GeneratePlanAsync()
+    {
+        var goal = _createGoal.Trim();
+        if (string.IsNullOrEmpty(goal) || _isGeneratingPlan) return;
+
+        _isGeneratingPlan = true;
+        StateHasChanged();
+        try
+        {
+            var workflow = await Planner.GenerateAsync(
+                goal,
+                workspaceId: ActiveContext.WorkspaceId,
+                projectId: string.IsNullOrEmpty(ActiveContext.ProjectId) ? null : ActiveContext.ProjectId,
+                ownerUserId: Session.UserId);
+
+            _isCreating = false;
+            _status = "Plan generated — review the steps below, then Save or Resume to run.";
+            await LoadAllAsync();
+            _selected = _all.FirstOrDefault(w => w.Id == workflow.Id);
+            await LoadSelectedDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            _status = $"Plan generation failed: {ex.Message}";
+        }
+        finally
+        {
+            _isGeneratingPlan = false;
+        }
+    }
+
+    // ── Plan review ──────────────────────────────────────────────────────
+
+    private void AddStep() => _editableSteps.Add(new EditableStep());
+
+    private void RemoveStep(int index)
+    {
+        if (_editableSteps.Count <= 1) return;
+        _editableSteps.RemoveAt(index);
+    }
+
+    private async Task SavePlanAsync()
+    {
+        if (_selected is null || _isSavingPlan) return;
+        var steps = _editableSteps
+            .Where(s => !string.IsNullOrWhiteSpace(s.Intent))
+            .Select((s, i) => new RuntimeStep(i, s.Intent.Trim(), string.IsNullOrWhiteSpace(s.Expected) ? "step completed successfully" : s.Expected.Trim(), ParseTier(s.Tier)))
+            .ToList();
+        if (steps.Count == 0)
+        {
+            _status = "Add at least one step with an intent before saving.";
+            return;
+        }
+
+        _isSavingPlan = true;
+        StateHasChanged();
+        try
+        {
+            await Planner.SavePlanAsync(_selected.Id, steps);
+            _status = "Plan saved.";
+            await LoadAllAsync();
+        }
+        catch (Exception ex)
+        {
+            _status = $"Save failed: {ex.Message}";
+        }
+        finally
+        {
+            _isSavingPlan = false;
+        }
+    }
+
+    private static RuntimeModelTier ParseTier(string tier) => tier switch
+    {
+        "High" => RuntimeModelTier.High,
+        "Fast" => RuntimeModelTier.Fast,
+        _ => RuntimeModelTier.Standard,
+    };
+
+    // ── Actions ───────────────────────────────────────────────────────────
+
+    private async Task RunNowAsync()
+    {
+        if (_selected is null || _isRunning || _selected.Status == WorkflowStatus.Running) return;
+
+        _isRunning = true;
+        StateHasChanged();
+        try
+        {
+            await Executor.RunAsync(_selected.Id);
+            _status = "Workflow advanced.";
+        }
+        catch (Exception ex)
+        {
+            _status = $"Run failed: {ex.Message}";
+        }
+        finally
+        {
+            _isRunning = false;
+            await LoadAllAsync();
+        }
+    }
+
+    private async Task CancelWorkflowAsync()
+    {
+        if (_selected is null || IsTerminal(_selected.Status)) return;
+
+        await WorkflowStore.CancelAsync(_selected);
+        _status = "Workflow cancelled.";
+        await LoadAllAsync();
+    }
+
+    private async Task ToggleExport()
+    {
+        if (_selected is null) return;
+        _showExport = !_showExport;
+        if (_showExport)
+            _exportText = await Exporter.ExportMarkdownAsync(_selected.Id);
+    }
+
+    // The event_type values persisted in the journal (mission_created, etc.)
+    // are historical data left unrenamed on purpose -- rewriting rows for a
+    // cosmetic win wasn't worth the risk. This only humanizes the display.
+    private static string HumanizeEventType(string eventType) => eventType switch
+    {
+        WorkflowEventTypes.WorkflowCreated => "Workflow created",
+        WorkflowEventTypes.PlanRevised => "Plan revised",
+        WorkflowEventTypes.RunStarted => "Run started",
+        WorkflowEventTypes.RunCompleted => "Run completed",
+        WorkflowEventTypes.AcceptanceApproved => "Accepted",
+        WorkflowEventTypes.AcceptanceRejected => "Rejected",
+        WorkflowEventTypes.Paused => "Paused",
+        WorkflowEventTypes.Resumed => "Resumed",
+        WorkflowEventTypes.Completed => "Completed",
+        WorkflowEventTypes.Failed => "Failed",
+        WorkflowEventTypes.Cancelled => "Cancelled",
+        _ => eventType.Replace('_', ' '),
+    };
+
+    private static bool IsTerminal(WorkflowStatus status) =>
+        status is WorkflowStatus.Completed or WorkflowStatus.Failed or WorkflowStatus.Cancelled;
+
+    private static string Subtitle(Workflow w) =>
+        w.CompletedAt is not null
+            ? $"finished {w.CompletedAt.Value.ToLocalTime():MMM d, HH:mm}"
+            : $"started {w.CreatedAt.ToLocalTime():MMM d, HH:mm}";
+
+    private static string Truncate(string value, int max) =>
+        value.Length <= max ? value : string.Concat(value.AsSpan(0, max - 1), "…");
+
+    private string EmptyMessage() =>
+        string.IsNullOrWhiteSpace(_search) ? "No workflows yet. Click + New to create one." : "No matches.";
+
+    private sealed class EditableStep
+    {
+        public string Intent { get; set; } = string.Empty;
+        public string Expected { get; set; } = string.Empty;
+        public string Tier { get; set; } = "Standard";
+    }
+}

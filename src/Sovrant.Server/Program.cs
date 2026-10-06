@@ -108,6 +108,10 @@ builder.Services.AddSingleton<WebhookCallbackService>();
 // Session eviction background service — TTL sweep + LRU cap (Phase 9.1).
 builder.Services.AddHostedService<Sovrant.Server.SessionEvictionService>();
 
+// Workflow scheduler — polls Planning/Running workflows and advances them
+// without waiting for a human or agent to explicitly ask (Phase 129).
+builder.Services.AddHostedService<Sovrant.Server.WorkflowSchedulerService>();
+
 // SignalR for real-time web frontend streaming (Phase 61).
 builder.Services.AddSignalR()
     .AddJsonProtocol(o =>
@@ -176,7 +180,13 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
+// Phase 144 (GitHub #33): behind a reverse proxy, trust X-Forwarded-* from known proxies.
+Sovrant.Server.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
+    Environment.GetEnvironmentVariable(Sovrant.Server.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
+
 var app = builder.Build();
+// First in the pipeline, so HTTPS redirection, rate limiting and logging see the real client.
+app.UseForwardedHeaders();
 
 if (bootstrapConfig.HasTls)
     app.UseHttpsRedirection();
@@ -224,16 +234,7 @@ app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 // Connect MCP servers if configured.
 await app.Services.InitializeRuntimeAsync().ConfigureAwait(false);
 
-// Seed the encrypted credential store with the LLM API key from env if no value
-// is persisted yet. This preserves the env-var bootstrap path while keeping the
-// secret out of MutableServerConfig and the HTTP surface.
-if (!string.IsNullOrEmpty(credentials.LlmApiKey))
-{
-    var credentialStore = app.Services.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
-    var existing = await credentialStore.RetrieveAsync(MutableApiKeyAuthProvider.LlmApiKeyCredentialKey).ConfigureAwait(false);
-    if (string.IsNullOrEmpty(existing))
-        await credentialStore.StoreAsync(MutableApiKeyAuthProvider.LlmApiKeyCredentialKey, credentials.LlmApiKey).ConfigureAwait(false);
-}
+// Env API keys (LLM_API_KEY, …) are imported by InitializeRuntimeAsync above (Phase 144).
 
 // Phase 88-C — re-sync MutableServerConfig from SovrantConfig now that
 // InitializeRuntimeAsync's ApplyUserPreferencesAsync has populated it from
@@ -256,6 +257,7 @@ ConfigRoutes.Map(app);
 StatusRoutes.Map(app);
 ModelsRoutes.Map(app);
 SessionRoutes.Map(app);
+SessionFolderRoutes.Map(app);
 UsageRoutes.Map(app);
 WebhookRoutes.Map(app);
 McpAuthRoutes.Map(app);
@@ -264,7 +266,7 @@ McpTrustRoutes.Map(app);
 EvalRoutes.Map(app);
 SwarmRoutes.Map(app);
 EngineRoutes.Map(app);
-MissionRoutes.Map(app);
+WorkflowRoutes.Map(app);
 TeamRoutes.Map(app);
 ArtifactRoutes.Map(app);
 ToolRegistryRoutes.Map(app);

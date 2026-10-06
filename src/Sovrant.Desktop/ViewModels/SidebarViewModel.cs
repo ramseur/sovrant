@@ -14,6 +14,8 @@ using Sovrant.Runtime.Providers;
 using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Workspaces;
 
+using Sovrant.Api.Ui;
+
 namespace Sovrant.Desktop.ViewModels;
 
 public partial class SidebarViewModel : ViewModelBase
@@ -72,7 +74,6 @@ public partial class SidebarViewModel : ViewModelBase
     public ObservableCollection<UnconfiguredProviderItem> UnconfiguredProviders { get; } = [];
     public bool HasUnconfiguredProviders => UnconfiguredProviders.Count > 0;
     public string UnconfiguredSectionLabel => HasProviderProfiles ? "AVAILABLE TO SET UP" : "GET STARTED";
-    public ObservableCollection<SessionListItem> RecentSessions { get; } = [];
 
     private ActiveSessionsViewModel? _activeSessions;
     public bool HasActiveSessions => _activeSessions?.HasActiveSessions ?? false;
@@ -98,20 +99,12 @@ public partial class SidebarViewModel : ViewModelBase
         ["Azure OpenAI"] = ["gpt-4o", "gpt-4o-mini", "gpt-4.1"],
     };
 
+    // Phase 136: Lucide has no brand logos, so each provider shows its category icon
+    // (hosted vs local) until licensed brand logos are added.
     private static readonly UnconfiguredProviderItem[] KnownProviders =
-    [
-        new("OpenAI",       "🤖"),
-        new("Anthropic",    "🧠"),
-        new("OpenRouter",   "🔀"),
-        new("DeepSeek",     "🔵"),
-        new("Groq",         "🚀"),
-        new("Mistral",      "🌀"),
-        new("Google",       "🔷"),
-        new("Together AI",  "🤝"),
-        new("Ollama",       "🦙"),
-        new("LM Studio",    "💻"),
-        new("Azure OpenAI", "☁️"),
-    ];
+        new[] { "OpenAI", "Anthropic", "OpenRouter", "DeepSeek", "Groq", "Mistral", "Google", "Together AI", "Ollama", "LM Studio", "Azure OpenAI" }
+            .Select(n => new UnconfiguredProviderItem(n, IconNames.ForProvider(n)))
+            .ToArray();
 
     public event EventHandler<string>? NavigationRequested;
     public event EventHandler<string>? SessionResumeRequested;
@@ -163,8 +156,8 @@ public partial class SidebarViewModel : ViewModelBase
             {
                 OnPropertyChanged(nameof(HasActiveSessions));
                 OnPropertyChanged(nameof(ActiveBackgroundSessions));
-                // Refresh IsActive on all recent sessions
-                foreach (var s in RecentSessions) s.RefreshIsActive(_activeSessions);
+                // Refresh the running dot on conversation rows
+                RefreshRunningStates();
             };
         }
         ProviderProfiles.CollectionChanged += (_, _) =>
@@ -475,6 +468,22 @@ public partial class SidebarViewModel : ViewModelBase
         var savedModel = await _prefs.GetAsync(App.SovrantUserId, UserPreferenceKeys.Model)
             .ConfigureAwait(false);
 
+        // Phase 138: a saved profile that isn't enabled for this workspace is switched off for
+        // the running process (so it's never contacted here); it comes back on when available.
+        var available = string.IsNullOrEmpty(savedProfileId)
+            ? null
+            : entries.FirstOrDefault(p => p.ProfileId == savedProfileId);
+        await Sovrant.Runtime.Providers.ActiveProviderGuard.ReconcileAsync(
+            _config, savedProfileId,
+            available is null ? null : Sovrant.Runtime.Providers.ActiveProviderGuard.AvailableProfile.From(available.CredentialId, available.BaseUrl, available.MaxTokens),
+            savedModel, _credentials,
+            (key, url) =>
+            {
+                if (_authProvider is null) return;
+                _authProvider.ApiKey = key;
+                _authProvider.BaseUrl = url;
+            }).ConfigureAwait(false);
+
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
             ProviderProfiles.Clear();
@@ -692,49 +701,13 @@ public partial class SidebarViewModel : ViewModelBase
     private async Task DeleteSessionAsync(string sessionId)
     {
         await _sessionStore.DeleteAsync(sessionId, ownerUserId: App.SovrantUserId);
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            var item = RecentSessions.FirstOrDefault(s => s.SessionId == sessionId);
-            if (item is not null)
-                RecentSessions.Remove(item);
-        });
+        await LoadSessionsAsync();
     }
 
     [RelayCommand]
     private async Task RefreshSessionsAsync()
     {
         await LoadSessionsAsync();
-    }
-
-    private async Task LoadSessionsAsync()
-    {
-        var sessions = await _sessionStore.ListWithTitlesAsync(ownerUserId: App.SovrantUserId);
-        var items = new List<SessionListItem>();
-
-        foreach (var s in sessions.Take(20))
-        {
-            var label = s.Title ?? s.SessionId;
-            if (label.Length > 40)
-                label = string.Concat(label.AsSpan(0, 37), "...");
-
-            items.Add(new SessionListItem
-            {
-                SessionId = s.SessionId,
-                Label = label,
-                Timestamp = s.UpdatedAt,
-                MessageCount = 0,
-            });
-        }
-
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            RecentSessions.Clear();
-            foreach (var item in items.OrderByDescending(s => s.Timestamp))
-            {
-                item.RefreshIsActive(_activeSessions);
-                RecentSessions.Add(item);
-            }
-        });
     }
 
 }
@@ -799,46 +772,4 @@ public sealed class ModelOption(string model, ProviderTreeGroup group, bool isFr
 }
 
 public sealed record UnconfiguredProviderItem(string Name, string Icon);
-
-public partial class SessionListItem : ViewModelBase
-{
-    [ObservableProperty]
-    private string _sessionId = string.Empty;
-
-    [ObservableProperty]
-    private string _label = string.Empty;
-
-    [ObservableProperty]
-    private DateTimeOffset _timestamp;
-
-    [ObservableProperty]
-    private int _messageCount;
-
-    [ObservableProperty]
-    private bool _isActive;
-
-    [ObservableProperty]
-    private ActiveSessionInfoViewModel? _activeInfo;
-
-    public bool IsRunning => ActiveInfo?.IsRunning ?? false;
-
-    partial void OnActiveInfoChanged(ActiveSessionInfoViewModel? value)
-    {
-        OnPropertyChanged(nameof(IsRunning));
-        if (value is not null)
-            value.PropertyChanged += (_, e) =>
-            {
-                if (e.PropertyName == nameof(ActiveSessionInfoViewModel.IsRunning))
-                    OnPropertyChanged(nameof(IsRunning));
-            };
-    }
-
-    public void RefreshIsActive(ActiveSessionsViewModel? activeSessions)
-    {
-        IsActive = activeSessions?.HasSession(SessionId) ?? false;
-        ActiveInfo = IsActive
-            ? activeSessions?.ActiveSessions.FirstOrDefault(s => s.SessionId == SessionId)
-            : null;
-    }
-}
 

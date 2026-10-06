@@ -1,0 +1,433 @@
+# Design
+
+This folder is the design record for Sovrant's user-facing surfaces. It exists to let anyone — human or agent — **verify a design before and after it ships**, without running the app.
+
+**Scope note:** most entries below describe changes actually applied to production code (`src/Sovrant.Web`, `src/Sovrant.Desktop`), committed and pushed to `development` — not just edits to `web.html`/`desktop.html`. The two mock files stay the source of truth for what a screen *should* look like; the dated sections are the log of real code being brought in line with them. See "Production code touched by this work" below for the full commit-by-commit list.
+
+## Two files. That's the whole thing.
+
+- **`web.html`** — every Web screen.
+- **`desktop.html`** — every Desktop screen.
+
+Open either in a browser; no build step. Pick a screen from the index on the left. Each entry is tagged with the pattern that renders it.
+
+A third file will join them when the CLI gets a real design pass. Today it's out of scope — the README calls it "functional but actively being refined".
+
+## 23 screens, 5 patterns
+
+The destinations behind the nav are not 23 designs. They're five patterns plus data:
+
+| Pattern | Screens | What it is |
+|---|---|---|
+| **Browse** | 15 | Searchable list beside a detail pane. Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Orchestration, Workflows, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations. |
+| **Overview** | 2 | Stat tiles over an activity table. Dashboard (scoped to you), Command Center (scoped to everyone). |
+| **Settings** | 4 | Sectioned cards of labelled rows, each row one control plus the sentence explaining it. Settings, Governance, Trust Boundary, Diagnostics. |
+| **Conversation** | 1 | Chat. Genuinely its own shape — welcome state, thread, collapsed work strips, composer. |
+| **Entry** | 1 | Login. The only screen with no rail. |
+
+(Was 21/13/4 until 2026-09-01 — Orchestration existed as its own nav destination the whole time but was never counted in the running total, on top of being mis-tagged Settings. Was 22/14 until 2026-09-04 — Workflows added as a new screen, see below.)
+
+This is the point of the folder. Those pages were each built standalone — they share no layout classes today, which is exactly why they drift. Designing the pattern once and treating each screen as pattern + data is what stops it.
+
+**When adding a screen, use an existing pattern.** A new pattern needs a reason the existing four can't express it.
+
+## Orchestration was mis-tagged Settings (fixed 2026-09-01)
+
+Caught by inspection, not code — Orchestration was rendering as a bare Settings screen (two sections, "Team run profile" and "Swarm") with no team list, no Run panel, no Members. The real page (`Orchestration.razor`) is a full Browse screen: a searchable team list on the left, and a detail pane with three sections (Run, Run Profile, Members) instead of Browse's usual single key/value block. The extra section count is what made it read as Settings — the shell was Browse the whole time.
+
+Fixed in the mock only (design-only pass, no `src/` changes): `S.orchestration` now carries a real team (`test` · Parallel · 1 agent) and renders through `browseHTML()` like every other list screen, with a dedicated detail-pane renderer (`orchTeamDetailHTML`) for the three-section content. "Swarm Defaults" — a real second view of this same screen in the actual product, not a separate destination — is wired up as a **Team / Defaults** toggle next to Chat's existing Thread/Welcome toggle (both now share one generalized `#screenToggle` control instead of a Chat-only one). Two new line icons (`I.seq` three horizontal lines, `I.par` three vertical lines) join the existing package icon for the Sequential/Parallel/Swarm mode badge — matching the icons already shipped in real `Orchestration.razor` during the emoji-cleanup pass.
+
+Not modeled in the mock, deliberately: the "New Team" and "Add Member" inline forms. Those are transient interaction states (open a form, fill it, submit), not distinct screens — same reasoning as why the mock doesn't model a loading spinner or a validation-error state for every button elsewhere.
+
+**Fixed (2026-09-01):** the ⚙ gear emoji on both platforms' "Swarm defaults" button — `Orchestration.razor:16` (`&#x2699;`) and its exact twin on Desktop, `OrchestrationView.axaml:15` (also `&#x2699;`, missed by the same earlier sweep since it never actually opened this file). Both now use the same package/box icon as "Swarm Defaults" everywhere else — reused directly on Web, and via the existing `IconSwarm` `StreamGeometry` on Desktop. Kept the existing gear-button interaction (still opens the same Swarm Defaults panel via `ToggleSwarmConfig`/`ToggleSwarmConfigCommand`) rather than also swapping it for the mock's Team/Defaults toggle — that's a bigger interaction change than "fix the emoji" asked for, still worth doing as its own follow-up. Verified live: button renders the box icon correctly and still opens the real Swarm Defaults panel.
+
+**Fixed (2026-09-02):** the deferred follow-up above — the single gear button is now the mock's actual **Team / Defaults** toggle on both platforms, matching the mock exactly. `Orchestration.razor`: `ToggleSwarmConfig()` split into `ShowTeamView()`/`ShowDefaultsView()`; header now shows `Team`/`Defaults`/`+ New` using the existing `.btn-sm.btn-primary`/`.btn-outline` classes (filled when active, outlined otherwise), Defaults panel's Close button now calls `ShowTeamView`. `OrchestrationViewModel.cs`: same split (`ToggleSwarmConfigCommand` → `ShowTeamViewCommand`/`ShowDefaultsViewCommand`); `OrchestrationView.axaml` header/drawer-Close buttons rebound accordingly. Desktop has no CSS classes to reuse, so the active/inactive fill is done with `BoolToTabBrushConverter` (`Converters/BoolToTabBrushConverter.cs`) — extended in this pass from a single hardcoded BrandPrimary/Transparent background converter into a parameterized one (`ActiveResource`/`InactiveResource`), plus a new `.Foreground` instance (white on the filled tab, `TextPrimary` otherwise), mirroring the existing `NavActiveBrushConverter` pattern already used for sub-nav active states. Caught and fixed one bug surfaced by this: the converter looked up resources via `app.Styles.TryGetResource`, which can't see resources declared in `Application.Resources` (where `BrandPrimary`/`TextPrimary` actually live) — silently fell through to transparent for both buttons. Fixed to `app.TryGetResource`, matching the working pattern in `NavActiveBrushConverter`. Verified live on Web (Chrome); verified live on Desktop up through the button restyle (Team filled/Defaults outlined, both readable) before window-focus contention from another app on screen interrupted further click-through — the click path itself is unchanged from the already-verified `ShowSwarmConfig` binding the old gear button used, so not re-litigated further.
+
+Verified live in Chrome, both platforms: team list renders with the mode badge, Run/Run Profile/Members all present in the detail pane, Team/Defaults toggle switches correctly, parity holds at 49 changed lines (chrome-only, confirmed line-by-line).
+
+## Parity
+
+**Web and Desktop should match as closely as each platform allows.** `desktop.html` is generated from `web.html` with only the platform chrome swapped — browser tab strip and address bar become a native titlebar and window controls. A diff of the two files should show *only* those chrome lines, the title/heading, and the theme storage key. Anything else that differs is drift.
+
+Current state: 49 changed lines, all accounted for by that list.
+
+## Mark placement (decided 2026-08-28)
+
+The "S"-in-a-square mark showed up everywhere — rail brand row on every screen, 54px on Login — which was wrong. It's brand chrome, not navigation, and repeating it added nothing a user needed. **The mark now appears in exactly two places, both platform chrome, neither one app content:**
+
+- **Web** — the browser tab favicon (`.fav` in the tabstrip mock).
+- **Desktop** — the native titlebar/window icon (`.tico` in the titlebar mock; real code already sets this via `Window.Icon`).
+
+Everywhere else — the rail (both platforms) and the Login header — now carries no brand element at all, not even the "Sovrant" wordmark. It's redundant: the tab/titlebar already names the app, and the rail's first visible thing is now the first nav destination, Dashboard. The brand row itself is gone too, not just its contents — the collapse toggle floats on the rail's own border edge instead of owning a header row, so there's no blank space above Dashboard. Shipped in both `web.html`/`desktop.html` and in real code: `MainLayout.razor` + `sovrant.css` on Web, `MainWindow.axaml` on Desktop (Login already had no mark on either platform).
+
+**Resolved (2026-09-01):** the "S" letterform is gone. Explored four abstract concepts (Flow/Orbit/Weave/Monogram) via a side-by-side comparison artifact shown at actual favicon/titlebar sizes — landed on reusing the app's existing lightning-bolt-in-purple-square (`Sovrant.Desktop/Assets/icon.png`, orange `#FF9800` on brand purple `#6D52C6`) rather than commissioning new artwork. That asset already existed as the Desktop window icon; it's now also `Sovrant.Web/wwwroot/favicon.ico`.
+
+One format correction along the way: the first pass shipped an SVG favicon, which modern Chrome/Firefox/Edge support but isn't the actual standard — `.ico` is what browsers request by default and what every browser supports. Regenerated as a proper multi-resolution `.ico` (16/32/48/64/128/256px, via Pillow) from the same source PNG. `web.html`/`desktop.html`'s `.fav`/`.tico` swatches now show the bolt shape (a standard "zap" icon path, filled orange) instead of the placeholder letter.
+
+## Chat: mark reuse + emoji removed (2026-08-31)
+
+A screen-by-screen review against the mark-placement rule above found it was already being violated on the highest-traffic screen: Chat's empty-state hero and every assistant message avatar reused the brand-mark treatment (a colored square with a bold glyph — ⚡ in real code, "S" in the mock), and the six welcome-state suggestion tiles used raw emoji (🤖🤝🌀🎯🎼🔗) despite the nav redesign's "real icons, not emoji" standard.
+
+Fixed on both platforms, matching the pattern already used for the rest of the app: the hero icon and every assistant avatar now render the same chat-bubble line icon used in the rail's own Chat nav item, in neutral (not brand-colored) styling — no square, no letter, no color fill. The six suggestion tiles use the same reused-icon-set approach as the rail (agents/projects/box/refresh/chevron/paperclip icons, matching web `I.*` icon keys and Desktop's `NavIcons.axaml` `StreamGeometry` resources).
+
+`web.html`/`desktop.html` also gained a **Thread / Welcome** toggle on the Chat screen (visible only when Chat is selected) so the mock can actually demonstrate both states the Conversation pattern claims to have — previously `.welcome`/`.wm` CSS existed but was never rendered by `chatHTML()`.
+
+Shipped in: `Chat.razor` + `ChatMessage.razor` + `sovrant.css` on Web; `ChatView.axaml` + `NavIcons.axaml` (4 new `StreamGeometry` keys: `IconSwarm`, `IconMission`, `IconOrchestrate`, `IconConnect`) on Desktop.
+
+**Known remaining emoji** (out of scope for this pass — tracked for the next screen in the rotation): `Chat.razor`'s privacy lock icons (🔒/🔓) and error-banner warning triangle (⚠), plus raw emoji still present in `TopContextBar`, `Artifacts`, `Agents`, `Memory`, `DocumentArtifactCard`, `Orchestration`, `Setup` (Web) and their Desktop equivalents.
+
+## Overview: emoji removed (2026-08-31)
+
+Dashboard and Command Center (`UserDashboard.razor`/`CommandCenter.razor` on Web, `UserDashboardView.axaml`/`CommandCenterView.axaml` on Desktop) both used a `KindIcon()` helper returning one of five emoji (🎯👥🤖💬🔗) prefixed onto every kind pill, plus 🔒/🔓/&#x1F512; for privacy state and ⚠ on the error banner. `web.html`/`desktop.html` never had this problem — the mock's kind pill was always plain text, no icon — so real code was the one out of step here, not the mock.
+
+Fixed to match the mock: `KindIcon()` deleted entirely (both Razor methods, both Desktop `KindIcon` properties/converters-in-XAML) — kind pills now show plain text only. Privacy lock/unlock and the warning-triangle are real line icons now, not emoji: Web inlines SVG directly (browser-rendered, no conversion risk); Desktop gained `IconLock`/`IconUnlock` `StreamGeometry` resources in `NavIcons.axaml`, verified by pixel-sampling the rendered window (padlock shape confirmed correct) and by exercising the equivalent Web toggle (same path logic) since the Desktop click didn't land precisely enough to re-verify interactively.
+
+**Known remaining emoji** (Agents/Browse pattern, next in rotation): the shared `BoolToLockIconConverter`/`BoolToPrivacyLabelConverter` (Desktop) still return 🔒/🔓 text for `AgentsView.axaml` and one more `ChatView.axaml` site (the session-level privacy toggle, distinct from the message-avatar fix already shipped) — left alone this pass since changing the shared converter would require updating all three call sites together to avoid breaking the two not yet in scope.
+
+## Browse: emoji removed (2026-08-31)
+
+Swept the rest of the Browse pattern (Artifacts, Documents, Memory, Agents, Projects, Users/Admin, Workspaces, System Integrations, Platform Integrations — Skills/Tools/Code Templates/Providers were already clean). Same finding as the other two passes: `web.html` never had any of these emoji, so this was real code drifting from the design record. Fixed: warning-triangle error banners (10 files), folder icon (Artifacts), chat-bubble icon (Documents' "Chat to create", Agents' "Launch chat"), lock/unlock (Memory notes, Agents' own-run privacy toggle), a generic package icon replacing the PostgreSQL/Supabase mascot emoji (System Integrations), and a refresh icon replacing the OAuth "waiting" spinner (Platform Integrations). Every icon reused path data already proven earlier this session — no new hand-drawn geometry this pass.
+
+**Left alone, deliberately:** the ✕ close/remove glyph used across ~6 sites (Integrations, WorkspacesAdmin, AdminView). That's a plain typographic symbol (same category as the → ▲▼ sort/link glyphs already in the codebase), not a pictorial emoji — outside what the "real icons, not emoji" standard is targeting.
+
+**Verification gap:** Web was fully verified live (Artifacts, Documents, Memory, Agents, System Integrations) in Chrome, including exercising interactive states. Desktop's build is clean and every icon geometry is one already pixel/screenshot-verified earlier this session, but live interactive verification of this pass's Desktop screens (Documents, Memory, System Integrations, Integrations) wasn't completed — `SetForegroundWindow` silently failed to focus the app window from the automation context, and synthetic clicks were confirmed (via `GetForegroundWindow`) to be landing elsewhere. Stopped immediately rather than continue clicking blindly; worth a manual look next time the app is open.
+
+## Settings: emoji removed (2026-09-01)
+
+Swept the last pattern — Governance, Trust Boundary, Diagnostics, Settings, and Orchestration. Only Orchestration had emoji: `ModeIcon()` returned one of three C# unicode escapes (`\U0001F465` people, `⚡` bolt, `\U0001F41D` bee) for the Sequential/Parallel/Swarm run-mode badges, plus one hardcoded bee on the "Swarm Defaults" badge. The other four screens, and Orchestration's Desktop counterpart, were already clean — Desktop's run-mode picker is a plain-text `ComboBox` with no icons at all.
+
+Fixed on Web only (nothing to fix on Desktop): Sequential is now three horizontal lines (a "steps in order" glyph), Parallel is three vertical lines, Swarm reuses the same package icon from the Chat/System-Integrations passes. All three are plain straight-line geometry — no arcs, zero hand-drawing risk. `ModeIcon()` now returns inline SVG markup rendered via `MarkupString`, the same pattern used for Chat's suggestion tiles. Verified live in Chrome: both the team-list badge and the detail-header badge render the new icon correctly.
+
+This closes out the pattern-by-pattern sweep from the review two turns back (Conversation → Overview → Browse → Settings).
+
+## Cleanup pass: deferred converter + Login bugs (2026-09-01)
+
+Closed out everything the sweep had left open:
+
+- **Shared `BoolToLockIconConverter` (Desktop).** Now returns the `IconLock`/`IconUnlock` `StreamGeometry` from `NavIcons.axaml` (via the same `Application.Current.TryGetResource` pattern already used by `BoolToBrushConverter`/`NavActiveBrushConverter`), instead of 🔒/🔓 text. All three call sites updated to bind a `Path.Data` instead of a `TextBlock.Text`: `AgentsView.axaml`, and `ChatView.axaml`'s session-level privacy toggle (distinct from the message-avatar mark fixed in the Chat pass).
+- **Web's `Chat.razor` had two more emoji this whole sweep missed**, caught while touching the file for the item above: the session-level privacy toggle (🔒/🔓, the Web twin of the Desktop fix) and the remember-form's "🔒 Private" checkbox label. Fixed the same way as their Dashboard/Memory/Agents equivalents. Also fixed `Chat.razor`'s error-banner ⚠, explicitly deferred at the end of the original Chat pass — closes that loop too.
+- **`LoginWindow.axaml` (Desktop), the two bugs tracked since the original design review:** `Background="{DynamicResource BackgroundBrush}"` → `SurfaceBackground` (the old key doesn't exist in either theme file, so `DynamicResource` was failing silently and the window never got its themed background), and hardcoded `Foreground="Red"` → `{DynamicResource StatusFail}`.
+
+Web verified live in Chrome (private toggle, remember-form checkbox — both render the new icon correctly on a fresh tab). Desktop builds clean; the `BoolToLockIconConverter`/`LoginWindow` fixes weren't re-verified live this round — same `SetForegroundWindow` automation limitation as the Browse pass, and the icon geometry itself was already pixel-confirmed from the Overview pass.
+
+**Still open:** the ✕ typographic close/remove glyph (left alone everywhere, deliberately — not a pictorial-emoji violation).
+
+## Production code touched by this work
+
+Everything from the nav-mark cleanup through the pattern sweep, in commit order — 8 commits, 33 production files across both platforms, all pushed directly to `development` (this repo's normal workflow, not a deviation):
+
+| Commit | What it shipped |
+|---|---|
+| `5038190`, `48ff6e2` | Nav mark/toggle cleanup — `MainLayout.razor`+CSS (Web), `MainWindow.axaml` (Desktop), both mocks |
+| `1ad8c9d` | Chat: mark reuse + emoji removed — `Chat.razor`, `ChatMessage.razor` (Web); `ChatView.axaml` + 4 new `NavIcons.axaml` resources (Desktop) |
+| `15fea93` | Overview: emoji removed — `UserDashboard.razor`, `CommandCenter.razor` (Web); `UserDashboardView.axaml`, `CommandCenterView.axaml` + both ViewModels (Desktop) |
+| `c99920a` | Browse: emoji removed across 9 screens — `Artifacts`, `Documents`, `Memory`, `Agents`, `Projects`, `Admin`, `Workspaces`, `WorkspacesAdmin`, `SystemIntegrations`, `Integrations` (Web); `DocumentsView`, `MemoryView`, `SystemIntegrationsView`, `IntegrationsView` (Desktop) |
+| `5e58296` | Settings: emoji removed — `Orchestration.razor` run-mode badges |
+| `5b711ce` | Deferred converter + Login bugs — `BoolToLockIconConverter.cs`, `AgentsView.axaml`, `ChatView.axaml` (Desktop); more of `Chat.razor` (Web); `LoginWindow.axaml`'s two theming bugs |
+| `bbeead6` | Web favicon — `App.razor`, new `favicon.ico` |
+
+Every commit above was scoped to the emoji/mark-cleanup review from `docs/design/README.md`'s own findings — nothing unrelated rode along. Full readout available via `git log --oneline 3484766..HEAD` (`3484766` is the two-file mock consolidation this log starts counting from).
+
+## Screen-by-screen visual pass (2026-09-01)
+
+Went through all 5 patterns in the browser — Login, Dashboard (Overview), Chat, Artifacts and Users (Browse), Orchestration and Diagnostics (Settings, as tagged at the time) — checking for genuine design roughness now that the emoji/mark sweep is done: layout, spacing, hierarchy, semantic color use. Nothing found worth changing. The pattern-once approach is holding: every screen checked reads as the same design system, not a bespoke one-off. Not touching the other 14 screens individually — they render through the same 5 pattern functions already confirmed clean, so per-screen re-verification would be checking the same code path repeatedly, not new risk.
+
+(Orchestration's Settings tag turned out to be wrong — see "Orchestration was mis-tagged Settings" above, caught the same day by inspection rather than by this pass. The design-roughness check above still stands for what it actually looked at: Orchestration's *content* — sectioned controls, clear labels — was fine, it was the pattern classification and missing team-list/Run/Members content that were wrong.)
+
+That leaves the two long-open items below actually resolved instead of just tracked.
+
+## New screen: Workflows (2026-09-04, design-only)
+
+Roadmap Phase 129 ("Missions → Workflows") shipped its rename in real code first this round — full-stack, not the presentation-layer-only scoping the roadmap entry originally described (see `docs/roadmap.md` Phase 129's 2026-09-03 update for why that changed) — plus a new `WorkflowSchedulerService` that advances `Planning`/`Running` workflows on its own, without a human or agent explicitly asking. This entry is the design-only follow-up: a dedicated **Workflows** screen so there's somewhere to actually see that happening, mocked here first per this repo's usual process — no `src/` changes yet.
+
+**Nav placement:** under Agents, alongside Orchestration (`agentlib → orchestration → workflows`) — same substrate, same group. Pattern: Browse, same shell as every other list screen in that group.
+
+**List pane:** goal (truncated), a status badge, and a relative timestamp + owner — three sample rows covering `Running`, `Awaiting human`, and `Completed` so the badge palette is visible in one screen. New `.badge.b-fail` CSS rule added (using the existing `--fail` token, same recipe as `.b-ok`/`.b-warn`) for a future `Failed` state — not used by the three samples shown, but the real `WorkflowStatus` enum has it and the badge needed to exist before real code reaches for it.
+
+**Detail pane** (`workflowDetailHTML`): goal in full, status badge, a **Plan** section (numbered steps with intent/expected-outcome/tier, straight from `plan_json`'s shape), an **Event journal** (timestamp + event type, exactly what `/workflow events` already returns as text — rendered as a list here), and actions that adapt to status: `Run now` when idle, `Resume` when `Awaiting human`, both hidden once terminal (`Completed`/`Failed`/`Cancelled`) since there's nothing left to run; `Cancel` hidden once terminal for the same reason; `Export` always available. This mirrors Orchestration's own "richer than a generic Browse detail" shape (multiple sections instead of one key/value block) — not a new pattern, same reasoning as why Orchestration's detail pane already looks like this.
+
+**Copy note on the Run button:** now that the scheduler exists, a manual "Run" is a *force it now* / *resume from a pause* action, not the only way anything happens — the note on the screen says this explicitly so it doesn't read as a regression when someone notices workflows moving without being clicked.
+
+**Also fixed while in this file:** two mock strings still said "mission" (Chat's welcome subtitle and one suggestion tile) — stale now that the real code shipped as "workflow" this round. Dashboard's and Command Center's stat tiles (`My missions` / `Missions`) had the same staleness, same fix.
+
+Not modeled here, deliberately (same reasoning as Orchestration's "New Team"/"Add Member" forms): the "New Workflow" creation form. It's a transient interaction state, not a distinct screen.
+
+Verified in Chrome (list renders all three sample rows and badge colors correctly; detail pane renders goal/plan/journal for the `Running` sample) and via direct console evaluation of `workflowDetailHTML()` against the `Awaiting human` and `Completed` samples (button visibility confirmed correct for both) — the mock's `sel` is always `items[0]`, same static-first-item limitation Orchestration's mock already has, so the other two states aren't reachable by clicking, only by calling the render function directly. `web.html`/`desktop.html` diff-checked: the added `S.workflows` block and `workflowDetailHTML` function are byte-identical between the two files.
+
+**Shipped to real code (2026-09-04):** `Workflows.razor` (Web) and `WorkflowsView.axaml`/`WorkflowsViewModel.cs` (Desktop), nav-wired into `AgentsPanel.razor`/`AgentsPanelView.axaml` and `MainWindow.axaml`'s DataTemplate registry, matching the mock's shape — goal, status badge, plan steps parsed from `plan_json`, event journal, and status-adaptive actions (Run now/Resume, Cancel, Export — all hidden once terminal). Both platforms call `IWorkflowStore`/`IWorkflowExecutor`/`WorkflowExportService` directly (in-process DI), the same pattern `Orchestration.razor`/`OrchestrationViewModel.cs` already use — no new backend surface needed. Reused `CommandCenter`'s existing `.cc-status`/`.cc-status-*` badge classes on Web instead of inventing new CSS (added one line extending `.cc-status-completed` to the green/pass treatment, since no rule previously existed for that state).
+
+Caught two real bugs during implementation, unrelated to the page itself but surfaced by working through the code: `WorkflowExportService`'s doc comment and `PrivacyRoutes.cs`'s actual route mapping both still referenced `/v1/missions/...` — the export doc comment was cosmetic, but the `PrivacyRoutes.cs` one was a live orphaned endpoint (`PATCH /v1/missions/{id}/privacy` instead of `/v1/workflows/{id}/privacy`) left over from the rename. Both fixed.
+
+Verified live end-to-end on Web in Chrome: created a real workflow, confirmed it appears in the list with the correct status badge, confirmed the detail pane renders goal/empty-plan/event-journal correctly, cancelled it and confirmed the status transition, the event-journal append, and the action buttons correctly disappearing once terminal. Desktop builds clean (0 errors, no new warnings) and mirrors Web's exact binding shape, but live screenshot verification wasn't completed — the window was covered by what appeared to be an active screen-share on the user's machine, and capturing that screen region risked grabbing meeting content, so verification stopped there rather than risk it.
+
+## Conversation folders (2026-10-02, design-only)
+
+Roadmap Phase 133. Mocked here first per this folder's usual process — no `src/` changes yet.
+
+**Where it lives:** the Chat screen's rail panel, the chat header, and a Move dialog. The rail panel is part of the existing **Conversation** pattern, so this adds no new pattern and the screen count stays at 23.
+
+**Rail panel** (`sessionTreeHTML`): the flat "Recent" list becomes a folder tree.
+- **Top bar:** search, plus a New-folder button beside it.
+- **Folders section:** each folder row has an expand chevron, a folder icon, its name, and a count of everything in it including subfolders.
+- **Unfiled section:** conversations that aren't in any folder.
+- **Conversation rows:** title, plus a muted label line *derived from live links* — `Agent · proposal-writer`, `Swarm · 1 run`, `● Workflow · Running`, `Webhook · slack`. Nothing about a conversation's "type" is stored, because a chat can gain or lose those links at any time. Plain chats show no label line.
+- **Nesting:** each level indents 16px (via a `--d` depth variable). The sample goes three levels deep (Client A › Proposals › conversation); the real limit is 5.
+
+**Folder "⋯" menu** (toggle: *Folder menu*): New subfolder, Rename, Move to…, Delete folder. The delete item carries the rule in plain words: "Conversations and subfolders inside move up to 'Client A'. No conversation is ever deleted." The menu is attached to the rail rather than the scrolling list, so the list can't clip it, and it opens upward when there's no room below the row. In real code it's a popup layer.
+
+**Chat header** (`chatHeadHTML`, thread state only): where the conversation is filed (`Client A › Proposals › Proposal draft v2`), its link labels as badges (names keep their own case), and a Move button, so a conversation can be filed from inside it.
+
+**Move dialog** (toggle: *Move dialog*): a folder-tree picker. Unfiled is at the top, the current folder is marked, and the chosen destination is highlighted. It has an inline New folder button. The scrim covers the whole app window, not just the chat column. The dialog notes that moving never changes a conversation's links to its agent, workflow or runs.
+
+**New CSS:** `.sfbar`, `.sfrow` (+ `.tw/.fi/.dt/.tx/.nm/.mt/.ct/.more`), `.sfmenu`, `.chead`, `.sfscrim`, `.sfdlg`. All of them use existing tokens. Every control height lands on the documented scale (24, 32, 34, 44px).
+
+**New icons:** `folder`, `folderPlus`, `dots`, `pencil` and `trash`. All are standard straight-line or simple-arc paths.
+
+**Drag and drop** (toggles: *Dragging*, *Refused drop*): two states, both sending nothing to the server until a valid drop.
+- **Valid drop:** "Kickoff notes" is dragged onto the Proposals folder. The target gets a brand-colored inset outline, the source row fades to 40%, and a drag preview attached to the cursor names the result: "Move to Proposals".
+- **Refused drop:** the "Client A" folder is dragged onto its own subfolder Proposals. The target gets a red inset outline with `not-allowed`, and the preview gives the reason: "Can't move a folder into its own subfolder".
+
+The same refusal treatment covers the other two rules: going past 5 levels deep, and duplicating a sibling folder's name. Like the folder menu, the preview is rendered into the rail so the scrolling list can't clip it.
+
+**Mock state:** the old Chat-only boolean (`chatWelcome`) became a six-way `chatState` (`thread | welcome | menu | move | drag | dragno`) behind the same `#screenToggle` control.
+
+Not modeled, deliberately (same reasoning as Orchestration's inline forms): the conversation-row "⋯" menu (Move to folder…, Rename, Make private, Delete), the hover-to-expand and auto-scroll behaviors during a drag, and inline rename. These are transient interaction states, not distinct screens.
+
+**Verified:** rendered all six Chat states in headless Edge.
+- **Thread:** checked in dark and light themes, with the tree scrolled to show Unfiled.
+- **Folder menu:** fully visible after the clipping fix.
+- **Move dialog:** the scrim covers the whole window.
+- **Dragging / Refused drop:** the target outline and drag preview render beside the right row.
+- **Parity:** `web.html`/`desktop.html` diff is still 49 lines, all chrome, with line endings ignored. `desktop.html` is CRLF and `web.html` is LF; that was already the case before this pass.
+
+## App sidebar: collapsible groups + always-visible conversations (2026-10-05, shipped to code same day)
+
+Roadmap Phase 135. The rail's shared panel used to show either the selected group's sub-pages or, for Chat only, the conversation tree — so folders vanished whenever you left Chat. Sub-pages now live inline in the nav, and Conversations is pinned below it on every screen. Same rail, icons, accent bar, and Admin grouping as the left-nav redesign; only where sub-pages sit changes. No new pattern.
+
+**Expanded rail** (`railHTML`):
+- **Plain links:** Dashboard, Chat and Projects.
+- **Collapsible sections:** Knowledge, Agents and Admin each have a chevron (`aria-expanded`). When open, their sub-pages are indented beneath, in 30px rows with a 44px left pad. Admin keeps its Overview / Access / Safety / System labels.
+- **One group open at a time.** By default it's the current page's group (`navOpen === null`). Clicking another header swaps which one is open, and clicking the open one closes it.
+- **No nav scrollbar (option 2, chosen 2026-10-05):** the nav takes exactly the height its open group needs.
+- **Conversations section:** below a divider, with a "Conversations" heading, search, New folder, and the Phase 133 tree (FOLDERS / UNFILED). It fills the rest of the rail with its own scroll, down to a 160px minimum.
+- **Compact rows:** the expanded nav uses 36px group rows and 30px sub-page rows (Admin's labels tightened), so a fully open Admin plus Conversations fits a maximized 1080p window with no rail scroll. Measured: the rail never overflows at that size, and Conversations get 204px with Admin open, 384px with Knowledge, 480px with Agents and 576px with Chat or Dashboard.
+- **Short windows:** only when even 160px won't fit does the rail's middle (`.railbody`) scroll as one; the account footer stays pinned. The current page scrolls into view after each render.
+- **Earlier version:** this replaced a first pass that capped the nav at 52% and scrolled it separately, which meant two stacked scrollbars and hid part of the open group.
+- **Highlighting:** the open conversation is highlighted only on the Chat screen.
+- **Unchanged:** the folder ⋯ menu, drag-and-drop and Move dialog states all still work from the new location.
+
+**Collapsed rail** (new *Flyout* toggle beside *Collapse rail*; turning it on collapses the rail):
+- **Flyout:** an icon-only rail opens a flyout (`flyoutHTML`, `role="menu"`) beside the group's icon, listing that group's sub-pages with the current one highlighted. In the real app it opens on hover *or* click/Enter/Space and closes on Esc — never hover-only.
+- **Chat icon:** its flyout lists the 5 most recent conversations, then "Show all conversations", which expands the rail.
+- **Conversations while collapsed:** hidden.
+
+**New mock toggle:** *Maximized* makes the app frame 1,040px tall, roughly a maximized 1080p window, instead of the usual 700px, so the option 2 layout can be checked at full size.
+
+**New CSS:** `.railbody`, `.nav .gchev`, `.sub.in`, `.sgl.in`, `.cvhead`, `.nav.flyopen`, `.flyout` (+ `.fh/.fsep/.fall`). All of them use existing tokens. Row heights are 32px and 34px, both on the documented scale.
+
+**Not modeled:**
+- **Real interaction behaviour:** hover timing and keyboard navigation inside a flyout.
+- **Width-based fallbacks:** narrow-window behaviour.
+
+**Verified:** rendered in headless Edge.
+- **Knowledge / Skills, expanded:** the section is open with Skills highlighted, and Conversations sits below.
+- **Admin / Users, expanded:** checked at the 700px frame, where the rail middle scrolls, and with *Maximized*, where all of Admin is shown with no nav scroll and Conversations get the remaining space.
+- **Knowledge / Skills, maximized:** Conversations get most of the rail.
+- **Collapsed with flyout:** checked on both Skills and Chat.
+- **Parity:** `web.html`/`desktop.html` diff is still 49 chrome-only lines, with line endings ignored.
+
+## Icon vocabulary: Lucide everywhere (2026-10-05, design-only)
+
+Roadmap Phase 136. The mocks already had no emoji, apart from one status dot, which stays because it's a text bullet. The emoji live in the real app (about 120 occurrences, counting HTML entities and `\u` escapes). So this pass defines the **vocabulary** that replaces them, and moves the mocks onto it.
+
+**Icon map:** the mock's `I` map (22 hand-copied SVGs) is replaced by `ICONS`, the 53 shared `SovrantIcon` names with the **exact Lucide markup** Web will render. That markup was extracted from `Blazicons.Lucide` 3.0.8 itself. `I` keeps its short keys as aliases, so no screen code changed.
+
+**Visible changes from swapping in real Lucide glyphs:**
+- **Book:** Knowledge's book becomes `BookOpen`.
+- **Chat bubble:** Chat's bubble becomes the current `MessageCircle`.
+- **Agents:** the hand-drawn robot becomes `Bot`.
+- **Projects:** becomes `FolderKanban`, so it no longer looks like a conversation folder.
+- **Team modes:** sequential and parallel become `ListOrdered` and `Columns3`.
+- **Shared glyphs:** send, attach, package, refresh and warning use Lucide's current paths.
+
+**New panel, "Icon vocabulary — Phase 136"** (below "The five patterns"):
+- **The names, by group:** every name grouped as Navigation, Actions, Objects and Status, with its glyph, the Lucide glyph behind it, and what it replaces.
+- **Sizes:** 14 inline, 16 buttons and rows, 19 nav, and 24+ for empty states.
+- **Accessibility:** every icon-only button keeps a label.
+
+**Top bar:** the context chips now show `workspace` / `projects` / `integrations` icons, in the spots where the app shows 🏢 📁 🔌 today.
+
+**Per-surface glyph names:** the Web and Desktop packages bundle different Lucide releases. Desktop's newer release renamed `Trash2` → `Trash` and `Building2` → `Building`. So the vocabulary stores a glyph per surface when the names differ: `delete` is `Trash2` on Web and `Trash` on Desktop, which is the same drawing, checked by rendering both. All 53 names were checked to exist in both packages (1,754 Web glyphs, 1,866 Desktop glyphs).
+
+**Brands: category icons (decided 2026-10-05).** Lucide ships no brand logos, but the app shows about 30 brands (model providers, integrations) as emoji. Each brand now shows the Lucide icon for its kind next to its name: `provider-cloud`, `provider-local`, or `integration-automation` / `platform` / `database` / `search` / `dxp`. This holds until official, licensed brand logos are added. Initials monograms were mocked and rejected, because brands collide: Slack, Stripe, Supabase, Snowflake and Sitecore would all be "S", and Groq and Google would both be "G". As more APIs and integrations arrive, collisions only increase.
+
+**Not modeled:**
+- **Real-app-only screens:** screens that exist only in the real app (setup wizard, tool-approval prompts, document cards, integration catalog). The panel's "replaces" column covers them.
+- **Out of scope:** the eval/verification report glyphs (✓ ✗ ⊘ in CLI and markdown output) and the OAuth callback pages. They're text output, not UI chrome.
+- **Dead code:** `GovernancePanel` (Web) and `GovernancePanelView` (Desktop) still hold emoji. They're unused, and will be deleted rather than migrated.
+
+**Verified:** rendered in headless Edge, on both mocks:
+- **Panel:** 53 vocabulary cells and 29 brand chips, with no empty glyphs. Both brand modes checked.
+- **Screens:** Orchestration, Chat and the top bar on Skills.
+- **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines, with line endings ignored.
+
+## Chat bubbles + icon Send/Stop (2026-10-05, shipped to code same day)
+
+Roadmap Phase 137. The Thread state already had right-aligned brand bubbles, flat assistant messages and an icon Send; this pass fills the gaps the real apps need before they adopt it.
+
+**Streaming state:** a new *Streaming* toggle on the Chat screen.
+- A second exchange is mid-reply: a running work strip (amber dot), and the reply text ending in a blinking brand caret.
+- The composer input is disabled ("Generating a reply…").
+- **The brand Send button becomes Stop in the same spot:** the `stop` icon, `title`/`aria-label` "Stop generating (Esc)". Its neutral, ChatGPT-style alternative was rejected (see the roadmap).
+
+**Assistant meta line:** under each assistant reply, one small muted line, *model · elapsed · Copy*. It replaces the real apps' per-message name row.
+
+**Centred 760px column:**
+- `.msgs` and `.composer` use `padding-inline: max(22px, calc((100% - 760px) / 2))`, so the thread and the composer box share one centred column, capped at 760px.
+- Before, only each message was capped, so on wide windows user bubbles sat at the far right edge.
+- Send and Stop also gained their labels in the idle state ("Send message (Enter)").
+
+**Kept:** avatars on both sides (initials gradient for the user, a neutral chat-icon tile for the assistant).
+
+**Not built:** the composer's attach and "+" buttons stay in the mock but aren't part of Phase 137 (non-goal).
+
+**Verified:** rendered in headless Edge, on both mocks.
+- **Thread and Streaming:** the message column and composer box line up (727–1487px at the default frame). The Stop button, caret and meta line render.
+- **Wide viewport:** the composer box is exactly 760px, with equal margins.
+- **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines.
+
+## Welcome & first-run onboarding (2026-10-05, shipped to code same day)
+
+Roadmap Phase 140. It takes Rahul Singh's first-run login (his issue #27) and his welcome polish (#28) further: one first-run journey, and a welcome that uses the whole window.
+
+**Login — four states** (*Sign in / First run / Approval / Working* toggles on the Login screen):
+- **First run:** no accounts exist yet. The subtitle reads "Welcome! Let's set up your server". A brand-tinted note explains that the first account becomes the **administrator** (registration, approvals, providers, workspaces). The password placeholder is "Choose a password", and the only button is **Create administrator account**.
+- **Working:** the fields and button are disabled, with a spinner and "Creating your administrator account…".
+- **Approval:** success shown in the success style, not the error style ("Account created. An administrator must approve it…"), plus the "New accounts need administrator approval" note under Create account.
+- **Rule kept:** wordmark only, no logo mark.
+
+**Welcome page — new screen** (index → Entry → Welcome; *Admin / Member* toggles). It's a full-window, one-time takeover after a user's first sign-in, with no rail; on first run it comes after provider setup.
+- **Header:** a "SOVRANT" eyebrow, "Welcome to Sovrant, <name>" (32px), and the tagline *"Your private AI workspace. Bring any model, keep your data, and stay in control of what your agents can do."*
+- **Info bubbles:** a 4×2 grid, each with an icon tile, title, two-line description and an "Open … →" link. The areas are Chat with any model · Agents · Teams & Swarms · Workflows · Knowledge · Integrations · Trust Boundary & Governance · Workspaces & admin. **For members** the last two become *Private by default* and *Projects*.
+- **Get started checklist:** a progress bar, "n of m done", rows with a check circle, a subtitle and an action link.
+  - *Admin:* connect a provider ✓ · enable providers for a workspace · invite your team · connect an integration · create your first agent.
+  - *Member:* pick a model ✓ · first conversation · try an agent · explore Knowledge.
+  - Ticks come from real state in the app; the mock shows one done.
+- **Footer:** **Start chatting** (primary), "Skip for now", and "Reopen any time from Dashboard → Show welcome". The Dashboard header gains a **Show welcome** button.
+
+**Chat welcome — bigger** (Chat → *Welcome*):
+- **Header:** 72px mark tile with a soft brand glow, 28px title, and a new subtitle ("Chat with any model, or put agents, teams and workflows to work…").
+- **Suggestions:** a 3-column grid, up to 920px wide, with the Phase 136 icon names (team, swarm, workflow, orchestration, integrations).
+- **Capabilities strip:** a "What Sovrant can do" strip of six cards (Agents · Teams & Swarms · Workflows · Knowledge · Integrations · Trust Boundary) with a **Show welcome →** link.
+- **Short windows:** the area scrolls (`justify-content: safe center`), so the mark is never clipped; on a maximized window it fills the main area.
+
+**Patterns table:** Entry is now *Login and Welcome*, 2 screens.
+
+**To check at build time:** the member bubble *Private by default* claims conversations are private unless shared, and that sensitive data is redacted before reaching a model. Confirm both against the real defaults (session privacy, Trust Boundary sanitizer) before shipping that copy.
+
+**Updated at build time (2026-10-05):**
+- **Admin-only areas:** Integrations, Trust Boundary / Governance and Workspaces are admin-only pages, so members now see *Integrations* and *Privacy & governance* described with "Managed by your admin" and **no link** (`.wb.managed`), plus *Projects*. The Welcome page is never a way into an admin page.
+- **Privacy copy:** the check above failed. Conversations are public to teammates in a shared workspace unless marked Private (`is_private` defaults to 0), so the copy is now "Mark a conversation Private and teammates won't see it". Redaction is only mentioned when the Trust Boundary is on.
+
+**Verified:** rendered in headless Edge, on both mocks:
+- **Login:** all four states (buttons, notes, spinner).
+- **Welcome:** admin and member pages (8 bubbles; 5 / 4 checklist rows; no empty icons).
+- **Chat welcome:** 6 suggestions and 6 capability cards; checked at the default and maximized sizes.
+- **Dashboard:** the Show welcome button.
+- **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines.
+
+## Friendly MCP connection errors (2026-10-06, shipped to code same day)
+
+Roadmap Phase 139. A server that fails to connect is shown as Unavailable, with one plain sentence saying why and what to do, instead of stack traces in the console. Toggles on Admin → Platform Integrations: *Connected / Unreachable / Credentials*, plus *Top-bar menu*.
+
+**Platform Integrations** (Browse; now two servers, `pixellab` and `github`):
+- **List row:** an **Unavailable** badge, "0 tools", and a short reason ("Unavailable · retrying" or "Unavailable · check key"). The page subtitle reads "2 MCP servers · 1 unavailable".
+- **Detail pane:** the same badge, then an alert box (`warning` icon) with the sentence and what happens next:
+  - *Unreachable* (warn colour): "Couldn't reach api.pixellab.ai. Check your internet connection. Retrying automatically." Meta line "Next attempt in 52 s · attempt 2 of 3". Buttons **Retry now** (primary) and Edit.
+  - *Credentials* (fail colour): "PixelLab rejected the credentials. Update the key in its settings below, then retry." Meta line "Not retried automatically: retrying can't fix a key." Buttons **Update key** (primary) and Retry.
+- **Tools row:** "0 — they appear when it reconnects".
+- **Connected:** unchanged (badge, details, Edit / Disconnect).
+
+**Top bar** (every page with the context bar):
+- **Integrations chip:** the summary ("1 active") gains a small `warning` icon, coloured by kind, whenever a server is unavailable.
+- **Menu:** "Integrations for this chat" lists each server with its checkbox and tool count. An unavailable server is unchecked and shows the `warning` icon, with the short reason as a tooltip on hover (drawn below the row so it never leaves the window). "Manage integrations →" is the footer (admins only in code: the page is admin-only).
+
+**Not shown, by decision:** nothing in chat; the badge and top-bar warning are enough.
+
+**Built differently from the mock:**
+- **Menu checkbox:** an unavailable server keeps its checkbox state in the top-bar menu (the mock unchecked it). The user's choice is a saved preference, and the server's tools come back by themselves when it reconnects.
+- **Countdown:** "retry n of 3" counts automatic retries, so right after the first failure it reads "retry 1 of 3".
+
+**Verified:** rendered in headless Edge on both mocks: all three states (badge, alert title, buttons, list row, chip warning), the menu (rows, tooltip), and the chip warning on Chat. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass (only existing icons: `warning`, `refresh`, `integrations`, `allow`, `dropdown`).
+
+## Home: Dashboard + Welcome in one place (2026-10-06, shipped to code same day)
+
+Roadmap Phase 141. The Dashboard becomes **Home**, and Phase 140's full-window Welcome retires: its content now sits below the activity, where people come back every day. Toggles on Home: *Admin / Member* and *First visit / Returning / All set*.
+
+**Layout, top to bottom:**
+- **Header:** "Welcome to Sovrant, Alex" on a user's first visit, then "Good morning, Alex"; the tagline as the subtitle. On the right, a **Get started · n of m** pill (brand tint, a small progress ring) that scrolls the page to the checklist, then Refresh. The pill disappears once everything is done.
+- **Activity (unchanged):** the six stat tiles and the activity table; on a first visit, the "Nothing yet" empty state.
+- **Get started:** the Phase 140 checklist, role-aware (admin 5 rows, member 4), ticked from real state. When complete it collapses to one line: a green check, "**All set** — you've finished getting started.", and **Dismiss**.
+- **What Sovrant can do:** the eight info cards in an auto-fill grid. The admin-only rule is unchanged: members see *Integrations* and *Privacy & governance* as "Managed by your admin", with no link.
+
+**Elsewhere:**
+- **Nav:** "Dashboard" is now **Home** (same icon; the URL stays `/dashboard`).
+- **Removed:** the Welcome screen (Entry is just Login again), the Dashboard's "Show welcome" button.
+- **Chat welcome:** the strip's link now reads "See everything on Home →".
+
+**Fixed on the way:** page-header subtitles on every screen were indented 21px, because the nav's global `.sub` rule (padding, 38px height) also matched `.ph .sub`. The header rule now resets it.
+
+**Verified:** rendered in headless Edge, on both mocks, for admin and member in all three states: greeting, pill text, stats, empty state vs rows, checklist rows, All set line, 8 cards, managed cards (members only). The pill scrolls the app area (not the page) to the checklist; the subtitle lines up with the title on Home, Command Center and Skills. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass.
+
+## Home tabs: Overview + Activity (2026-10-06, shipped to code same day)
+
+Roadmap Phase 142. With real activity, Phase 141's Home pushed the guide below the fold (on a laptop you saw part of the checklist and none of the cards), and the header subtitle didn't wrap beside the pill. Home now has two tabs; it always opens on **Overview**. Toggles on Home: *Admin / Member*, *First visit / Returning / All set / Dismissed*, *Overview / Activity*, *At a glance*.
+
+**Tabs:** an underline tab strip at the top of the page: **Overview | Activity**. Activity's right side carries "Last updated" and Refresh.
+
+**Overview** (the guide, laid out like the chat welcome):
+- **Hero:** centred greeting (26px; "Welcome to Sovrant, Alex" on the first visit) and the tagline on one line.
+- **At a glance (kept at review):** a centred row of six small pills ("14 sessions", "1 agent run", "1 shared", …), each opening Activity. Review fixes: the text sat at the top of the pill (baseline alignment), so it's now centred with even padding; labels are singular for 1, and "shared (public)" became "shared". The tagline got 6px more room below it, and the page's top and bottom padding were trimmed to keep the laptop fit.
+- **Get started (left) and What Sovrant can do (right), side by side;** they stack below 1100px. The checklist is the Phase 141 one with tighter rows.
+- **Cards:** compact cards in a 2-column grid. Each has an icon, a title with "→", and a two-line description; the whole card is the link. Members' admin-managed cards keep "Managed by your admin" with a one-line description.
+- **When done:** the checklist collapses to the "All set" line above the cards, and the cards spread to 4 columns. After Dismiss, only the cards remain.
+- **No Get started pill:** the checklist is already in view.
+
+**Activity:** the report, unchanged: a one-line description with "What are these?", the six stat tiles, and the activity table (or "Nothing yet").
+
+**Laptop check:** the mock browser frame sized to a maximized 1366×768 browser (1366×700 including the mock's tab and address bars). All 16 Overview states (two roles, four checklist states, at a glance on and off) fit without scrolling on both mocks. The first pass overflowed by 55–100px while the checklist was in progress, which led to the compact cards.
+
+**Changed at review (2026-10-06, after seeing it on Desktop):** there was spare room at the bottom of Overview, so the guide now uses the whole container.
+- **Get started:** runs across the full width as **numbered step tiles**, one per item (5 for admins, 4 for members; 3 per row below 1100px). Each tile has a number or a green check, the title, the subtitle and its action link.
+- **What Sovrant can do:** sits **below** it, **four across**, with each card's full description and its "Open … →" link (no more two-line truncation).
+- **Fit:** in a 1280×800-class window everything fits. On a 1366×768 laptop, the second row of cards needs a short scroll (about 100px) while the checklist is unfinished; once it's done, everything fits.
+
+**Changed at build time:**
+- **Admin heading:** the admin checklist reads "Set up Sovrant for your team" (was first-run wording).
+- **Greeting:** returning users see "Welcome back, Alex" instead of "Good morning", which was wrong for people working through the night.
+
+**Review links:** `web.html#home&glance` (also `&member`, `&first`, `&allset`, `&dismissed`, `&activity`) opens Home in that state.
+
+**Verified:** rendered in headless Edge on both mocks: 32 Overview combinations measured (overflow, cards visible, checklist rows, All set, managed cards), plus the Activity tab. Parity diff still 49 chrome-only lines.
+
+## Open decisions
+
+- **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.
+
+- **Control height scale — documented, not unified.** Flagged early in this pass as ad hoc (9 distinct heights: 22/26/28/29/30/32/34/36/38/40/44px). Audited every real height in `web.html`'s CSS (excluding the browser-chrome mockup frame, which isn't product UI) and it's looser than ideal but not random — it clusters into three real tiers:
+  - **28–32px** — compact/icon-only controls: `.chip` (28), `.av` avatar (29), `.ib` icon button (30), `.send` composer action (32), `.ctog` rail toggle (26, deliberately smaller — floats half-off the rail edge)
+  - **34–36px** — standard controls: `.btn` secondary button, `.inpb` settings input, `.idx` index row (34), `.search` (36)
+  - **40–44px** — primary/high-traffic controls: `.nav` rail row, `.li` login input (40), `.frow` footer row, `.lbtn` login primary button (44)
+
+  Not forcing a mass rewrite to 3 exact values — every current height was visually tuned for its specific control, and normalizing ~15 CSS rules with no way to re-verify each one visually within this pass is a real regression risk for a cosmetic-only win. **Standard going forward: new controls should land on 28, 32, 34, 36, 40, or 44px** — one of the six values already in use — rather than introduce a 7th.
+
+## Already shipped from this work
+
+- Chat bubbles + icon Send/Stop (Phase 137) on Web (`ChatMessage.razor`, `Chat.razor`) and Desktop (`ChatView.axaml`). Matches the Thread and Streaming states, including avatars, the meta line, the 760px column, and brand Stop in Send's spot. One known gap: the runtime still delivers reply text per model call rather than live (see roadmap Phase 137 build notes), so the streaming caret is rarely visible.
+
+- Lucide icons (Phase 136): `SovrantIcon` on Web (`Components/Shared/SovrantIcon.razor`, `Services/SovrantIcons`) and Desktop (`Controls/SovrantIcon`), sharing `Sovrant.Api.Ui.IconNames`. The mock's `VOCAB` grew to 62 names as the code turned up more hand-drawn icons and glyph characters (`team`, `brand`, `rail-collapse` / `rail-expand`, `stop`, `dropdown`, `back`, `sort-asc` / `sort-desc`). `Sovrant.Ui.Tests` keeps the mock, `IconNames` and the Desktop map in step.
+
+- The app sidebar (Phase 135): collapsible nav groups plus an always-visible Conversations section in the expanded rail, and flyouts in the collapsed rail, on Web (`AppNav.razor`, `RailNav.razor`, `AppNavModel`) and Desktop (`AppNavViewModel`, `MainWindow.axaml`). It matches the mock's option 2 sizing and compact rows.
+
+- The left-nav redesign (commit `7970ca3`): collapsible rail, real line icons replacing emoji, left accent bar for the active item, Admin's nine destinations grouped under Overview / Access / Safety / System.
+- Web's `.rail-icon` dropped 42px → 40px to match Desktop, closing the one real parity gap.

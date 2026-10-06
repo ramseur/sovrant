@@ -1,5 +1,7 @@
 using System.Text.Json;
 
+using Sovrant.Api.Ui;
+
 namespace Sovrant.Desktop.ViewModels;
 
 /// <summary>
@@ -124,12 +126,12 @@ internal static class DocumentArtifactParser
         var f = format.ToUpperInvariant();
         return f switch
         {
-            "PDF" or "STRUCTURED_PDF" => "\uD83D\uDCC4",
-            "WORD" or "DOCX" => "\uD83D\uDCDD",
-            "EXCEL" or "XLSX" => "\uD83D\uDCCA",
-            "POWERPOINT" or "PPTX" => "\uD83D\uDCFD\uFE0F",
-            "MARKDOWN" or "MD" => "\uD83D\uDCC4",
-            _ => "\uD83D\uDCCE",
+            "PDF" or "STRUCTURED_PDF" => IconNames.FilePdf,
+            "WORD" or "DOCX" => IconNames.FileWord,
+            "EXCEL" or "XLSX" => IconNames.FileSheet,
+            "POWERPOINT" or "PPTX" => IconNames.FileSlides,
+            "MARKDOWN" or "MD" => IconNames.FileMarkdown,
+            _ => IconNames.File,
         };
     }
 

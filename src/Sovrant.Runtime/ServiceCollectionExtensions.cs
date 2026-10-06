@@ -10,7 +10,7 @@ using Sovrant.Runtime.Hooks;
 using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Evals;
 using Sovrant.Runtime.Memory;
-using Sovrant.Runtime.Missions;
+using Sovrant.Runtime.Workflows;
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Preferences;
 using Sovrant.Runtime.Providers;
@@ -196,6 +196,14 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ISessionStore>(sp =>
             new SqliteSessionStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
+        // Phase 133 — conversation folders live beside sessions (the Postgres
+        // backend replaces both together); labels always read SQLite, where
+        // workflows and agent runs stay regardless of the session backend.
+        services.AddSingleton<ISessionFolderStore>(sp =>
+            new SqliteSessionFolderStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<ISessionLinkResolver>(sp =>
+            new SqliteSessionLinkResolver(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
         // Token usage tracking
         services.AddSingleton<ITokenUsageStore>(sp =>
             new SqliteTokenUsageStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
@@ -230,6 +238,8 @@ public static class ServiceCollectionExtensions
         // Each row holds non-secret metadata (name, base url, default model,
         // max tokens) plus a credential_id reference whose plaintext key
         // lives only in the encrypted ICredentialStore.
+        // Phase 140 — Welcome page content and first-sign-in state (shared by Web and Desktop).
+        services.AddSingleton<Onboarding.OnboardingService>();
         services.AddSingleton<IProviderProfileStore>(sp =>
             new SqliteProviderProfileStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
@@ -290,11 +300,11 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IRuntimeTraceStore>(sp =>
             new SqliteRuntimeTraceStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
-        // Mission scratchpad (Phase 51) — typed, append-only shared store for
+        // Workflow scratchpad (Phase 51) — typed, append-only shared store for
         // parallel sub-agents within one mission to publish intermediate
         // findings the next plan wave can read.
-        services.AddSingleton<IMissionScratchpadStore>(sp =>
-            new SqliteMissionScratchpadStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<IWorkflowScratchpadStore>(sp =>
+            new SqliteWorkflowScratchpadStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Context compactor (Phase 51) — folds older step outcomes into a
         // summary when the run history won't fit in the planner budget.
@@ -345,20 +355,22 @@ public static class ServiceCollectionExtensions
         // that need a bespoke step runner build their own executor.
         services.AddSingleton<Engine.IExecutor, Engine.LlmExecutor>();
 
-        // Mission layer (Phase 51) — long-lived goals sitting on top of the
+        // Workflow layer (Phase 51) — long-lived goals sitting on top of the
         // engine layer with acceptance gates and an append-only event
         // journal. The store owns V011 tables; the planner/executor/gate
         // are deliberately swap-in seams so production can later plug in
         // an LLM-backed planner without touching routes or storage.
-        services.AddSingleton<IMissionStore>(sp =>
-            new SqliteMissionStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
-        services.AddSingleton<IMissionPlanner, SimpleMissionPlanner>();
+        services.AddSingleton<IWorkflowStore>(sp =>
+            new SqliteWorkflowStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        services.AddSingleton<IWorkflowPlanner, LlmWorkflowPlanner>();
         services.AddSingleton<IAcceptanceGate, AllStepsSucceededGate>();
-        services.AddSingleton<IMissionExecutor, LlmMissionExecutor>();
-        services.AddSingleton<MissionExportService>();
+        services.AddSingleton<WorkflowSessionNotifier>();
+        services.AddSingleton<IWorkflowExecutor, LlmWorkflowExecutor>();
+        services.AddSingleton<WorkflowExportService>();
+        services.AddSingleton<WorkflowPlanningService>();
 
         // Autonomous-driver layer (Phase 67) — named strategies for advancing
-        // a mission forward. The LLM driver wraps IMissionExecutor; additional
+        // a mission forward. The LLM driver wraps IWorkflowExecutor; additional
         // drivers (swarm, external orchestrator) register alongside it and are
         // resolved by name through DriverRegistry.
         services.AddSingleton<IAutonomousDriver, LlmAutonomousDriver>();
@@ -405,6 +417,7 @@ public static class ServiceCollectionExtensions
         // MCP
         services.AddSingleton<IMcpClientFactory, SovrantMcpClientFactory>();
         services.AddSingleton<McpClientRegistry>();
+        services.AddSingleton<McpServerStatusRegistry>(); // Phase 139
         services.AddSingleton<McpToolRegistrar>();
         services.AddSingleton<ICredentialStore>(sp =>
             new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>(), bootstrap.LegacyKeystorePath));
@@ -484,6 +497,15 @@ public static class ServiceCollectionExtensions
         var sovrantUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID")
             ?? Environment.UserName;
         await legacyMigrator.RunAsync(sovrantUserId, ct).ConfigureAwait(false);
+
+        // Phase 144 — provider keys from the environment (shell, container env or .env): imported
+        // into the encrypted store on first boot (or every start with SOVRANT_ENV_KEYS_OVERRIDE=true),
+        // and LLM_BASE_URL / SOVRANT_MODEL become the install-wide defaults. Runs before preferences
+        // are applied, so a fresh install with LLM_API_KEY skips provider setup entirely.
+        await Config.EnvCredentialSeeder.SeedAsync(
+            services.GetRequiredService<Mcp.ICredentialStore>(), Environment.GetEnvironmentVariable,
+            services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Runtime.EnvCredentialSeeder"), ct).ConfigureAwait(false);
+        Config.EnvCredentialSeeder.ApplyDefaults(services.GetRequiredService<SovrantConfig>(), Environment.GetEnvironmentVariable);
 
         // Phase 88-C — apply persisted user preferences and the active
         // provider's credential to the runtime SovrantConfig. The migrator
@@ -588,6 +610,20 @@ public static class ServiceCollectionExtensions
         var credentials = services.GetRequiredService<Mcp.ICredentialStore>();
         var config = services.GetRequiredService<SovrantConfig>();
 
+        // Phase 144 — a user with no provider yet gets one for LLM_API_KEY (no-op otherwise).
+        // Best-effort: it must never stop the user's saved preferences from applying.
+#pragma warning disable CA1031, CA1848 // best-effort, like the preference load around it
+        try
+        {
+            await Config.EnvCredentialSeeder.EnsureUserProviderAsync(services, userId, Environment.GetEnvironmentVariable, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Runtime.EnvCredentialSeeder")
+                .LogWarning(ex, "Could not create a provider from LLM_API_KEY for {UserId}", userId);
+        }
+#pragma warning restore CA1031, CA1848
+
         // Active provider profile resolution (tiered):
         //   1. Workspace-level profile (admin-set, overrides user preference)
         //   2. User's personal profile preference
@@ -680,18 +716,11 @@ public static class ServiceCollectionExtensions
         if (!string.IsNullOrEmpty(apiKey))
             config.ApiKey = apiKey;
 
-        // Pin the SmartRouter to the provider that matches the active profile's base URL.
-        // Without this, OllamaProvider (cost=0) wins the cost-scoring heuristic over any
-        // cloud provider whenever Ollama happens to be running on localhost — silently
-        // routing the user to their local machine instead of their configured provider.
+        // Phase 138: every profile (cloud or local) is served by the router's primary provider at
+        // the profile's base URL, so pin that, never a guess from "the URL is localhost".
         var router = services.GetService<Sovrant.Api.Routing.ISmartRouter>();
         if (router is not null)
-        {
-            bool isLocalUrl = config.BaseUrl is not null &&
-                              (config.BaseUrl.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
-                               config.BaseUrl.Host == "127.0.0.1");
-            await router.PinProviderAsync(isLocalUrl ? "ollama" : "openai-compat", ct).ConfigureAwait(false);
-        }
+            await Sovrant.Api.Routing.ActiveProfileRouting.PinActiveProfileAsync(router, ct).ConfigureAwait(false);
     }
 
     /// <summary>
