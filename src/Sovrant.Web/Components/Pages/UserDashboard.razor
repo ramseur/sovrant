@@ -31,6 +31,7 @@
             {
                 <span class="text-muted text-sm">Last updated: @_state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture)</span>
             }
+            <a class="btn-secondary" href="/welcome">Show welcome</a>
             <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
         </div>
     </div>

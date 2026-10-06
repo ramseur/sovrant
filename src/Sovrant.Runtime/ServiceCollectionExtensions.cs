@@ -238,6 +238,8 @@ public static class ServiceCollectionExtensions
         // Each row holds non-secret metadata (name, base url, default model,
         // max tokens) plus a credential_id reference whose plaintext key
         // lives only in the encrypted ICredentialStore.
+        // Phase 140 — Welcome page content and first-sign-in state (shared by Web and Desktop).
+        services.AddSingleton<Onboarding.OnboardingService>();
         services.AddSingleton<IProviderProfileStore>(sp =>
             new SqliteProviderProfileStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
 

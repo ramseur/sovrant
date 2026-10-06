@@ -12780,7 +12780,7 @@ On 2026-10-05 Desktop started during a brief DNS hiccup. `McpToolRegistrar.Regis
 
 ## Phase 140 — Welcome & First-Run Onboarding
 
-**Status:** Planned (2026-10-05) — plan agreed; design mock done (`docs/design/web.html` / `desktop.html`: Login states, the new Welcome screen with Admin / Member, Chat → Welcome); code next.
+**Status:** Done (2026-10-05) — design mock and code on Web + Desktop; verified live on a fresh database (first-run admin, then a member account).
 
 ### Why
 
@@ -12805,11 +12805,11 @@ Rahul Singh's fork (PR #31) attempted parts of this. **Issue #27 (login onboardi
    - **Feedback:** a progress line while working ("Creating your administrator account…"); success in the success style, not the error style.
 2. **"Welcome to Sovrant" page.** Full window, shown once per user after sign-in (and after provider setup on first run).
    - **Header:** the Sovrant mark, "Welcome to Sovrant, <name>", and the tagline.
-   - **Info bubbles:** one per area, each with an icon (Phase 136 vocabulary), two lines on what it does, and a link to it. The areas are Chat with any model · Agents · Teams & Swarms · Workflows · Knowledge (skills, templates, memory, documents) · Integrations (MCP) · Trust Boundary & Governance · Workspaces & admin. Admin-only areas are hidden for members.
+   - **Info bubbles:** one per area, each with an icon (Phase 136 vocabulary), two lines on what it does, and a link to it. The areas are Chat with any model · Agents · Teams & Swarms · Workflows · Knowledge (skills, templates, memory, documents) · Integrations (MCP) · Trust Boundary & Governance · Workspaces & admin. **Admin-only areas** (Integrations, Trust Boundary & Governance, Workspaces) are described to members as "Managed by your admin", with **no link**; members get Projects in place of Workspaces.
    - **Get started checklist, ticked from real state:**
      - *Admins:* provider connected · providers enabled for a workspace · team invited · an integration connected · first agent created.
      - *Members:* a model selected · try an agent · first conversation · explore Knowledge.
-   - **Actions:** "Start chatting" (primary) and "Skip for now". Reopenable from Help / Dashboard.
+   - **Actions:** "Start chatting" (primary) and "Skip for now". Reopenable from Dashboard → Show welcome and the chat welcome's strip.
 3. **Bigger chat welcome (every new chat).**
    - **Layout:** the empty state fills the main area, with a larger mark and title (Rahul's #28 polish) and the suggestion cards in a wider grid.
    - **Capabilities strip:** a compact "What Sovrant can do" strip repeats the info bubbles in short form, linking to each area.
@@ -12828,8 +12828,18 @@ Rahul Singh's fork (PR #31) attempted parts of this. **Issue #27 (login onboardi
 
 ### Acceptance criteria
 - [x] Mock: first-run login, Welcome page (admin + member), new chat welcome on both surfaces; parity diff chrome-only; logged in `docs/design/README.md`
-- [ ] Empty server → the login screen offers "Create administrator account" and explains the admin role; approval note shown when required
-- [ ] Every user sees the Welcome page once after first sign-in; it's role-aware; "Show welcome" reopens it
-- [ ] Checklist items tick from real state (no hard-coded ticks)
-- [ ] The empty-chat welcome fills the main area, with a wider suggestion grid and the capabilities strip
-- [ ] Web + Desktop parity; verified live (fresh isolated DB for first run, plus a member account)
+- [x] Empty server → the login screen offers "Create administrator account" and explains the admin role; approval note shown when required
+- [x] Every user sees the Welcome page once after first sign-in; it's role-aware; "Show welcome" reopens it
+- [x] Checklist items tick from real state (no hard-coded ticks)
+- [x] The empty-chat welcome fills the main area, with a wider suggestion grid and the capabilities strip
+- [x] Web + Desktop parity; verified live (fresh isolated DB for first run, plus a member account)
+- [x] Members can't reach an admin page from the Welcome page, the chat strip, or a typed link/page name
+
+### Build notes (2026-10-05)
+- **Shared content:** `Sovrant.Runtime.Onboarding.OnboardingService` builds the areas, the role-aware checklist (ticked from provider profiles, workspace provider enablement, users, MCP servers, user-tier agents, agent runs, sessions) and the "seen" state, so Web and Desktop show identical content. "Seen" and "visited Knowledge" are `user_preferences` keys (`onboarding.welcome_seen`, `onboarding.knowledge_visited`); no schema change.
+- **Admin-only areas:** `WelcomeArea.AdminManaged` areas carry no target; `OnboardingService.IsAdminOnly` lists the admin targets. Each surface maps targets to routes and returns no link for admin targets when the user isn't an admin.
+- **Security check:** every Web admin page (`/admin*`, `/governance`, `/trust-boundary`, `/diagnostics`, `/command`) already redirects non-admins server-side; verified live by typing the URLs as a member. Desktop only hid the Admin group, and `MainViewModel.OnNavigationRequested` opened any page by name, so it now refuses admin pages (including the `Integrations` alias) for non-admins.
+- **Copy check:** conversations are *not* private by default (`sessions.is_private` defaults to 0, so teammates in a shared workspace see public activity on their Dashboard). The member copy says "Mark a conversation Private and teammates won't see it", and only mentions redaction when the Trust Boundary is on.
+- **Web:** `/welcome` (own layout, signed-in only), first-run `Login.razor`, Setup → `/welcome`, Dashboard "Show welcome", bigger chat welcome with the strip, Knowledge visits marked from `MainLayout`.
+- **Desktop:** `LoginWindow` first-run states and Enter-to-submit (it had none), a full-window `WelcomeOverlay`, Dashboard "Show welcome", the bigger chat welcome. Links from Welcome and the chat strip also move the rail highlight.
+- **Tests:** `OnboardingServiceTests` (9), `WelcomeAccessTests` (13), `WelcomeOverlayRenderTests` (headless member render), `LoginWindowInputTests` (headless typing).

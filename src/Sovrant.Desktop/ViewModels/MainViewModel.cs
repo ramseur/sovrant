@@ -93,6 +93,33 @@ public partial class MainViewModel : ViewModelBase
         commandPalette.CommandExecuted += OnCommandExecuted;
 
         AppNav = new AppNavViewModel(this);
+
+        Welcome = services.GetRequiredService<WelcomeViewModel>();
+        Welcome.NavigateRequested += NavigateFromLink;
+    }
+
+    /// <summary>Phase 140 — the full-window Welcome overlay.</summary>
+    public WelcomeViewModel Welcome { get; }
+
+    /// <summary>Opens the Welcome page with fresh checklist state (Dashboard → Show welcome, chat welcome).</summary>
+    [RelayCommand]
+    private Task ShowWelcomeAsync() => ShowWelcomeCoreAsync(force: true);
+
+    /// <summary>Shows Welcome on this user's first sign-in only.</summary>
+    public Task ShowWelcomeIfFirstTimeAsync() => ShowWelcomeCoreAsync(force: false);
+
+    private async Task ShowWelcomeCoreAsync(bool force)
+    {
+        var userId = _principal.UserId;
+        if (string.IsNullOrEmpty(userId)) return;
+        var email = (_principal as Sovrant.Desktop.Auth.DesktopPrincipalAccessor)?.Email ?? userId;
+        var at = email.IndexOf('@', StringComparison.Ordinal);
+        var name = at > 0 ? email[..at] : email;
+        var workspaceId = _services.GetService<ActiveContextViewModel>()?.ActiveWorkspaceId;
+        if (force)
+            await Welcome.ShowAsync(userId, name, _principal.IsAdmin, workspaceId).ConfigureAwait(true);
+        else
+            await Welcome.ShowIfFirstTimeAsync(userId, name, _principal.IsAdmin, workspaceId).ConfigureAwait(true);
     }
 
     /// <summary>Phase 135 — collapsible nav groups (expanded rail) and flyouts (collapsed rail).</summary>
@@ -247,12 +274,44 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
+    /// <summary>Admin-only pages (the Admin nav group). Mirrors Web, where each page redirects non-admins.</summary>
+    private static readonly HashSet<string> AdminOnlyPages = new(StringComparer.Ordinal)
+    {
+        "CommandCenter", "Admin", "AdminWorkspaces", "AdminProviders", "Governance", "TrustBoundary",
+        "Diagnostics", "Integrations", "AdminPlatformIntegrations", "AdminSystemIntegrations",
+    };
+
+    /// <summary>
+    /// Phase 140 — navigation from an in-page link (Welcome, chat welcome cards): moves the rail's
+    /// highlight to the page, then opens it. Admin pages are refused for non-admins here too.
+    /// </summary>
+    private void NavigateFromLink(string page)
+    {
+        if (IsAdminOnlyPage(page) && !_principal.IsAdmin) return;
+        // Highlight the page's group (setting SelectedGroup only updates the rail; it doesn't navigate).
+        if (AppNavViewModel.GroupForPage(page) is { } group)
+            SelectedGroup = group;
+        Sidebar.SelectedNavItem = page;
+        OnNavigationRequested(this, page);
+    }
+
+    /// <summary>True for pages only admins may open (also used by tests).</summary>
+    public static bool IsAdminOnlyPage(string pageName) => AdminOnlyPages.Contains(pageName);
+
     private void OnNavigationRequested(object? sender, string pageName)
     {
+        // Phase 140: hiding the Admin group isn't enough. Any link (Welcome page, command
+        // palette, events) that names an admin page must not open it for a non-admin.
+        if (IsAdminOnlyPage(pageName) && !_principal.IsAdmin)
+            return;
         ParkCurrentChatIfRunning();
+        // Phase 140 — opening any Knowledge page ticks "Explore Knowledge" on the member checklist.
+        if (pageName is "Skills" or "Guidelines" or "Memory" or "Documents" or "Tools" && _principal.UserId is { Length: > 0 } uid)
+            _ = _services.GetService<Sovrant.Runtime.Onboarding.OnboardingService>()?.MarkKnowledgeVisitedAsync(uid);
         CurrentPage = pageName switch
         {
             "Chat" => CreateChatViewModel(),
+            "Dashboard" => _services.GetRequiredService<UserDashboardViewModel>(),
             "Settings" => _services.GetRequiredService<SettingsViewModel>(),
             var s when s.StartsWith("Settings:", StringComparison.Ordinal) => ResolveSettings(s),
             "Diagnostics" => _services.GetRequiredService<DiagnosticsViewModel>(),
@@ -347,6 +406,13 @@ public partial class MainViewModel : ViewModelBase
     {
         var chat = _services.GetRequiredService<ChatViewModel>();
         chat.TurnCompleted += () => _ = Sidebar.RefreshSessionsCommand.ExecuteAsync(null);
+        // Phase 140 — the chat welcome's capability strip (role-aware) links into each area.
+        chat.SetAdmin(_principal.IsAdmin);
+        chat.AreaRequested += page =>
+        {
+            if (page == "Welcome") _ = ShowWelcomeCoreAsync(force: true);
+            else NavigateFromLink(page);
+        };
         // Phase 133 — keep the sidebar's open-conversation highlight and the chat header in sync.
         chat.PropertyChanged += (_, e) =>
         {

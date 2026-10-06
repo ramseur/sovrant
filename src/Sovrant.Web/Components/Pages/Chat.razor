@@ -29,7 +29,7 @@
     }
 
     <!-- Messages area -->
-    <div class="chat-messages" id="chat-messages">
+    <div class="chat-messages @(_messages.Count == 0 && !_isSending ? "is-empty" : "")" id="chat-messages">
         @if (_messages.Count == 0 && !_isSending)
         {
             <!-- Hero state -->
@@ -45,7 +45,7 @@
                     </div>
                 }
                 <h1 class="hero-title">@(_agentName is not null ? $"Ask {_agentName} anything" : "What are you working on?")</h1>
-                <p class="hero-subtitle">Create agents, build teams, and orchestrate workflows to automate your work.</p>
+                <p class="hero-subtitle">Chat with any model, or put agents, teams and workflows to work. Pick a starting point, or just type below.</p>
                 <div class="hero-suggestions">
                     @foreach (var s in _suggestions)
                     {
@@ -54,6 +54,16 @@
                             <span>@s.Text</span>
                         </button>
                     }
+                </div>
+                @* Phase 140 — a compact "What Sovrant can do" strip; same areas as the Welcome page. *@
+                <div class="hero-caps">
+                    <div class="hero-caps-label"><span>What Sovrant can do</span><a href="/welcome">Show welcome →</a></div>
+                    <div class="hero-caps-row">
+                        @foreach (var (icon, title, desc, href) in _capabilities)
+                        {
+                            <a class="hero-cap" href="@href"><SovrantIcon Name="@icon" Size="16" /><b>@title</b><span>@desc</span></a>
+                        }
+                    </div>
                 </div>
             </div>
         }
@@ -212,6 +222,21 @@
 
     // Icon is an IconNames value (Phase 136).
     private record Suggestion(string Icon, string Text);
+
+    // Phase 140 — the chat welcome's capabilities strip. Integrations and Trust Boundary are
+    // admin-only pages, so members get Projects and the Privacy card instead.
+    private IEnumerable<(string Icon, string Title, string Desc, string Href)> _capabilities =>
+    [
+        (IconNames.Agents, "Agents", "Your own assistants", "/agents"),
+        (IconNames.Team, "Teams & Swarms", "Agents working together", "/orchestration"),
+        (IconNames.Workflow, "Workflows", "Planned, scheduled work", "/workflows"),
+        (IconNames.Knowledge, "Knowledge", "Skills, memory, docs", "/skills"),
+        .. (Session.IsAdmin
+            ? new[] { (IconNames.Integrations, "Integrations", "MCP tools and platforms", "/admin/integrations"),
+                      (IconNames.Trust, "Trust Boundary", "Redaction and controls", "/trust-boundary") }
+            : new[] { (IconNames.Projects, "Projects", "Files and chats together", "/projects"),
+                      (IconNames.Private, "Privacy", "You choose what teammates see", "/welcome") }),
+    ];
 
 
     private static readonly Suggestion[] _suggestions =

@@ -57,6 +57,7 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Onboarding.OnboardingService Onboarding { get; set; } = default!;
 
     private bool _collapsed;
     private CommandPalette? _palette;
@@ -76,6 +77,20 @@
     {
         if (!Session.IsAuthenticated)
             Nav.NavigateTo("/login", forceLoad: false);
+        Nav.LocationChanged += OnLocationChanged;
+        MarkKnowledgeVisited(Nav.Uri);
+    }
+
+    // Phase 140 — opening any Knowledge page ticks "Explore Knowledge" on the member checklist.
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        MarkKnowledgeVisited(e.Location);
+
+    private void MarkKnowledgeVisited(string uri)
+    {
+        var userId = Session.UserId;
+        if (string.IsNullOrEmpty(userId) || AppNavModel.GroupForPath(Nav.ToBaseRelativePath(uri).Insert(0, "/"))?.Key != "knowledge")
+            return;
+        _ = Onboarding.MarkKnowledgeVisitedAsync(userId);
     }
 
     private void Navigate(string url)
@@ -108,5 +123,9 @@
         Nav.NavigateTo("/login", forceLoad: false);
     }
 
-    public void Dispose() => _dotNetRef?.Dispose();
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        _dotNetRef?.Dispose();
+    }
 }

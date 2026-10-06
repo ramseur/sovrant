@@ -17,6 +17,11 @@ Versions correspond to tags on the `development` branch.
 
 - **Conversation folders (Phase 133)** — file any conversation into a per-user folder tree (up to 5 levels, across all workspaces) on Web and Desktop: folder rows with counts, ⋯ menus (new subfolder, rename, move, delete), a Move dialog, a chat-header breadcrumb with Move, search across folders, and drag and drop (conversations and folders) that refuses invalid drops while dragging. Deleting a folder moves its contents up a level; no conversation is ever deleted. Sidebar labels (`Agent · x`, `Workflow · Running`, `Swarm · n runs`, `Team · n runs`, `Webhook · source`) are derived from live links, never stored. New `ISessionFolderStore` (SQLite, Postgres, remote), `SessionFolderRules` / `SessionFolderTree` shared by both UIs, 5 endpoints (`/v1/session-folders`, `PUT /v1/sessions/{id}/folder`), SDK methods (`listSessionFolders`, `createSessionFolder`, `updateSessionFolder`, `deleteSessionFolder`, `moveSessionToFolder`). Swarm and team runs launched from a chat now record that conversation (`agent_runs.session_id`, via a new per-turn `TurnContext`); team runs started outside chat (Orchestration page, team-run API) and swarms started via `POST /v1/swarm` get a conversation of their own (id = run id, seeded with the goal, outcome appended when the run ends), so every run appears in the sidebar and can be filed. `POST /v1/swarm` now also records an `agent_runs` row.
 
+- **Welcome & first-run onboarding (Phase 140)** — on Web and Desktop:
+  - **First-run sign-up:** on a server with no accounts, the login screen explains that the first account becomes the administrator and offers "Create administrator account" (Enter submits). It also shows an approval note when new accounts need approval, a progress line while working, and success messages in the success style. Based on Rahul Singh's issue #27.
+  - **"Welcome to Sovrant" page:** a full-window page each user sees once after their first sign-in (after provider setup on first run), reopenable from Dashboard → Show welcome. It has the tagline, eight info bubbles linking to each area, and a role-aware "Get started" checklist ticked from real state. Admin-only areas (Integrations, Trust Boundary & Governance, Workspaces) are described to members as "Managed by your admin", with no link.
+  - **Bigger chat welcome:** the empty chat fills the main area, with a larger mark and title, a 3-column suggestion grid, and a "What Sovrant can do" strip. Based on Rahul Singh's #28.
+
 ### Changed
 
 - **Ollama only when active on your workspace (Phase 138)** — Sovrant no longer reaches out to `localhost:11434` on every install (the source of "Ollama is being called although it isn't configured").
@@ -44,6 +49,7 @@ Versions correspond to tags on the `development` branch.
 
 ### Fixed
 
+- **Desktop: admin pages could be opened by name** — the Admin nav group was hidden from non-admins, but any in-app link naming an admin page (Welcome links, chat cards, events) would still open it. Desktop navigation now refuses admin pages (Command Center, Users, Workspaces, Providers, Governance, Trust Boundary, Diagnostics, Platform/System Integrations) for non-admins, matching Web, where each page already redirects. (Phase 140)
 - **Prompts sometimes needed sending twice** — OpenRouter (especially for `:free` models) can answer HTTP 200 and then report a rate-limited or busy upstream *inside* the stream (`{"error": …}`), or close the stream with no content. The stream reader skipped the error chunk, so the turn "completed" in about 0.3 s with 0 tokens and no message: the timer started and stopped, and the user had to re-send.
   - **In-stream errors** are now read and surfaced as provider errors ("Provider returned error 429: …").
   - **Empty replies** (no text, no tool calls, no output tokens) are now treated as a failed call, not a silent success.

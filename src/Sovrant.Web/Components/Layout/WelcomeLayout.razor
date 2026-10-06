@@ -1,0 +1,17 @@
+@* Phase 140 — full-window layout for the Welcome page: no rail, signed-in users only. *@
+@inherits LayoutComponentBase
+@inject WebSessionService Session
+@inject NavigationManager Nav
+
+@if (Session.IsAuthenticated)
+{
+    <div class="welcome-shell">@Body</div>
+}
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!Session.IsAuthenticated)
+            Nav.NavigateTo("/login", forceLoad: false);
+    }
+}

@@ -316,12 +316,13 @@
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center"
                         Spacing="16"
-                        MaxWidth="600">
-                <!-- Logo icon — same chat-bubble mark as the assistant avatar below;
-                     no brand-colored square (that treatment is reserved for the
-                     tab/titlebar mark, see docs/design/README.md). -->
-                <Border Width="56" Height="56" HorizontalAlignment="Center">
-                    <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Chat}" Size="42"
+                        Margin="24"
+                        MaxWidth="920">
+                <!-- Logo icon — same chat-bubble mark as the assistant avatar below, on the soft
+                     brand tile from the Phase 140 mock (a tint, not the solid titlebar square). -->
+                <Border Width="72" Height="72" CornerRadius="20" HorizontalAlignment="Center"
+                        Background="{DynamicResource BrandPrimarySoft}">
+                    <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Chat}" Size="38"
                           Foreground="{DynamicResource BrandPrimary}"
                           HorizontalAlignment="Center" VerticalAlignment="Center" />
                 </Border>
@@ -348,17 +349,17 @@
                 </Border>
 
                 <TextBlock Text="What are you working on?"
-                           FontSize="24" FontWeight="Bold"
+                           FontSize="28" FontWeight="Bold"
                            Foreground="{DynamicResource TextPrimary}"
                            HorizontalAlignment="Center" />
-                <TextBlock Text="Create agents, build teams, and orchestrate workflows to automate your work."
-                           FontSize="14"
+                <TextBlock Text="Chat with any model, or put agents, teams and workflows to work. Pick a starting point, or just type below."
+                           FontSize="15" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="560"
                            Foreground="{DynamicResource TextSecondary}"
                            HorizontalAlignment="Center"
                            Margin="0,0,0,8" />
 
-                <!-- Suggestion cards — 2 columns -->
-                <UniformGrid Columns="2" HorizontalAlignment="Center">
+                <!-- Suggestion cards — 3 columns (Phase 140) -->
+                <UniformGrid Columns="3" HorizontalAlignment="Stretch">
                     <Button Margin="4" Padding="14,10" CornerRadius="10"
                             HorizontalAlignment="Stretch" HorizontalContentAlignment="Left"
                             Background="{DynamicResource SurfaceCard}"
@@ -432,6 +433,43 @@
                         </StackPanel>
                     </Button>
                 </UniformGrid>
+
+                <!-- Phase 140 — "What Sovrant can do": same areas as the Welcome page, role-aware -->
+                <StackPanel Spacing="10" Margin="0,8,0,0">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="Show welcome →" Padding="0" Background="Transparent"
+                                BorderThickness="0" FontSize="12" FontWeight="SemiBold" Cursor="Hand"
+                                Foreground="{DynamicResource BrandPrimary}"
+                                Command="{Binding OpenAreaCommand}" CommandParameter="Welcome" />
+                        <TextBlock Text="WHAT SOVRANT CAN DO" FontSize="11" FontWeight="Bold" LetterSpacing="0.6"
+                                   Foreground="{DynamicResource TextMuted}" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <ItemsControl ItemsSource="{Binding Capabilities}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><UniformGrid Columns="6" /></ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:CapabilityCard">
+                                <Button Margin="4" Padding="11,10" CornerRadius="10" Cursor="Hand"
+                                        HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                        HorizontalContentAlignment="Left" VerticalContentAlignment="Top"
+                                        Background="Transparent" BorderThickness="1"
+                                        BorderBrush="{DynamicResource SurfaceBorder}"
+                                        Command="{Binding $parent[ItemsControl].((vm:ChatViewModel)DataContext).OpenAreaCommand}"
+                                        CommandParameter="{Binding Page}">
+                                    <StackPanel Spacing="4">
+                                        <ctrl:SovrantIcon IconName="{Binding IconName}" Size="16"
+                                                          Foreground="{DynamicResource BrandPrimary}" HorizontalAlignment="Left" />
+                                        <TextBlock Text="{Binding Title}" FontSize="12.5" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Description}" FontSize="11.5" TextWrapping="Wrap"
+                                                   Foreground="{DynamicResource TextMuted}" />
+                                    </StackPanel>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
             </StackPanel>
 
             <!-- Messages area -->

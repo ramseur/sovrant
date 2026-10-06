@@ -1,28 +1,49 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Sovrant.Desktop.ViewModels"
+        xmlns:ctrl="using:Sovrant.Desktop.Controls"
+        xmlns:ui="using:Sovrant.Api.Ui"
         x:Class="Sovrant.Desktop.Views.LoginWindow"
         x:DataType="vm:LoginViewModel"
         Title="Sovrant — Sign in"
-        Width="420" Height="460"
+        Width="440" SizeToContent="Height"
         CanResize="False"
         WindowStartupLocation="CenterScreen">
 
+  <!-- Phase 140 — first-run admin sign-up (docs/design/desktop.html, Login: Sign in / First run / Approval / Working). -->
   <Border Padding="36" Background="{DynamicResource SurfaceBackground}">
     <StackPanel Spacing="16">
 
       <TextBlock Text="Sovrant" FontSize="28" FontWeight="Bold"
                  HorizontalAlignment="Center" Margin="0,0,0,4"/>
 
-      <TextBlock Text="Sign in to continue."
-                 FontSize="12" Opacity="0.6"
+      <TextBlock Text="{Binding Subtitle}"
+                 FontSize="12.5" Opacity="0.65"
                  HorizontalAlignment="Center"
                  Margin="0,0,0,4"/>
+
+      <!-- First run: the first account becomes the administrator -->
+      <Border IsVisible="{Binding IsFirstRun}" CornerRadius="9" Padding="12,10"
+              Background="{DynamicResource BrandPrimarySoft}" BorderBrush="{DynamicResource BrandPrimary}" BorderThickness="1">
+        <!-- Runs on one line: whitespace between Run elements renders as extra spaces. -->
+        <TextBlock TextWrapping="Wrap" FontSize="12.5" LineHeight="19"><Run Text="First-time setup" FontWeight="SemiBold"/><Run Text=" — no accounts exist yet. The first account you create becomes the "/><Run Text="administrator" FontWeight="SemiBold"/><Run Text=", with full control over registration, approvals, providers and workspaces."/></TextBlock>
+      </Border>
+
+      <!-- Success (e.g. registered, awaiting approval) — success style, not the error line -->
+      <Border IsVisible="{Binding InfoMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"
+              CornerRadius="9" Padding="12,10" BorderThickness="1"
+              BorderBrush="{DynamicResource StatusPass}">
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Done}" Size="15" Foreground="{DynamicResource StatusPass}" VerticalAlignment="Top"/>
+          <TextBlock Text="{Binding InfoMessage}" TextWrapping="Wrap" MaxWidth="320" FontSize="12.5"
+                     Foreground="{DynamicResource StatusPass}"/>
+        </StackPanel>
+      </Border>
 
       <!-- Email -->
       <StackPanel Spacing="6">
         <TextBlock Text="Email" FontSize="13"/>
-        <TextBox Text="{Binding Email, Mode=TwoWay}"
+        <TextBox x:Name="EmailBox" Text="{Binding Email, Mode=TwoWay}"
                  Watermark="you@example.com"
                  IsEnabled="{Binding !IsBusy}"/>
       </StackPanel>
@@ -30,9 +51,9 @@
       <!-- Password -->
       <StackPanel Spacing="6">
         <TextBlock Text="Password" FontSize="13"/>
-        <TextBox Text="{Binding Password, Mode=TwoWay}"
+        <TextBox x:Name="PasswordBox" Text="{Binding Password, Mode=TwoWay}"
                  PasswordChar="•"
-                 Watermark="Password"
+                 Watermark="{Binding PasswordWatermark}"
                  IsEnabled="{Binding !IsBusy}"/>
       </StackPanel>
 
@@ -42,15 +63,27 @@
                  TextWrapping="Wrap"
                  IsVisible="{Binding ErrorMessage, Converter={x:Static StringConverters.IsNotNullOrEmpty}}"/>
 
+      <!-- First run: create the administrator -->
+      <Button Content="Create administrator account"
+              IsVisible="{Binding IsFirstRun}"
+              HorizontalAlignment="Stretch"
+              HorizontalContentAlignment="Center"
+              Command="{Binding RegisterCommand}"
+              IsEnabled="{Binding !IsBusy}"
+              Background="{DynamicResource BrandPrimary}" Foreground="White"
+              Padding="0,10"/>
+
+      <!-- Normal sign-in -->
       <Button Content="Sign in"
+              IsVisible="{Binding ShowSignIn}"
               HorizontalAlignment="Stretch"
               HorizontalContentAlignment="Center"
               Command="{Binding LoginCommand}"
               IsEnabled="{Binding !IsBusy}"
               Padding="0,10"/>
 
-      <!-- Registration option shown only when open -->
-      <StackPanel Spacing="6" IsVisible="{Binding IsRegistrationOpen}">
+      <!-- Registration option shown only when open (and never on first run) -->
+      <StackPanel Spacing="6" IsVisible="{Binding ShowRegistrationSection}">
         <Separator/>
         <TextBlock Text="Don't have an account?"
                    HorizontalAlignment="Center" Opacity="0.55" FontSize="12"/>
@@ -60,12 +93,17 @@
                 Command="{Binding RegisterCommand}"
                 IsEnabled="{Binding !IsBusy}"
                 Padding="0,8"/>
+        <TextBlock Text="New accounts need administrator approval before first sign-in."
+                   IsVisible="{Binding IsApprovalRequired}"
+                   HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"
+                   Opacity="0.6" FontSize="12"/>
       </StackPanel>
 
-      <!-- Busy indicator -->
-      <ProgressBar IsIndeterminate="True"
-                   IsVisible="{Binding IsBusy}"
-                   Height="3"/>
+      <!-- Busy: what's happening -->
+      <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" IsVisible="{Binding IsBusy}">
+        <ProgressBar IsIndeterminate="True" Width="60" Height="3" VerticalAlignment="Center"/>
+        <TextBlock Text="{Binding BusyLabel}" FontSize="12.5" Opacity="0.7"/>
+      </StackPanel>
 
     </StackPanel>
   </Border>

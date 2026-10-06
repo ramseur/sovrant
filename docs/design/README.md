@@ -325,6 +325,10 @@ Roadmap Phase 140. It takes Rahul Singh's first-run login (his issue #27) and hi
 
 **To check at build time:** the member bubble *Private by default* claims conversations are private unless shared, and that sensitive data is redacted before reaching a model. Confirm both against the real defaults (session privacy, Trust Boundary sanitizer) before shipping that copy.
 
+**Updated at build time (2026-10-05):**
+- **Admin-only areas:** Integrations, Trust Boundary / Governance and Workspaces are admin-only pages, so members now see *Integrations* and *Privacy & governance* described with "Managed by your admin" and **no link** (`.wb.managed`), plus *Projects*. The Welcome page is never a way into an admin page.
+- **Privacy copy:** the check above failed. Conversations are public to teammates in a shared workspace unless marked Private (`is_private` defaults to 0), so the copy is now "Mark a conversation Private and teammates won't see it". Redaction is only mentioned when the Trust Boundary is on.
+
 **Verified:** rendered in headless Edge, on both mocks:
 - **Login:** all four states (buttons, notes, spinner).
 - **Welcome:** admin and member pages (8 bubbles; 5 / 4 checklist rows; no empty icons).

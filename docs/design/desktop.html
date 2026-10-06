@@ -329,6 +329,9 @@
   .wb b{font-size:14px;font-weight:600}
   .wb span{font-size:12.5px;line-height:1.5;color:var(--t2)}
   .wb .go{margin-top:auto;padding-top:4px;font-size:12px;font-weight:600;color:var(--brand)}
+  .wb.managed{cursor:default}
+  .wb.managed:hover{border-color:var(--border);background:var(--card)}
+  .wb .mg{margin-top:auto;padding-top:4px;font-size:11.5px;color:var(--t3)}
   .wcheck{border:1px solid var(--border);border-radius:12px;background:var(--card);padding:18px 20px;display:flex;flex-direction:column;gap:10px}
   .wcheck .hd{display:flex;align-items:center;justify-content:space-between;gap:12px}
   .wcheck h3{margin:0;font-size:15px;font-weight:600}
@@ -1092,11 +1095,17 @@ function welcomePageHTML(){
     ['team','Teams & Swarms','Put agents to work together: in sequence, in parallel, or as a swarm.','Open Orchestration'],
     ['workflow','Workflows','Plan multi-step work, review the plan, then let it run on a schedule.','Open Workflows'],
     ['knowledge','Knowledge','Skills, code templates, memory and documents your agents draw on.','Open Knowledge'],
-    ['integrations','Integrations','Connect MCP servers and platforms so agents can work in your tools.','Open Integrations'],
-    admin?['trust','Trust Boundary & Governance','Redact sensitive data before it leaves, and decide which tools agents may use.','Open Trust Boundary']
-         :['private','Private by default','Your conversations stay yours unless you share them, and sensitive data is redacted before it reaches a model.','How privacy works'],
-    admin?['workspace','Workspaces & admin','Choose which providers, integrations and people each workspace gets.','Open Workspaces']
-         :['projects','Projects','Keep the files and conversations for a piece of work together.','Open Projects'],
+    /* Integrations, Trust Boundary / Governance and Workspaces are admin-only pages: members see them
+       described as managed by their admin, with no link (the Welcome page is never a way in). */
+    ...(admin ? [
+      ['integrations','Integrations','Connect MCP servers and platforms so agents can work in your tools.','Open Integrations'],
+      ['trust','Trust Boundary & Governance','Redact sensitive data before it leaves, and decide which tools agents may use.','Open Trust Boundary'],
+      ['workspace','Workspaces & admin','Choose which providers, integrations and people each workspace gets.','Open Workspaces'],
+    ] : [
+      ['projects','Projects','Keep the files and conversations for a piece of work together.','Open Projects'],
+      ['integrations','Integrations','Your admin connects MCP servers and platforms so agents can work in your tools.',null],
+      ['private','Privacy & governance','Mark a conversation Private and teammates won\'t see it. Your admin decides which tools agents may use.',null],
+    ]),
   ];
   const tasks=admin?[
       [true,'Connect a model provider','OpenRouter connected',''],
@@ -1115,7 +1124,7 @@ function welcomePageHTML(){
     <div class="whead"><span class="eyebrow">Sovrant</span>
       <h1>Welcome to Sovrant, ${admin?'Alex':'Sam'}</h1>
       <p>Your private AI workspace. Bring any model, keep your data, and stay in control of what your agents can do.</p></div>
-    <div class="wgrid">${areas.map(([ic,t,d,go])=>`<div class="wb"><div class="wi">${sv(ICONS[ic])}</div><b>${t}</b><span>${d}</span><div class="go">${go} →</div></div>`).join('')}</div>
+    <div class="wgrid">${areas.map(([ic,t,d,go])=>`<div class="wb${go?'':' managed'}"><div class="wi">${sv(ICONS[ic])}</div><b>${t}</b><span>${d}</span>${go?`<div class="go">${go} →</div>`:`<div class="mg">Managed by your admin</div>`}</div>`).join('')}</div>
     <div class="wcheck"><div class="hd"><h3>${admin?'Get started: set up your server':'Get started'}</h3><span class="pg">${done} of ${tasks.length} done</span></div>
       <div class="wbar"><i style="width:${Math.round(done/tasks.length*100)}%"></i></div>
       ${tasks.map(([d,t,sub,act])=>`<div class="wli${d?' done':''}"><span class="ck">${d?sv(ICONS.allow,3):''}</span><span class="tx">${t}<span class="sub2">${sub}</span></span>${d?'<span class="okl">Done</span>':`<span class="act">${act} →</span>`}</div>`).join('')}

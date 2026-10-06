@@ -212,6 +212,7 @@ public partial class App : Application
         services.AddSingleton<UserDashboardViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
         services.AddTransient<LoginViewModel>();
+        services.AddSingleton<WelcomeViewModel>();
         services.AddTransient<AdminViewModel>();
         services.AddTransient<SystemIntegrationsViewModel>();
 
@@ -340,6 +341,8 @@ public partial class App : Application
         window.Closed += (_, _) => Environment.Exit(0);
         MainWindow = window;
         window.Show();
+        // Phase 140: a user's first sign-in (after setup on first run) opens the Welcome page.
+        await mainVm.ShowWelcomeIfFirstTimeAsync().ConfigureAwait(true);
 
         // Background user/workspace seeding (local mode only — server handles this in remote mode).
         if (!isRemote)
@@ -414,6 +417,7 @@ public partial class App : Application
         await Services.GetRequiredService<SettingsViewModel>().HydrateFromStoresAsync().ConfigureAwait(true);
 
         MainWindow?.Show();
+        await Services.GetRequiredService<MainViewModel>().ShowWelcomeIfFirstTimeAsync().ConfigureAwait(true);
     }
 
     /// <summary>

@@ -17,6 +17,11 @@
                         <TextBlock Text="Last updated:" FontSize="11" Foreground="{DynamicResource TextMuted}" />
                         <TextBlock Text="{Binding LastRefreshed}" FontSize="11" Foreground="{DynamicResource TextMuted}" />
                     </StackPanel>
+                    <!-- Phase 140 — reopen the Welcome page -->
+                    <Button Content="Show welcome"
+                            Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ShowWelcomeCommand}"
+                            Padding="12,6" CornerRadius="6"
+                            Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             Padding="12,6" CornerRadius="6"
                             Background="Transparent" Foreground="{DynamicResource TextPrimary}" />

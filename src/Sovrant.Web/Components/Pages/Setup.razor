@@ -157,7 +157,8 @@
                 AuthProvider.BaseUrl = parsed;
             }
 
-            Nav.NavigateTo("/command");
+            // Phase 140: back to the Welcome page, where "Connect a model provider" now shows done.
+            Nav.NavigateTo("/welcome");
         }
         catch (Exception ex) { _status = $"Failed to save: {ex.Message}"; }
         finally { _saving = false; }

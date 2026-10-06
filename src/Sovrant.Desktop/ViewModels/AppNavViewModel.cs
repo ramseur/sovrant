@@ -41,6 +41,9 @@ public partial class AppNavViewModel : ViewModelBase
         ], AdminOnly: true),
     ];
 
+    /// <summary>The rail group a page belongs to ("knowledge" for "Skills"), or null.</summary>
+    public static string? GroupForPage(string page) => s_groups.FirstOrDefault(g => g.Items.Any(i => i.Page == page))?.Key;
+
     private readonly MainViewModel _main;
 
     // null = auto (the current page's group is open); "" = none; otherwise a group key.

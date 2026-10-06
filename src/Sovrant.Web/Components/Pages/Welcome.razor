@@ -1,0 +1,129 @@
+@page "/welcome"
+@layout Layout.WelcomeLayout
+@using Sovrant.Runtime.Config
+@using Sovrant.Runtime.Onboarding
+@inject OnboardingService Onboarding
+@inject WebSessionService Session
+@inject ActiveContextService ActiveContext
+@inject SovrantConfig Config
+@inject NavigationManager Nav
+
+@* Phase 140 — "Welcome to Sovrant": shown once to every user after their first sign-in (and after
+   provider setup on first run); reopen from Dashboard → Show welcome or the chat welcome strip.
+   Role-aware; admin-only areas are described to members but never linked. *@
+<div class="wel-page">
+    <div class="wel-wrap">
+        <div class="wel-head">
+            <span class="wel-eyebrow">Sovrant</span>
+            <h1>Welcome to Sovrant, @DisplayName</h1>
+            <p>@OnboardingService.Tagline</p>
+        </div>
+
+        @if (_content is not null)
+        {
+            <div class="wel-grid">
+                @foreach (var area in _content.Areas)
+                {
+                    var href = LinkFor(area.Target);
+                    if (href is not null)
+                    {
+                        <a class="wel-card" href="@href">
+                            <span class="wel-icon"><SovrantIcon Name="@area.IconName" Size="18" /></span>
+                            <b>@area.Title</b>
+                            <span class="wel-desc">@area.Description</span>
+                            <span class="wel-go">@area.ActionLabel →</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <div class="wel-card managed">
+                            <span class="wel-icon"><SovrantIcon Name="@area.IconName" Size="18" /></span>
+                            <b>@area.Title</b>
+                            <span class="wel-desc">@area.Description</span>
+                            <span class="wel-managed">Managed by your admin</span>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="wel-check">
+                <div class="wel-check-head">
+                    <h3>@(_content.IsAdmin ? "Get started: set up your server" : "Get started")</h3>
+                    <span>@_content.DoneCount of @_content.Checklist.Count done</span>
+                </div>
+                <div class="wel-bar"><i style="width:@(Percent)%"></i></div>
+                @foreach (var item in _content.Checklist)
+                {
+                    <div class="wel-item @(item.Done ? "done" : "")">
+                        <span class="wel-tick">@if (item.Done) { <SovrantIcon Name="@IconNames.Allow" Size="12" StrokeWidth="3" /> }</span>
+                        <span class="wel-item-text">@item.Title<span>@item.Subtitle</span></span>
+                        @if (item.Done)
+                        {
+                            <span class="wel-ok">Done</span>
+                        }
+                        else if (LinkFor(item.Target) is { } itemHref)
+                        {
+                            <a class="wel-act" href="@itemHref">@item.ActionLabel →</a>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="wel-foot">
+            <a class="login-btn wel-start" href="/">Start chatting</a>
+            <a class="wel-skip" href="/dashboard">Skip for now</a>
+            <div class="wel-hint">Reopen any time from Dashboard → Show welcome.</div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private WelcomeContent? _content;
+
+    private string DisplayName
+    {
+        get
+        {
+            var email = Session.Email ?? Session.UserId ?? string.Empty;
+            var at = email.IndexOf('@', StringComparison.Ordinal);
+            return at > 0 ? email[..at] : email;
+        }
+    }
+
+    private int Percent => _content is null || _content.Checklist.Count == 0
+        ? 0
+        : (int)Math.Round(100.0 * _content.DoneCount / _content.Checklist.Count);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userId = Session.UserId;
+        if (string.IsNullOrEmpty(userId))
+            return;
+        _content = await Onboarding.GetWelcomeAsync(userId, Session.IsAdmin, ActiveContext.WorkspaceId);
+        await Onboarding.MarkWelcomeSeenAsync(userId);
+    }
+
+    /// <summary>Web route for a Welcome link; null for admin-only pages when the user isn't an admin.</summary>
+    private string? LinkFor(WelcomeTarget? target)
+    {
+        if (target is not { } t || (OnboardingService.IsAdminOnly(t) && !Session.IsAdmin))
+            return null;
+        return t switch
+        {
+            WelcomeTarget.Chat or WelcomeTarget.Privacy => "/",
+            WelcomeTarget.Agents => "/agents",
+            WelcomeTarget.Orchestration => "/orchestration",
+            WelcomeTarget.Workflows => "/workflows",
+            WelcomeTarget.Knowledge => "/skills",
+            WelcomeTarget.Projects => "/projects",
+            WelcomeTarget.Integrations => "/admin/integrations",
+            WelcomeTarget.TrustBoundary => "/trust-boundary",
+            WelcomeTarget.Workspaces => "/admin/workspaces",
+            WelcomeTarget.Users => "/admin",
+            // First run (nothing configured yet) uses the setup page; afterwards, Admin → Providers.
+            WelcomeTarget.ProviderSetup => string.IsNullOrWhiteSpace(Config.ApiKey) && Config.BaseUrl is null ? "/setup" : "/admin/providers",
+            _ => null,
+        };
+    }
+}
