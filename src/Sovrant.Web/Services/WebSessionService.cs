@@ -83,6 +83,19 @@ public sealed class WebSessionService : IPrincipalAccessor
 
     public void SetWorkspace(string? workspaceId) => _workspaceId = workspaceId;
 
+    /// <summary>
+    /// Phase 145: this tab's sign-in has ended (timed out, revoked, signed out elsewhere). The tab stops
+    /// acting as the user at once, even if the browser ignores the redirect to Sign in.
+    /// </summary>
+    public void MarkSignedOut(string? reason)
+    {
+        SignOut();
+        EndedReason = reason;
+    }
+
+    /// <summary>Why this tab's sign-in ended while it was open, if it did.</summary>
+    public string? EndedReason { get; private set; }
+
     // The circuit's authentication state is set before any component renders, so the task has
     // completed; it isn't available at all for plain HTTP endpoints, which fall back to HttpContext.User.
     private static ClaimsPrincipal? ReadUser(AuthenticationStateProvider? authState)

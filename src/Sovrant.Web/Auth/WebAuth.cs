@@ -54,26 +54,8 @@ public static class WebAuth
     internal static void DeleteCookie(HttpContext ctx) =>
         ctx.Response.Cookies.Delete(CookieName, new CookieOptions { Path = "/", Secure = ctx.Request.IsHttps, SameSite = SameSiteMode.Lax });
 
-    /// <summary>"Chrome on Windows"-style label for a User-Agent, for Admin → Users and the account menu.</summary>
-    public static string DescribeBrowser(string? userAgent)
-    {
-        if (string.IsNullOrWhiteSpace(userAgent)) return "Unknown browser";
-        var ua = userAgent;
-        var browser = ua.Contains("Edg/", StringComparison.Ordinal) ? "Edge"
-            : ua.Contains("OPR/", StringComparison.Ordinal) ? "Opera"
-            : ua.Contains("Firefox/", StringComparison.Ordinal) ? "Firefox"
-            : ua.Contains("Chrome/", StringComparison.Ordinal) || ua.Contains("CriOS/", StringComparison.Ordinal) ? "Chrome"
-            : ua.Contains("Safari/", StringComparison.Ordinal) ? "Safari"
-            : "Browser";
-        var os = ua.Contains("iPhone", StringComparison.Ordinal) ? "iPhone"
-            : ua.Contains("iPad", StringComparison.Ordinal) ? "iPad"
-            : ua.Contains("Android", StringComparison.Ordinal) ? "Android"
-            : ua.Contains("Windows", StringComparison.Ordinal) ? "Windows"
-            : ua.Contains("Mac OS X", StringComparison.Ordinal) ? "Mac"
-            : ua.Contains("Linux", StringComparison.Ordinal) ? "Linux"
-            : null;
-        return os is null ? browser : $"{browser} on {os}";
-    }
+    /// <summary>"Chrome on Windows"-style label for a User-Agent (see <see cref="WebSignInText"/>).</summary>
+    public static string DescribeBrowser(string? userAgent) => WebSignInText.DescribeBrowser(userAgent);
 
     /// <summary>Adds the cookie scheme, the sign-in policy and authorization.</summary>
     public static IServiceCollection AddSovrantWebAuth(this IServiceCollection services)
@@ -125,11 +107,19 @@ public static class WebAuth
 
         // Activity ping from the page (at most once a minute, only after real keyboard/mouse activity):
         // authenticating the request already renewed the idle timeout. 401 tells the page to go to Sign in.
-        app.MapPost("/auth/ping", (HttpContext ctx) => ctx.User.Identity?.IsAuthenticated == true
-            ? Results.NoContent()
-            : Results.Json(new { reason = ctx.Items[SignedOutReasonItem] as string ?? "signedout" }, statusCode: StatusCodes.Status401Unauthorized))
-            .DisableAntiforgery();
+        app.MapPost("/auth/ping", (HttpContext ctx) => SignedInOr401(ctx)).DisableAntiforgery();
+
+        // Status check from the page every minute. Does NOT renew the idle timeout (see WebAuthHandler),
+        // so an idle tab notices when its sign-in has ended and goes to Sign in.
+        app.MapGet("/auth/status", (HttpContext ctx) => SignedInOr401(ctx));
     }
+
+    private static IResult SignedInOr401(HttpContext ctx) => ctx.User.Identity?.IsAuthenticated == true
+        ? Results.NoContent()
+        : Results.Json(new { reason = ctx.Items[SignedOutReasonItem] as string ?? "signedout" }, statusCode: StatusCodes.Status401Unauthorized);
+
+    /// <summary>Requests that check the sign-in without counting as activity.</summary>
+    internal static bool IsPassiveCheck(HttpRequest request) => request.Path.StartsWithSegments("/auth/status", StringComparison.OrdinalIgnoreCase);
 
     private static async Task<IResult> SignInAsync(HttpContext ctx, string userId, bool remember,
         IWebSignInService signIns, WebSignInPolicy policy, IServiceProvider services)
@@ -197,7 +187,7 @@ internal sealed class WebAuthHandler(
         if (string.IsNullOrEmpty(token))
             return AuthenticateResult.NoResult();
 
-        var check = await signIns.CheckAsync(token, policy, touch: true, Context.RequestAborted).ConfigureAwait(false);
+        var check = await signIns.CheckAsync(token, policy, touch: !WebAuth.IsPassiveCheck(Request), Context.RequestAborted).ConfigureAwait(false);
         if (check.IsValid && check.SignIn is not null && check.Role is not null)
             return AuthenticateResult.Success(new AuthenticationTicket(WebAuth.ToPrincipal(check.SignIn, check.Role), WebAuth.Scheme));
 

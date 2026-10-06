@@ -118,3 +118,39 @@ document.addEventListener('dragstart', function (e) {
         e.dataTransfer.effectAllowed = 'move';
     }
 }, true);
+
+// Phase 145 — keep this browser's sign-in alive while you're actually using it, and notice when it
+// ends. Clicks inside the app travel over Blazor's WebSocket, which doesn't renew the sign-in cookie,
+// so real keyboard/mouse/touch activity sends /auth/ping (at most once a minute). Every minute the
+// page also asks /auth/status (which does not renew) so an idle or revoked tab goes to Sign in.
+window.sovrantSignIn = {
+    _last: 0,
+    _started: false,
+    start: function () {
+        if (this._started) return;
+        this._started = true;
+        const self = this;
+        self._last = Date.now();
+        const onActivity = function () {
+            const now = Date.now();
+            if (now - self._last < 60000) return;
+            self._last = now;
+            self._check('/auth/ping', 'POST');
+        };
+        ['keydown', 'mousedown', 'touchstart', 'wheel'].forEach(function (e) {
+            document.addEventListener(e, onActivity, { passive: true, capture: true });
+        });
+        setInterval(function () { self._check('/auth/status', 'GET'); }, 60000);
+    },
+    _check: function (url, method) {
+        fetch(url, { method: method, credentials: 'same-origin', cache: 'no-store' })
+            .then(function (r) {
+                if (r.status !== 401) return;
+                return r.json().catch(function () { return {}; }).then(function (j) {
+                    const reason = j && j.reason && j.reason !== 'signedout' ? '?reason=' + encodeURIComponent(j.reason) : '';
+                    location.href = '/login' + reason;
+                });
+            })
+            .catch(function () { /* offline or restarting: try again next time */ });
+    }
+};

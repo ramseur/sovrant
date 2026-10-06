@@ -8,6 +8,7 @@
 @inject ITokenService TokenService
 @inject WebSessionService Session
 @inject NavigationManager Nav
+@inject IServiceProvider Services
 
 <div class="settings-page">
     <div class="diag-header">
@@ -73,9 +74,47 @@
                                 <div class="memory-meta">
                                     <span class="text-muted text-sm">@u.UserId</span>
                                     <span class="text-muted text-sm">joined @u.CreatedAt.LocalDateTime.ToString("d")</span>
+                                    @if (SignInsEnabled)
+                                    {
+                                        <span class="text-muted text-sm">@SignedInText(u)</span>
+                                    }
                                 </div>
+                                @if (_expanded.Contains(u.UserId) && SignInsOf(u).Count > 0)
+                                {
+                                    @* Phase 145 — every browser this person is signed in on, with Revoke. *@
+                                    <div class="signin-table">
+                                        <table>
+                                            <thead><tr><th>Browser</th><th>Last active</th><th>Expires</th><th></th></tr></thead>
+                                            <tbody>
+                                                @foreach (var si in SignInsOf(u))
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <div class="signin-dev">
+                                                                @Sovrant.Web.Auth.WebAuth.DescribeBrowser(si.UserAgent)
+                                                                @if (si.SignInId == Session.SignInId)
+                                                                {
+                                                                    <span class="signin-this">This browser</span>
+                                                                }
+                                                            </div>
+                                                            <div class="signin-meta">@SignInMeta(si)</div>
+                                                        </td>
+                                                        <td>@Ago(si.LastActiveAt)</td>
+                                                        <td>@ExpiresText(si)</td>
+                                                        <td style="text-align:right"><button class="btn btn-sm" @onclick="() => RevokeSignInAsync(si)">Revoke</button></td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
                             </div>
                             <div class="memory-actions">
+                                @if (SignInsEnabled && SignInsOf(u).Count > 0)
+                                {
+                                    <button class="btn btn-sm" @onclick="() => ToggleSignIns(u.UserId)">@(_expanded.Contains(u.UserId) ? "Hide sign-ins" : "Sign-ins")</button>
+                                    <button class="btn btn-sm" @onclick="() => SignOutEverywhereAsync(u)">Sign out everywhere</button>
+                                }
                                 @if (u.Status == "pending")
                                 {
                                     <button class="btn btn-sm btn-primary" @onclick="() => ApproveAsync(u.UserId)">Approve</button>
@@ -201,12 +240,73 @@
         try
         {
             _users = (await UserService.ListAsync().ConfigureAwait(false)).ToList();
+            await LoadSignInsAsync().ConfigureAwait(false);
             FilterUsers();
             _registrationOpen = await IdentityService.IsRegistrationOpenAsync().ConfigureAwait(false);
             _approvalRequired = await IdentityService.IsApprovalRequiredAsync().ConfigureAwait(false);
         }
         catch (Exception ex) { _error = $"Load failed: {ex.Message}"; }
         finally { _isLoading = false; }
+    }
+
+    // ── Phase 145: where each person is signed in ─────────────────────────────
+    private Sovrant.Runtime.Auth.IWebSignInService? _signInService;
+    private Sovrant.Runtime.Auth.WebSignInPolicy? _policy;
+    private Dictionary<string, List<Sovrant.Runtime.Auth.WebSignIn>> _signIns = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
+
+    private bool SignInsEnabled => _signInService is not null && _policy is not null;
+
+    private async Task LoadSignInsAsync()
+    {
+        _signInService ??= Services.GetService<Sovrant.Runtime.Auth.IWebSignInService>();
+        _policy ??= Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicy>();
+        if (!SignInsEnabled) return;
+        var all = await _signInService!.ListAllActiveAsync(_policy!).ConfigureAwait(false);
+        _signIns = all.GroupBy(s => s.UserId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+    }
+
+    private List<Sovrant.Runtime.Auth.WebSignIn> SignInsOf(User u) => _signIns.TryGetValue(u.UserId, out var l) ? l : [];
+
+    private string SignedInText(User u) => u.Status == "pending" ? "awaiting approval"
+        : SignInsOf(u).Count switch { 0 => "not signed in", 1 => "signed in on 1 browser", var n => $"signed in on {n} browsers" };
+
+    private string SignInMeta(Sovrant.Runtime.Auth.WebSignIn si) =>
+        $"{si.IpAddress ?? "unknown IP"} · signed in {si.CreatedAt.LocalDateTime:g}"
+        + (si.Remember ? $" · kept {(int)Math.Round(_policy!.RememberLifetime.TotalDays)} days" : string.Empty);
+
+    private string ExpiresText(Sovrant.Runtime.Auth.WebSignIn si) =>
+        si.Remember ? si.ExpiresAt.LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture)
+        : _policy!.IdleTimeout == TimeSpan.FromHours(1) ? "1 h idle" : $"{(int)_policy.IdleTimeout.TotalMinutes} min idle";
+
+    private void ToggleSignIns(string userId)
+    {
+        if (!_expanded.Remove(userId)) _expanded.Add(userId);
+    }
+
+    private async Task RevokeSignInAsync(Sovrant.Runtime.Auth.WebSignIn si)
+    {
+        if (!SignInsEnabled) return;
+        await _signInService!.RevokeAsync(si.SignInId, Sovrant.Runtime.Auth.WebSignInRevokeReasons.Admin).ConfigureAwait(false);
+        _status = $"Signed {si.UserId} out of {Sovrant.Web.Auth.WebAuth.DescribeBrowser(si.UserAgent)}.";
+        await LoadSignInsAsync().ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SignOutEverywhereAsync(User u)
+    {
+        if (!SignInsEnabled) return;
+        var n = await _signInService!.RevokeAllAsync(u.UserId, Sovrant.Runtime.Auth.WebSignInRevokeReasons.Admin).ConfigureAwait(false);
+        _status = $"Signed {u.Email ?? u.UserId} out of {n} {(n == 1 ? "browser" : "browsers")}.";
+        await LoadSignInsAsync().ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string Ago(DateTimeOffset t)
+    {
+        var d = DateTimeOffset.UtcNow - t;
+        return d.TotalMinutes < 1 ? "Just now" : d.TotalMinutes < 60 ? $"{(int)d.TotalMinutes} min ago"
+            : d.TotalHours < 24 ? $"{(int)d.TotalHours} h ago" : t.LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture);
     }
 
     private void FilterUsers()

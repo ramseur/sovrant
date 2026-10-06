@@ -50,6 +50,31 @@ public sealed record WebSignIn(
     DateTimeOffset LastActiveAt,
     DateTimeOffset ExpiresAt);
 
+/// <summary>Display text for sign-ins, shared by Web and Desktop admin pages.</summary>
+public static class WebSignInText
+{
+    /// <summary>"Chrome on Windows"-style label for a User-Agent, for Admin → Users and the account menu.</summary>
+    public static string DescribeBrowser(string? userAgent)
+    {
+        if (string.IsNullOrWhiteSpace(userAgent)) return "Unknown browser";
+        var ua = userAgent;
+        var browser = ua.Contains("Edg/", StringComparison.Ordinal) ? "Edge"
+            : ua.Contains("OPR/", StringComparison.Ordinal) ? "Opera"
+            : ua.Contains("Firefox/", StringComparison.Ordinal) ? "Firefox"
+            : ua.Contains("Chrome/", StringComparison.Ordinal) || ua.Contains("CriOS/", StringComparison.Ordinal) ? "Chrome"
+            : ua.Contains("Safari/", StringComparison.Ordinal) ? "Safari"
+            : "Browser";
+        var os = ua.Contains("iPhone", StringComparison.Ordinal) ? "iPhone"
+            : ua.Contains("iPad", StringComparison.Ordinal) ? "iPad"
+            : ua.Contains("Android", StringComparison.Ordinal) ? "Android"
+            : ua.Contains("Windows", StringComparison.Ordinal) ? "Windows"
+            : ua.Contains("Mac OS X", StringComparison.Ordinal) ? "Mac"
+            : ua.Contains("Linux", StringComparison.Ordinal) ? "Linux"
+            : null;
+        return os is null ? browser : $"{browser} on {os}";
+    }
+}
+
 /// <summary>Why a presented sign-in token isn't valid (or <see cref="Valid"/>).</summary>
 public enum WebSignInStatus { Valid, Unknown, TimedOut, Revoked }
 
@@ -79,8 +104,17 @@ public interface IWebSignInService
     /// </summary>
     Task<WebSignInCheck> CheckAsync(string token, WebSignInPolicy policy, bool touch, CancellationToken ct = default);
 
+    /// <summary>
+    /// Checks a sign-in by its id without recording activity: an open Web tab uses this to notice that
+    /// its sign-in has ended (timed out, revoked, or signed out in another tab).
+    /// </summary>
+    Task<WebSignInCheck> CheckByIdAsync(string signInId, WebSignInPolicy policy, CancellationToken ct = default);
+
     /// <summary>A person's active (not revoked, not expired) sign-ins, most recently active first.</summary>
     Task<IReadOnlyList<WebSignIn>> ListActiveAsync(string userId, WebSignInPolicy policy, CancellationToken ct = default);
+
+    /// <summary>Everyone's active sign-ins in one query (Admin → Users), most recently active first.</summary>
+    Task<IReadOnlyList<WebSignIn>> ListAllActiveAsync(WebSignInPolicy policy, CancellationToken ct = default);
 
     /// <summary>Ends one sign-in. Returns false if it didn't exist or had already ended.</summary>
     Task<bool> RevokeAsync(string signInId, string reason, CancellationToken ct = default);
@@ -93,6 +127,9 @@ internal sealed class SqliteWebSignInService(ISqliteConnectionFactory connection
 {
     private const string TokenPrefix = "sws_";
     private const string Columns = "s.sign_in_id, s.user_id, s.remember, s.user_agent, s.ip_address, s.created_at, s.last_active_at, s.expires_at";
+    private const string CheckSelect = "SELECT " + Columns + ", s.revoked_at, s.revoked_reason, u.role, u.status FROM web_sign_ins s INNER JOIN users u ON u.user_id = s.user_id ";
+    private const string CheckByTokenSql = CheckSelect + "WHERE s.token_hash = $key";
+    private const string CheckByIdSql = CheckSelect + "WHERE s.sign_in_id = $key";
     private static readonly TimeSpan TouchInterval = TimeSpan.FromMinutes(1);
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
@@ -131,12 +168,24 @@ internal sealed class SqliteWebSignInService(ISqliteConnectionFactory connection
         return (signIn, token);
     }
 
-    public async Task<WebSignInCheck> CheckAsync(string token, WebSignInPolicy policy, bool touch, CancellationToken ct = default)
+    public Task<WebSignInCheck> CheckAsync(string token, WebSignInPolicy policy, bool touch, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(policy);
         if (string.IsNullOrEmpty(token) || !token.StartsWith(TokenPrefix, StringComparison.Ordinal))
-            return new WebSignInCheck(WebSignInStatus.Unknown);
+            return Task.FromResult(new WebSignInCheck(WebSignInStatus.Unknown));
+        return CheckCoreAsync(byId: false, Hash(token), policy, touch, ct);
+    }
 
+    public Task<WebSignInCheck> CheckByIdAsync(string signInId, WebSignInPolicy policy, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        return string.IsNullOrEmpty(signInId)
+            ? Task.FromResult(new WebSignInCheck(WebSignInStatus.Unknown))
+            : CheckCoreAsync(byId: true, signInId, policy, touch: false, ct);
+    }
+
+    private async Task<WebSignInCheck> CheckCoreAsync(bool byId, string key, WebSignInPolicy policy, bool touch, CancellationToken ct)
+    {
         using var connection = connectionFactory.CreateConnection();
         WebSignIn signIn;
         string role, userStatus;
@@ -144,12 +193,11 @@ internal sealed class SqliteWebSignInService(ISqliteConnectionFactory connection
         bool revoked;
         using (var cmd = connection.CreateCommand())
         {
-            cmd.CommandText = "SELECT " + Columns + """
-                , s.revoked_at, s.revoked_reason, u.role, u.status
-                FROM web_sign_ins s INNER JOIN users u ON u.user_id = s.user_id
-                WHERE s.token_hash = $hash
-                """;
-            cmd.Parameters.AddWithValue("$hash", Hash(token));
+            if (byId)
+                cmd.CommandText = CheckByIdSql;
+            else
+                cmd.CommandText = CheckByTokenSql;
+            cmd.Parameters.AddWithValue("$key", key);
             using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
             if (!await reader.ReadAsync(ct).ConfigureAwait(false))
                 return new WebSignInCheck(WebSignInStatus.Unknown);
@@ -189,6 +237,24 @@ internal sealed class SqliteWebSignInService(ISqliteConnectionFactory connection
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT " + Columns + " FROM web_sign_ins s WHERE s.user_id = $uid AND s.revoked_at IS NULL ORDER BY s.last_active_at DESC";
         cmd.Parameters.AddWithValue("$uid", userId);
+        var now = _clock.GetUtcNow();
+        var list = new List<WebSignIn>();
+        using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
+        while (await reader.ReadAsync(ct).ConfigureAwait(false))
+        {
+            var s = Read(reader);
+            if (!IsExpired(s, policy, now))
+                list.Add(s);
+        }
+        return list;
+    }
+
+    public async Task<IReadOnlyList<WebSignIn>> ListAllActiveAsync(WebSignInPolicy policy, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT " + Columns + " FROM web_sign_ins s WHERE s.revoked_at IS NULL ORDER BY s.last_active_at DESC";
         var now = _clock.GetUtcNow();
         var list = new List<WebSignIn>();
         using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);

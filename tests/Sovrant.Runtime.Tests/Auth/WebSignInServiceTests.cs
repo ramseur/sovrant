@@ -117,6 +117,34 @@ public sealed class WebSignInServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task An_Open_Tab_Can_Check_Its_Sign_In_Without_Counting_As_Activity()
+    {
+        var (signIn, token) = await _signIns.CreateAsync("sam@example.com", remember: false, null, null, Policy);
+
+        _clock.Advance(TimeSpan.FromMinutes(50));
+        Assert.True((await _signIns.CheckByIdAsync(signIn.SignInId, Policy)).IsValid); // a status check, not activity
+        _clock.Advance(TimeSpan.FromMinutes(11));
+        Assert.Equal(WebSignInStatus.TimedOut, (await _signIns.CheckByIdAsync(signIn.SignInId, Policy)).Status);
+        Assert.Equal(WebSignInStatus.TimedOut, (await _signIns.CheckAsync(token, Policy, touch: true)).Status);
+        Assert.Equal(WebSignInStatus.Unknown, (await _signIns.CheckByIdAsync("wsi-nope", Policy)).Status);
+    }
+
+    [Fact]
+    public async Task Admins_See_Everyones_Active_Sign_Ins_In_One_List()
+    {
+        await _signIns.CreateAsync("sam@example.com", false, "Chrome on Windows", null, Policy);
+        var (gone, _) = await _signIns.CreateAsync("sam@example.com", false, "Firefox on Linux", null, Policy);
+        await _signIns.CreateAsync("admin@example.com", true, "Edge on Windows", null, Policy);
+        await _signIns.RevokeAsync(gone.SignInId, WebSignInRevokeReasons.SignOut);
+
+        var all = await _signIns.ListAllActiveAsync(Policy);
+        Assert.Equal(2, all.Count);
+        Assert.DoesNotContain(all, s => s.SignInId == gone.SignInId);
+        Assert.Equal("Chrome on Windows", WebSignInText.DescribeBrowser("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"));
+        Assert.Equal("Safari on iPhone", WebSignInText.DescribeBrowser("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1"));
+    }
+
+    [Fact]
     public void Limits_Come_From_The_Environment()
     {
         var env = new Dictionary<string, string>

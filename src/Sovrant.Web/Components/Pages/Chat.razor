@@ -552,6 +552,12 @@
     {
         var text = _inputText.Trim();
         if (string.IsNullOrEmpty(text) || _isSending) return;
+        // Phase 145: a tab whose sign-in has ended can't start work as that user.
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo(Session.EndedReason is { } why ? $"/login?reason={why}" : "/login", forceLoad: true);
+            return;
+        }
 
         _inputText = string.Empty;
         await ResetTextareaHeight();

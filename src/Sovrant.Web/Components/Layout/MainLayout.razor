@@ -27,9 +27,33 @@
             </div>
         }
 
+        @if (_acctOpen && !Program.IsRemoteMode)
+        {
+            @* Phase 145 — account menu: who you are, how long this browser stays signed in, sign out here or everywhere. *@
+            <div class="acct-scrim" @onclick="() => _acctOpen = false"></div>
+            <div class="acct-menu" role="menu">
+                <div class="acct-head">
+                    <div class="rail-footer-avatar">@_userInitial</div>
+                    <div>
+                        <div class="acct-name">@_userName</div>
+                        <div class="acct-email">@Session.Email · @(Session.IsAdmin ? "Admin" : "Member")</div>
+                    </div>
+                </div>
+                <div class="acct-body">
+                    @((MarkupString)_acctLifetime)<br />Signed in on @_acctBrowsers @(_acctBrowsers == 1 ? "browser" : "browsers").
+                </div>
+                <button class="acct-item" role="menuitem" @onclick='() => { _acctOpen = false; Nav.NavigateTo("/settings"); }'>Settings</button>
+                <form class="signout-form" method="post" action="/auth/logout">
+                    <AntiforgeryToken />
+                    <button class="acct-item" role="menuitem" type="submit">Sign out</button>
+                    <button class="acct-item" role="menuitem" type="submit" name="scope" value="all">Sign out of all browsers</button>
+                </form>
+            </div>
+        }
         <div class="rail-footer">
-            <button class="rail-footer-user" title="Settings"
-                    @onclick='() => Nav.NavigateTo("/settings")'>
+            <button class="rail-footer-user @(_acctOpen ? "open" : "")" title="@(Program.IsRemoteMode ? "Settings" : "Account")"
+                    aria-haspopup="@(Program.IsRemoteMode ? "false" : "menu")" aria-expanded="@_acctOpen"
+                    @onclick="OnFooterClick">
                 <div class="rail-footer-avatar">@_userInitial</div>
                 <div class="rail-footer-info">
                     <div class="rail-footer-name">@_userName</div>
@@ -39,15 +63,7 @@
                     }
                 </div>
             </button>
-            @if (!Program.IsRemoteMode)
-            {
-                @* Phase 145: sign-out posts to /auth/logout, which ends this browser's sign-in and clears its cookie. *@
-                <form class="signout-form" method="post" action="/auth/logout">
-                    <AntiforgeryToken />
-                    <button class="rail-footer-settings" type="submit" title="Sign out">&#x21AA;</button>
-                </form>
-            }
-            else
+            @if (Program.IsRemoteMode)
             {
                 <button class="rail-footer-settings" title="Sign out" @onclick="LogoutAsync">&#x21AA;</button>
             }
@@ -65,6 +81,7 @@
 @code {
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
+    [Inject] private IServiceProvider Services { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.ActiveContextService ActiveContext { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
     [Inject] private Sovrant.Runtime.Onboarding.OnboardingService Onboarding { get; set; } = default!;
@@ -115,7 +132,43 @@
         {
             _dotNetRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("sovrantInterop.registerCtrlK", _dotNetRef);
+            if (Session.IsCookieSignIn)
+            {
+                await JS.InvokeVoidAsync("sovrantSignIn.start");
+                _ = WatchSignInAsync(_signInWatch.Token);
+            }
         }
+    }
+
+    /// <summary>
+    /// Phase 145: once a minute, check this tab's sign-in on the server. If it ended (idle timeout,
+    /// 12-hour limit, revoked, signed out in another tab) the tab stops acting as the user at once
+    /// and goes to Sign in, even if the browser-side check didn't run.
+    /// </summary>
+    private async Task WatchSignInAsync(CancellationToken ct)
+    {
+        var signIns = Services.GetService<Sovrant.Runtime.Auth.IWebSignInService>();
+        var policy = Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicy>();
+        if (signIns is null || policy is null || Session.SignInId is null) return;
+        using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                var check = await signIns.CheckByIdAsync(Session.SignInId, policy, ct);
+                if (check.IsValid) continue;
+                var reason = check.Status switch
+                {
+                    Sovrant.Runtime.Auth.WebSignInStatus.TimedOut => Sovrant.Web.Auth.WebAuth.ReasonTimedOut,
+                    Sovrant.Runtime.Auth.WebSignInStatus.Revoked when check.RevokedReason == Sovrant.Runtime.Auth.WebSignInRevokeReasons.Admin => Sovrant.Web.Auth.WebAuth.ReasonRevoked,
+                    _ => null,
+                };
+                Session.MarkSignedOut(reason);
+                await InvokeAsync(() => Nav.NavigateTo(reason is null ? "/login" : $"/login?reason={reason}", forceLoad: true));
+                return;
+            }
+        }
+        catch (OperationCanceledException) { /* tab closed */ }
     }
 
     [JSInvokable]
@@ -138,6 +191,47 @@
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChanged;
+        _signInWatch.Cancel();
+        _signInWatch.Dispose();
         _dotNetRef?.Dispose();
     }
+
+    private readonly CancellationTokenSource _signInWatch = new();
+
+    // ── Phase 145 account menu ──────────────────────────────────────────────
+    private bool _acctOpen;
+    private string _acctLifetime = string.Empty;
+    private int _acctBrowsers = 1;
+
+    private async Task OnFooterClick()
+    {
+        if (Program.IsRemoteMode) { Nav.NavigateTo("/settings"); return; }
+        _acctOpen = !_acctOpen;
+        if (_acctOpen) await LoadAccountAsync();
+    }
+
+    private async Task LoadAccountAsync()
+    {
+        var signIns = Services.GetService<Sovrant.Runtime.Auth.IWebSignInService>();
+        var policy = Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicy>();
+        if (signIns is null || policy is null || Session.UserId is null) return;
+        var mine = await signIns.ListActiveAsync(Session.UserId, policy);
+        _acctBrowsers = Math.Max(1, mine.Count);
+        var current = mine.FirstOrDefault(s => s.SignInId == Session.SignInId);
+        _acctLifetime = AccountLifetime(current, policy);
+    }
+
+    internal static string AccountLifetime(Sovrant.Runtime.Auth.WebSignIn? s, Sovrant.Runtime.Auth.WebSignInPolicy policy)
+    {
+        if (s is { Remember: true })
+            return $"<b>Kept signed in for {(int)Math.Round(policy.RememberLifetime.TotalDays)} days</b> on this browser (until {s.ExpiresAt:d MMM}). You chose \"Keep me signed in\".";
+        var idle = policy.IdleTimeout == TimeSpan.FromHours(1) ? "1 hour" : $"{(int)policy.IdleTimeout.TotalMinutes} minutes";
+        var since = s is null ? string.Empty : $" Signed in {Ago(DateTimeOffset.UtcNow - s.CreatedAt)}.";
+        return $"<b>Signed out after {idle} idle</b>, renewed while you're active ({policy.AbsoluteLifetime.TotalHours:0.#} hours at most).{since}";
+    }
+
+    private static string Ago(TimeSpan t) =>
+        t.TotalMinutes < 1 ? "just now"
+        : t.TotalMinutes < 60 ? $"{(int)t.TotalMinutes} min ago"
+        : $"{(int)t.TotalHours} h {t.Minutes} min ago";
 }

@@ -185,6 +185,50 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <!-- Phase 145 — who is signed in on Web (same database), one row per browser -->
+                <StackPanel Spacing="6" Margin="0,12,0,0" IsVisible="{Binding HasWebSignIns}">
+                    <TextBlock Text="Signed in on Web" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <ItemsControl ItemsSource="{Binding WebSignIns}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:WebSignInRow">
+                                <Border Padding="14,8" CornerRadius="10" Margin="0,0,0,6"
+                                        Background="{DynamicResource SurfaceMuted}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding LastActive}" FontSize="12" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextSecondary}" Width="80" />
+                                            <TextBlock Text="{Binding Expires}" FontSize="12" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextSecondary}" Width="70" />
+                                            <Button Content="Revoke"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).RevokeWebSignInCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="10,5" CornerRadius="6" FontSize="12"
+                                                    Background="{DynamicResource SurfaceMuted}" Foreground="{DynamicResource TextPrimary}" />
+                                            <Button Content="Sign out everywhere"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).SignOutWebEverywhereCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="10,5" CornerRadius="6" FontSize="12"
+                                                    Background="{DynamicResource SurfaceMuted}" Foreground="{DynamicResource TextPrimary}" />
+                                        </StackPanel>
+                                        <StackPanel Spacing="2">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding UserId}" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}" />
+                                                <TextBlock Text="{Binding Browser}" FontSize="13"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Meta}" FontSize="11" TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->

@@ -105,8 +105,9 @@ public partial class AdminViewModel : ViewModelBase
     public AdminViewModel(IIdentityService identity, IUserService users, IPrincipalAccessor principal,
         IWorkspaceService workspaces, ActiveContextViewModel activeContext,
         IWorkspaceSettingsStore wsSettings, IProviderProfileStore profileStore,
-        IMcpServerStore mcpServerStore)
+        IMcpServerStore mcpServerStore, IWebSignInService? webSignIns = null)
     {
+        _webSignIns = webSignIns;
         _identity = identity;
         _users = users;
         _principal = principal;
@@ -131,6 +132,7 @@ public partial class AdminViewModel : ViewModelBase
                 ActiveUsers.Add(u);
             RegistrationOpen = await _identity.IsRegistrationOpenAsync().ConfigureAwait(true);
             ApprovalRequired = await _identity.IsApprovalRequiredAsync().ConfigureAwait(true);
+            await LoadWebSignInsAsync().ConfigureAwait(true);
 
             AdminWorkspaces.Clear();
             var allWs = await _workspaces.ListAllAsync().ConfigureAwait(true);
@@ -142,6 +144,45 @@ public partial class AdminViewModel : ViewModelBase
     }
 
     partial void OnUserFilterChanged(string value) => ApplyFilter();
+
+    // ── Phase 145: who is signed in on Web (same database), with Revoke ───────────
+    private readonly IWebSignInService? _webSignIns;
+    private readonly WebSignInPolicy _webPolicy = WebSignInPolicy.FromEnvironment(Environment.GetEnvironmentVariable);
+
+    /// <summary>Every browser signed in to Sovrant Web, one row each.</summary>
+    public ObservableCollection<WebSignInRow> WebSignIns { get; } = [];
+
+    [ObservableProperty]
+    private bool _hasWebSignIns;
+
+    private async Task LoadWebSignInsAsync()
+    {
+        WebSignIns.Clear();
+        if (_webSignIns is not null)
+        {
+            foreach (var s in await _webSignIns.ListAllActiveAsync(_webPolicy).ConfigureAwait(true))
+                WebSignIns.Add(WebSignInRow.From(s, _webPolicy));
+        }
+        HasWebSignIns = WebSignIns.Count > 0;
+    }
+
+    [RelayCommand]
+    private async Task RevokeWebSignInAsync(WebSignInRow row)
+    {
+        if (_webSignIns is null) return;
+        await _webSignIns.RevokeAsync(row.SignInId, WebSignInRevokeReasons.Admin).ConfigureAwait(true);
+        Status = $"Signed {row.UserId} out of {row.Browser}.";
+        await LoadWebSignInsAsync().ConfigureAwait(true);
+    }
+
+    [RelayCommand]
+    private async Task SignOutWebEverywhereAsync(WebSignInRow row)
+    {
+        if (_webSignIns is null) return;
+        var n = await _webSignIns.RevokeAllAsync(row.UserId, WebSignInRevokeReasons.Admin).ConfigureAwait(true);
+        Status = $"Signed {row.UserId} out of {n} {(n == 1 ? "browser" : "browsers")}.";
+        await LoadWebSignInsAsync().ConfigureAwait(true);
+    }
 
     private void ApplyFilter()
     {
@@ -409,3 +450,19 @@ public partial class AdminViewModel : ViewModelBase
 public sealed record WorkspaceProviderProfile(string ProfileId, string Name, string ProviderKind, string BaseUrl, string CredentialId);
 
 public sealed record ConfigWorkspaceMemberRow(string UserId, string DisplayName, string Email, WorkspaceRole Role);
+
+/// <summary>Phase 145 — one browser signed in to Sovrant Web, for Desktop's Admin → Users.</summary>
+public sealed record WebSignInRow(string SignInId, string UserId, string Browser, string Meta, string LastActive, string Expires)
+{
+    public static WebSignInRow From(WebSignIn s, WebSignInPolicy policy)
+    {
+        var ago = DateTimeOffset.UtcNow - s.LastActiveAt;
+        var lastActive = ago.TotalMinutes < 1 ? "Just now" : ago.TotalMinutes < 60 ? $"{(int)ago.TotalMinutes} min ago"
+            : ago.TotalHours < 24 ? $"{(int)ago.TotalHours} h ago" : s.LastActiveAt.LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture);
+        var expires = s.Remember ? s.ExpiresAt.LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture)
+            : policy.IdleTimeout == TimeSpan.FromHours(1) ? "1 h idle" : $"{(int)policy.IdleTimeout.TotalMinutes} min idle";
+        var meta = $"{s.IpAddress ?? "unknown IP"} · signed in {s.CreatedAt.LocalDateTime.ToString("g", System.Globalization.CultureInfo.CurrentCulture)}"
+            + (s.Remember ? $" · kept {(int)Math.Round(policy.RememberLifetime.TotalDays)} days" : string.Empty);
+        return new WebSignInRow(s.SignInId, s.UserId, WebSignInText.DescribeBrowser(s.UserAgent), meta, lastActive, expires);
+    }
+}
