@@ -78,6 +78,12 @@ public static class WorkspaceSettingsKeys
     /// <summary>JSON-encoded array of regex patterns identifying secrets in tool output.</summary>
     public const string GovernanceSecretPatterns = "governance.secret_patterns";
 
+    /// <summary>
+    /// Whether members (non-admins) may use file and shell tools on a shared Web server (bool).
+    /// Default false. Phase 145 stopgap; see <c>HostToolAccess</c>.
+    /// </summary>
+    public const string GovernanceMemberFileTools = "governance.member_file_tools";
+
     /// <summary>Master switch for the trust boundary pipeline (bool). Default false (opt-in).</summary>
     public const string TrustBoundaryEnabled = "trustboundary.enabled";
 

@@ -14,6 +14,10 @@ public partial class GovernanceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _auditLogEnabled;
 
+    /// <summary>Phase 145 stopgap: members may use file and shell tools on a shared Web server.</summary>
+    [ObservableProperty]
+    private bool _memberFileToolsEnabled;
+
     [ObservableProperty]
     private string _newBlockedCommand = string.Empty;
 
@@ -101,12 +105,20 @@ public partial class GovernanceViewModel : ViewModelBase
         SaveConfig();
     }
 
+    [RelayCommand]
+    private void ToggleMemberFileTools()
+    {
+        MemberFileToolsEnabled = !MemberFileToolsEnabled;
+        SaveConfig();
+    }
+
     private void LoadConfig()
     {
         var config = GovernanceConfig.Load(_settings);
 
         GovernanceLevel = config.Level.ToString();
         AuditLogEnabled = config.AuditLog;
+        MemberFileToolsEnabled = config.MemberFileTools;
 
         BlockedCommands.Clear();
         foreach (var cmd in config.BlockedCommands)
@@ -138,6 +150,7 @@ public partial class GovernanceViewModel : ViewModelBase
                     : GovernanceLevel.Equals("PERMISSIVE", StringComparison.OrdinalIgnoreCase) ? "permissive"
                     : "standard",
                 AuditLog = AuditLogEnabled,
+                MemberFileTools = MemberFileToolsEnabled,
             };
 
             foreach (var cmd in BlockedCommands)

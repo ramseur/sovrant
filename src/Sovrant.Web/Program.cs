@@ -153,6 +153,9 @@ public static class Program
             var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);
             var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
             builder.Services.AddSingleton<IPermissionPolicy>(permissionPolicy);
+            // Phase 145 stopgap: Web is shared, so members can't use file/shell tools unless an
+            // admin allows it (Governance). Desktop and the CLI don't register this.
+            builder.Services.AddSingleton<Sovrant.Runtime.Tools.IHostToolPolicy, Sovrant.Runtime.Tools.MemberHostToolPolicy>();
             builder.Services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
             builder.Services.AddSingleton(config);
             var confirmationHandler = new BlazorConfirmationHandler();
@@ -177,9 +180,8 @@ public static class Program
             await app.Services.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
                 .InitializeAsync().ConfigureAwait(false);
 
-            // Restore a previously stored session token from the local credential store.
-            // Validates via GET /v1/auth/me on the remote server; redirects to /login if missing/invalid.
-            await TryRestoreWebRemoteSessionAsync(app.Services, webSession).ConfigureAwait(false);
+            // No sign-in survives a restart: everyone signs in again (see ForgetStoredWebSignInAsync).
+            await ForgetStoredWebSignInAsync(app.Services).ConfigureAwait(false);
         }
         else
         {
@@ -191,9 +193,8 @@ public static class Program
             await app.Services.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
                 .InitializeAsync().ConfigureAwait(false);
 
-            // Attempt to restore a stored session token before serving any request.
-            // If valid, MainLayout will render normally; otherwise it redirects to /login.
-            await TryRestoreWebSessionAsync(app.Services, webSession).ConfigureAwait(false);
+            // No sign-in survives a restart: everyone signs in again (see ForgetStoredWebSignInAsync).
+            await ForgetStoredWebSignInAsync(app.Services).ConfigureAwait(false);
         }
 
         // Forwarded headers first, so HTTPS redirection and links see the client's scheme/host.
@@ -299,59 +300,21 @@ public static class Program
 
     internal static void SetUserId(string userId) => SovrantUserId = userId;
 
-    private static async Task TryRestoreWebRemoteSessionAsync(IServiceProvider services, WebSessionService session)
+    /// <summary>
+    /// Earlier versions saved the last Web sign-in token and restored it at startup for the whole
+    /// process, so after a restart any visitor was signed in as that user without a password.
+    /// Web no longer saves the token; this deletes one left behind by an older version.
+    /// Phase 145 replaces process-wide sign-in with a per-browser cookie.
+    /// </summary>
+    private static async Task ForgetStoredWebSignInAsync(IServiceProvider services)
     {
         try
         {
-            var store = services.GetRequiredService<ICredentialStore>();
-            var token = await store.RetrieveAsync(StoredWebTokenKey).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(token)) return;
-
-            var remoteOptions = services.GetRequiredService<SovrantRemoteOptions>();
-            remoteOptions.ApiToken = token;
-
-            // Validate against the server's /v1/auth/me endpoint.
-            var httpFactory = services.GetRequiredService<IHttpClientFactory>();
-            using var http = httpFactory.CreateClient("SovrantApi");
-            var resp = await http.GetAsync(new Uri("/v1/auth/me", UriKind.Relative)).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode) return;
-
-            var json = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            var userId = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetString() : null;
-            var role = doc.RootElement.TryGetProperty("role", out var r) ? r.GetString() : "user";
-            if (string.IsNullOrEmpty(userId)) return;
-
-            session.SignIn(userId, role ?? "user");
-            SovrantUserId = userId;
+            await services.GetRequiredService<ICredentialStore>().DeleteAsync(StoredWebTokenKey).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // Ignore restore errors — user will be redirected to login.
-        }
-    }
-
-    private static async Task TryRestoreWebSessionAsync(IServiceProvider services, WebSessionService session)
-    {
-        try
-        {
-            var store = services.GetRequiredService<ICredentialStore>();
-            var plaintext = await store.RetrieveAsync(StoredWebTokenKey).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(plaintext)) return;
-
-            var tokens = services.GetRequiredService<ITokenService>();
-            var resolved = await tokens.ResolveAsync(plaintext).ConfigureAwait(false);
-            if (resolved is null) return;
-
-            // Hydrate email so the sidebar shows the friendly name, not the raw usr_... ID.
-            var userService = services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
-            var user = await userService.GetAsync(resolved.Token.UserId).ConfigureAwait(false);
-            session.SignIn(resolved.Token.UserId, resolved.Role, user?.Email);
-            SovrantUserId = resolved.Token.UserId;
-        }
-        catch
-        {
-            // Ignore restore errors — user will be redirected to login.
+            await Console.Error.WriteLineAsync($"[web] Could not clear a stored sign-in token: {ex.Message}").ConfigureAwait(false);
         }
     }
 

@@ -190,7 +190,8 @@ public static class ServiceCollectionExtensions
             sp.GetService<Permissions.IPerTurnApprovalCache>(),
             sp.GetService<Mcp.IMcpTrustGate>(),
             sp.GetService<Mcp.McpClientRegistry>(),
-            sp.GetService<Governance.IAuditStore>()));
+            sp.GetService<Governance.IAuditStore>(),
+            sp.GetService<Tools.IHostToolPolicy>()));
 
         // Session store — SQLite primary, optional JSONL dual-write.
         services.AddSingleton<ISessionStore>(sp =>

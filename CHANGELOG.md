@@ -9,6 +9,13 @@ Versions correspond to tags on the `main` branch.
 
 ## [Unreleased]
 
+> **Pre-release notice: Sovrant.Web is single-user per server.** One Web server holds one signed-in user for every browser, so people sharing a Web server see each other's data and act as each other. Use Web for one person at a time, or Sovrant.Server for teams. Per-browser sign-in for teams of 10–1000 is Phase 145 (GitHub #32). The two stopgaps below reduce the risk until then.
+
+### Security
+
+- **Web: no automatic sign-in after a restart.** Web saved the last sign-in token and restored it at startup for the whole server, so after a restart any visitor was signed in as that user without a password. Web no longer saves the token, deletes one left by an older version, and everyone signs in again after a restart. A guard test keeps it that way.
+- **Web and Server: file and shell tools are off for members by default.** On a shared server these tools run as the server's account with no folder limits, so a member's agent could reach other people's files or the database. Members (non-admins) now get a clear refusal; admins are unaffected and can turn member access on under Governance ("Let members use file and shell tools", Web and Desktop) or with `SOVRANT_GOVERNANCE_MEMBER_FILE_TOOLS=true`. Covers files (Read, Write, Edit, Glob, Grep, …), shell (Bash, PowerShell, REPL), worktrees, LSP and code tools that run commands. On Server the check uses each request's real user, carried into work the request starts; scheduled workflows run as their owner. Desktop and the CLI are single-user and unaffected.
+
 ### Fixed
 
 - **Postgres: new conversations were public:** the Postgres store didn't set `is_private` when it created a conversation, so the column default (0, public) applied. New conversations are now private, as on SQLite. Conversations created on Postgres before this fix keep their current setting; owners can make any of them Private from the chat header.

@@ -117,6 +117,8 @@ On first launch, the setup wizard guides you through provider configuration (API
 
 Browser-based UI on port 5100 with the full runtime embedded.
 
+> **⚠ Pre-release: Sovrant.Web is single-user for now.** One Web server holds one signed-in user for every browser, so two people using the same Web server see each other's conversations and act as each other. Use Web for one person at a time, or run **Sovrant.Server** (each request is authenticated separately) for teams. Per-browser sign-in for teams of 10–1000 is [Phase 145](docs/roadmap.md) (GitHub #32). Until then, Web signs everyone out on restart, and members can't use file and shell tools (on Web or Server) unless an admin allows it under Governance.
+
 ```bash
 dotnet run --project src/Sovrant.Web
 # Open http://localhost:5100
@@ -354,7 +356,7 @@ Every conversation is stored in a SQLite database with full-text search via FTS5
 
 ### Multi-User & Workspaces
 
-Sovrant ships as a proper multi-user system, not a single-admin tool.
+Sovrant ships as a proper multi-user system, not a single-admin tool. Sovrant.Server enforces it per request today; **Sovrant.Web is still single-user per server** until Phase 145 (see the warning under [Web App](#web-app)).
 
 - **Login + registration on Web and Desktop.** First-run goes through registration, not a blank config screen. Username + password (hashed in SQLite via V026). Admins can flip **open registration** and **require admin approval** flags from the Admin UI.
 - **Per-user API tokens.** Users issue `svt_*` bearer tokens via `POST /v1/users/me/tokens` (or admins via `POST /v1/users/{id}/tokens`); the plaintext is returned once and never recoverable. Tokens carry an optional expiry, a sliding `last_used_at` for inactivity TTL, and can be revoked at any time.

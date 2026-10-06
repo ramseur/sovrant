@@ -33,6 +33,13 @@ public sealed class GovernanceConfig
     [JsonPropertyName("audit_log")]
     public bool AuditLog { get; set; } = true;
 
+    /// <summary>
+    /// Whether members (non-admins) may use file and shell tools on a shared Web server.
+    /// Off by default: those tools run as the server's account with no path limits (Phase 145 stopgap).
+    /// </summary>
+    [JsonPropertyName("member_file_tools")]
+    public bool MemberFileTools { get; set; }
+
     /// <summary>Parses the configured governance level.</summary>
     [JsonIgnore]
     public GovernanceLevel Level =>
@@ -56,6 +63,10 @@ public sealed class GovernanceConfig
         config.AuditLog = WorkspaceSettingsResolver.ResolveBool(
             settings, WorkspaceSettingsKeys.GovernanceAuditLog,
             "SOVRANT_GOVERNANCE_AUDIT_LOG", fallback: config.AuditLog);
+
+        config.MemberFileTools = WorkspaceSettingsResolver.ResolveBool(
+            settings, WorkspaceSettingsKeys.GovernanceMemberFileTools,
+            "SOVRANT_GOVERNANCE_MEMBER_FILE_TOOLS", fallback: config.MemberFileTools);
 
         ReplaceList(config.BlockedCommands, WorkspaceSettingsResolver.ResolveStringList(
             settings, WorkspaceSettingsKeys.GovernanceBlockedCommands,
@@ -85,6 +96,8 @@ public sealed class GovernanceConfig
             GovernanceLevelName, ct).ConfigureAwait(false);
         await store.SetAsync(ws, WorkspaceSettingsKeys.GovernanceAuditLog,
             AuditLog ? "true" : "false", ct).ConfigureAwait(false);
+        await store.SetAsync(ws, WorkspaceSettingsKeys.GovernanceMemberFileTools,
+            MemberFileTools ? "true" : "false", ct).ConfigureAwait(false);
         await store.SetAsync(ws, WorkspaceSettingsKeys.GovernanceBlockedCommands,
             JsonSerializer.Serialize(BlockedCommands), ct).ConfigureAwait(false);
         await store.SetAsync(ws, WorkspaceSettingsKeys.GovernanceProtectedFiles,

@@ -5,7 +5,6 @@
 @using Sovrant.Runtime.Mcp
 @using Sovrant.Web.Services
 @inject IIdentityService IdentityService
-@inject ICredentialStore CredentialStore
 @inject WebSessionService Session
 @inject NavigationManager Nav
 @inject IServiceProvider Services
@@ -87,7 +86,6 @@
 </div>
 
 @code {
-    private const string StoredTokenKey = "sovrant.web.auth_token";
 
     private string _email = string.Empty;
     private string _password = string.Empty;
@@ -184,7 +182,11 @@
 
     private async Task SignInAndGoAsync(string token, string userId, string? role)
     {
-        await CredentialStore.StoreAsync(StoredTokenKey, token).ConfigureAwait(false);
+        // The sign-in token is not saved: a saved token was restored for every visitor after a
+        // restart (signing them in as the last user). Remote mode keeps it in memory for its API
+        // client only. Phase 145 replaces this with a per-browser sign-in cookie.
+        if (Services.GetService<Sovrant.Client.Remote.SovrantRemoteOptions>() is { } remote)
+            remote.ApiToken = token;
         Program.SetUserId(userId);
         Session.SignIn(userId, role ?? "user", _email.Trim());
         if (!Program.IsRemoteMode)

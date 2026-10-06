@@ -125,6 +125,11 @@ builder.Services.AddSingleton<RequestLoggingMiddleware>();
 
 // IPrincipalAccessor — reads the authenticated caller from HttpContext.Items.
 builder.Services.AddHttpContextAccessor();
+// Phase 145 stopgap: Server is multi-user, so members can't use file/shell tools unless an admin
+// allows it (Governance). The caller comes from the ambient principal set per request / per job.
+builder.Services.AddSingleton<Sovrant.Runtime.Tools.IHostToolPolicy>(sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
+    Sovrant.Runtime.Auth.AmbientPrincipal.Accessor,
+    sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
 builder.Services.AddScoped<Sovrant.Runtime.Auth.IPrincipalAccessor, Sovrant.Server.Auth.HttpContextPrincipalAccessor>();
 
 // CORS — configurable via SOVRANT_CORS_ORIGINS (comma-separated); falls back to localhost defaults.

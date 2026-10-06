@@ -19,6 +19,7 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
     private readonly IMcpTrustGate? _trustGate;
     private readonly McpClientRegistry? _mcpRegistry;
     private readonly IAuditStore? _auditStore;
+    private readonly IHostToolPolicy? _hostToolPolicy;
     private readonly ILogger<DefaultToolExecutor> _logger;
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Executing tool '{ToolName}'")]
@@ -57,7 +58,8 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         IPerTurnApprovalCache? approvalCache = null,
         IMcpTrustGate? trustGate = null,
         McpClientRegistry? mcpRegistry = null,
-        IAuditStore? auditStore = null)
+        IAuditStore? auditStore = null,
+        IHostToolPolicy? hostToolPolicy = null)
     {
         _registry = registry;
         _policy = policy;
@@ -67,6 +69,7 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         _trustGate = trustGate;
         _mcpRegistry = mcpRegistry;
         _auditStore = auditStore;
+        _hostToolPolicy = hostToolPolicy;
         _logger = logger;
     }
 
@@ -76,6 +79,13 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         JsonElement input,
         CancellationToken ct = default)
     {
+        // Host policy first (shared Web servers): refused outright, before any approval prompt.
+        if (_hostToolPolicy?.GetBlockReason(toolName) is { } hostBlock)
+        {
+            LogDenied(_logger, toolName);
+            return new ToolExecutionResult(false, hostBlock, IsError: true);
+        }
+
         var isDestructive = ModeAwarePermissionPolicy.IsDestructive(toolName);
         var decision = _policy.Evaluate(toolName, isDestructive);
 

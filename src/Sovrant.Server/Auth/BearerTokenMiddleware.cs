@@ -54,7 +54,11 @@ internal sealed class BearerTokenMiddleware : IMiddleware
         context.Items[SovrantHttpContextKeys.Role] = resolved.Role;
         context.Items[SovrantHttpContextKeys.AuthMode] = SovrantHttpContextKeys.AuthModeToken;
 
-        await next(context).ConfigureAwait(false);
+        // The caller also becomes the ambient principal, so work this request starts (agents,
+        // swarms, background runs) keeps its user after the response ends. The member tool
+        // policy reads it (Phase 145 stopgap).
+        using (Sovrant.Runtime.Auth.AmbientPrincipal.Push(resolved.Token.UserId, resolved.Role))
+            await next(context).ConfigureAwait(false);
     }
 
     private static Task Reject(HttpContext context)

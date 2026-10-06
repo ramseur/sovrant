@@ -38,6 +38,17 @@
                 <span class="slider"></span>
             </label>
         </div>
+
+        <div class="toggle-card toggle-card-bare">
+            <div>
+                <div class="toggle-title">Let members use file and shell tools</div>
+                <div class="toggle-desc">Read, write, search and run commands on this server. These tools run as the server's account with no folder limits, so a member's agent could reach other people's files. Admins can always use them.</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_memberFileTools" />
+                <span class="slider"></span>
+            </label>
+        </div>
     </div>
 
     <!-- Blocked Commands -->
@@ -101,6 +112,7 @@
 @code {
     private string _level = "standard";
     private bool _auditLog = true;
+    private bool _memberFileTools;
     private List<string> _blockedCommands = [];
     private List<string> _protectedFiles = [];
     private List<string> _secretPatterns = [];
@@ -115,6 +127,7 @@
         var config = GovernanceConfig.Load(SettingsStore);
         _level = config.GovernanceLevelName;
         _auditLog = config.AuditLog;
+        _memberFileTools = config.MemberFileTools;
         _blockedCommands = [.. config.BlockedCommands];
         _protectedFiles = [.. config.ProtectedFiles];
         _secretPatterns = [.. config.SecretPatterns];
@@ -151,7 +164,7 @@
     {
         try
         {
-            var config = new GovernanceConfig { GovernanceLevelName = _level, AuditLog = _auditLog };
+            var config = new GovernanceConfig { GovernanceLevelName = _level, AuditLog = _auditLog, MemberFileTools = _memberFileTools };
             foreach (var c in _blockedCommands) config.BlockedCommands.Add(c);
             foreach (var f in _protectedFiles) config.ProtectedFiles.Add(f);
             foreach (var p in _secretPatterns) config.SecretPatterns.Add(p);
