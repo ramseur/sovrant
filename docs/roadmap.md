@@ -46,6 +46,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | Phase 141 | Home — the Welcome page merged into the Dashboard: greeting + Get started pill, your activity, then the Get started checklist ("All set" + Dismiss when done) and "What Sovrant can do"; Dashboard renamed Home; the full-window Welcome retired ✅ |
 | **v1.5 — done** | Phase 142 | Home tabs — **Overview** (default: greeting, at a glance, Get started beside What Sovrant can do, laid out like the chat welcome; fits a laptop screen) and **Activity** (the stats and activity table); admin checklist reads "Set up Sovrant for your team"; time-neutral greeting; header wrapping fixed ✅ |
 | **2.0 — in progress** | Phase 143 | SDK & API parity — Part A done for 2.0 (workflow plan / edit / cancel routes, MCP status + retry over HTTP, SDK privacy setters, snake_case create fix); Part B planned (the SDK's older gaps, safe retries, SDK checks in CI) |
+| **2.0 — next** | Phase 144 | Environment configuration that works everywhere — every `.env.example` variable honoured from shell, container env or `.env`; provider keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE`); Web port, forwarded headers, `/health` + `/ready` (GitHub #33, #34, #35) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -254,6 +255,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Home — one page to see what's going on and how Sovrant can help: greeting + "Get started" pill, the current dashboard stats and activity, then the role-aware Get started checklist (collapses to "All set" and can be dismissed) and the "What Sovrant can do" cards; Dashboard → Home in the nav (URL unchanged); retires Phase 140's full-window Welcome (Web + Desktop) | Phase 141 | Built |
 | Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Built |
 | SDK & API parity — every app feature reachable over HTTP and the JS SDK. Part A (2.0, built): workflow plan / edit / cancel, MCP status + retry, privacy setters. Part B (planned): ~14 older server routes the SDK never wrapped, idempotent-only SDK retries, workflow left behind when planning fails, SDK type check + tests in CI | Phase 143 | Part A Built · Part B Planned |
+| Environment configuration that works everywhere — every documented env variable works from the shell, container env or `.env` on every app it applies to; provider API keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply every start); Web hosting parity (`SOVRANT_WEB_PORT`, forwarded headers, `/health` + `/ready`); docs match the code | Phase 144 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -13031,3 +13033,66 @@ The 2.0.0 release review compared every server route with every JS SDK call. Fea
 ### Acceptance criteria
 - [x] Part A routes, SDK methods and types; server tests; docs (`docs/server.md`, README)
 - [ ] Part B items 1–5
+
+---
+
+## Phase 144 — Environment Configuration That Works Everywhere
+
+**Status:** Planned (2026-10-06) — plan agreed; code next. No UI, so no design mock.
+
+### Why
+
+A 2026-10-06 audit of every variable in `.env.example` and the README's env table, against the code, found three problems.
+
+**Documented but never read:**
+- `SOVRANT_MODEL`, in `.env.example`.
+- `LLM_API_KEY` (aliases `OPENAI_API_KEY`, `PROVIDER_API_KEY`), `LLM_BASE_URL`, `OPENROUTER_API_KEY`, `BRAVE_API_KEY` and `FIRECRAWL_API_KEY`, in the README. `CredentialConfig.LlmApiKey` is never assigned, so the Server's "seed the key from env" block is dead code.
+
+**Read before `.env` is loaded:**
+- `SOVRANT_USER_ID` on Web and Desktop, read in a static initializer.
+- `SOVRANT_RUNTIME_MODE` on Web.
+
+**Server-only:** `SOVRANT_PORT`, `SOVRANT_CORS_ORIGINS`, `SOVRANT_SESSION_TTL_SECONDS`, `SOVRANT_MAX_SESSIONS` and `SOVRANT_RATE_LIMIT_RPM` have no Web equivalent and aren't labelled as Server-only. Web's port is compiled in (5100).
+
+GitHub issues from a containerised, multi-tenant deployment hit exactly this:
+- **#35:** headless provisioning; the docs claim `LLM_API_KEY` works.
+- **#33:** reverse proxy: no forwarded headers despite `docs/ssl.md` saying they're wired up, and a fixed Web port.
+- **#34:** Sovrant.Web has no `/health`.
+
+**Rule (decided 2026-10-06): every variable in `.env.example` must work** from the shell, container env or a `.env` file, on every app it's documented for.
+
+### Decisions (confirmed 2026-10-06)
+
+| Question | Decision |
+|---|---|
+| Env API keys | **Seed on first boot**: if the encrypted store has no value yet, import the env value once. After that the store wins, so admin edits in the UI stick. **`SOVRANT_ENV_KEYS_OVERRIDE=true`** re-applies env values on every start, for CI and ephemeral containers |
+| `LLM_API_KEY` + `LLM_BASE_URL` + `SOVRANT_MODEL` | On first boot with no provider profile: create one (key encrypted), make it active, and enable it for the default workspace, so a fresh container can chat with no clicks |
+| Other keys | `OPENROUTER_API_KEY`, `BRAVE_API_KEY` and `FIRECRAWL_API_KEY` are seeded into their credential-store entries the same way |
+| `.env` timing | `.env` is loaded before anything reads the environment, on every app |
+| Scope | Server, Web, Desktop (embedded) and CLI, wherever the variable applies; Server-only variables are labelled as such |
+
+### What ships
+1. **Load order:** `.env` loads first on every app (fixes `SOVRANT_USER_ID` and `SOVRANT_RUNTIME_MODE`).
+2. **Env key seeding:** a shared runtime service (`EnvCredentialSeeder`) does the first-boot seeding and the optional override, as described above.
+3. **Web hosting parity:** `SOVRANT_WEB_PORT`; forwarded headers on Web and Server with `SOVRANT_TRUSTED_PROXIES` (loopback by default; IPs, CIDRs, or `*`); `GET /health` (status + DB schema version) and `GET /ready` (503 until the runtime is ready) on Web.
+4. **Docs:**
+   - `.env.example` rewritten: the "keys are never read" banner goes; each variable notes the apps it applies to.
+   - The README env table matches the code.
+   - `docs/ssl.md` corrected.
+   - `docs/config-audit.md` updated.
+5. **Tests:**
+   - Seeding: first boot, no override, override on.
+   - `.env` precedence and timing.
+   - **A guard test that fails if a variable documented in `.env.example` isn't read anywhere in `src/`.**
+
+### Out of scope
+- **Bootstrap file:** MCP servers, workspace MCP enablement and the initial admin stay with Phase 118, which owns the declarative bootstrap file (also GitHub #35's main proposal).
+- **Sub-path hosting:** `SOVRANT_PATH_BASE` is a separate item; the UI uses absolute `/…` links throughout.
+- **Multi-user Web:** stays deferred (GitHub #32).
+
+### Acceptance criteria
+- [ ] Every `.env.example` variable verified working from `.env` and from the process environment, on each app it's documented for
+- [ ] A fresh container with only `LLM_API_KEY` (+ optional `LLM_BASE_URL`, `SOVRANT_MODEL`) can chat after creating the admin account, with no provider setup
+- [ ] `SOVRANT_ENV_KEYS_OVERRIDE=true` re-applies env keys on restart; without it, admin edits survive restarts
+- [ ] Web: `SOVRANT_WEB_PORT`, forwarded headers, `/health`, `/ready`; Server: forwarded headers
+- [ ] Docs match the code; the guard test is in place
