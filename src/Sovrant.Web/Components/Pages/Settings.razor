@@ -65,7 +65,6 @@
 
 @code {
     [Inject] private SovrantConfig Config { get; set; } = default!;
-    [Inject] private IPermissionModeAccessor PermissionModeAccessor { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
@@ -79,8 +78,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _permissionMode = PermissionModeAccessor.Mode.ToString();
-        await Task.CompletedTask;
+        // Phase 145: your own saved mode (it applies to your conversations only), else the install default.
+        var mine = string.IsNullOrEmpty(Session.UserId) ? null : await Prefs.GetAsync(Session.UserId, UserPreferenceKeys.PermissionMode);
+        _permissionMode = Enum.TryParse<PermissionMode>(mine, out var saved) ? saved.ToString() : Config.PermissionMode.ToString();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -95,8 +95,7 @@
 
     private void OnPermissionModeChanged()
     {
-        if (Enum.TryParse<PermissionMode>(_permissionMode, out var mode))
-            PermissionModeAccessor.Mode = mode;
+        // Saved as your preference (SaveAsync); each of your chat turns applies it to that conversation.
         ScheduleAutoSave();
     }
 
@@ -125,9 +124,6 @@
         {
             var userId = Session.UserId!;
             await Prefs.SetAsync(userId, UserPreferenceKeys.PermissionMode, _permissionMode);
-
-            if (Enum.TryParse<PermissionMode>(_permissionMode, out var pm))
-                Config.PermissionMode = pm;
 
             _statusMessage = "Settings saved.";
         }

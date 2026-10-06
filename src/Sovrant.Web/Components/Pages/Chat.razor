@@ -175,6 +175,7 @@
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Preferences.IUserPreferenceStore Prefs { get; set; } = default!;
     [Inject] private Sovrant.Agents.Templates.AgentTemplateRegistry AgentRegistry { get; set; } = default!;
     [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
     [Inject] private Sovrant.Runtime.Governance.IAuditStore AuditStore { get; set; } = default!;
@@ -202,6 +203,8 @@
     private int _nextTurnIndex;
     private string _pageError = string.Empty;
     private string _sessionId = $"session-{Guid.NewGuid():N}";
+    private IDisposable? _approvals;
+    private (string Session, Sovrant.Runtime.Permissions.PermissionMode Mode)? _modeApplied;
     private string? _agentName;
     private string? _agentSystemPrompt;
     // Phase 99 — defaults to private until a stored value (or user toggle)
@@ -265,7 +268,9 @@
 
     protected override void OnInitialized()
     {
-        ConfirmationHandler.ConfirmationRequested += OnConfirmationRequested;
+        // Phase 145: only this tab's user's approvals, preferring the conversation shown here.
+        if (!string.IsNullOrEmpty(Me))
+            _approvals = ConfirmationHandler.Subscribe(Me, () => _sessionId, OnConfirmationRequested);
         ActiveContext.OnChanged += OnContextChanged;
         ActiveContext.OnSessionResume += OnSessionResume;
         ActiveContext.OnNewSession += OnNewSession;
@@ -667,6 +672,18 @@
             var pooled = await SessionPool.GetOrCreateAsync(sessionId, ownerUserId: Me,
                 agentSystemPrompt: _agentSystemPrompt, agentName: _agentName, ct: ct);
 
+            // Phase 145: this user's permission mode applies to this conversation only. Applied when the
+            // conversation starts or the saved preference changes, so EnterPlanMode/ExitPlanMode (which
+            // change just this conversation) aren't undone on the next message.
+            if (!string.IsNullOrEmpty(Me)
+                && Enum.TryParse<Sovrant.Runtime.Permissions.PermissionMode>(
+                       await Prefs.GetAsync(Me, Sovrant.Runtime.Preferences.UserPreferenceKeys.PermissionMode, ct), out var myMode)
+                && (pooled.Config.PermissionMode is null || _modeApplied != (sessionId, myMode)))
+            {
+                pooled.Config.PermissionMode = myMode;
+                _modeApplied = (sessionId, myMode);
+            }
+
             // Sync privacy — the session row may have just been created with the
             // default (is_private = true). If the user already toggled before
             // sending (pre-message toggle), persist that choice now.
@@ -915,7 +932,7 @@
 
     public void Dispose()
     {
-        ConfirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
+        _approvals?.Dispose();
         ActiveContext.OnChanged -= OnContextChanged;
         ActiveContext.OnSessionResume -= OnSessionResume;
         ActiveContext.OnNewSession -= OnNewSession;

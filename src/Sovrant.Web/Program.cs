@@ -161,7 +161,9 @@ public static class Program
 
             // Web-specific overrides
             var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);
-            var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
+            // Phase 145: each conversation is judged by its owner's mode (set per chat turn); config's mode
+            // is only the default for work outside a conversation.
+            var permissionPolicy = new SessionAwarePermissionPolicy(config.PermissionMode);
             builder.Services.AddSingleton<IPermissionPolicy>(permissionPolicy);
             // Phase 145 stopgap: Web is shared, so members can't use file/shell tools unless an
             // admin allows it (Governance). Desktop and the CLI don't register this.
