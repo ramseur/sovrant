@@ -46,7 +46,8 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | Phase 141 | Home — the Welcome page merged into the Dashboard: greeting + Get started pill, your activity, then the Get started checklist ("All set" + Dismiss when done) and "What Sovrant can do"; Dashboard renamed Home; the full-window Welcome retired ✅ |
 | **v1.5 — done** | Phase 142 | Home tabs — **Overview** (default: greeting, at a glance, Get started beside What Sovrant can do, laid out like the chat welcome; fits a laptop screen) and **Activity** (the stats and activity table); admin checklist reads "Set up Sovrant for your team"; time-neutral greeting; header wrapping fixed ✅ |
 | **2.0 — in progress** | Phase 143 | SDK & API parity — Part A done for 2.0 (workflow plan / edit / cancel routes, MCP status + retry over HTTP, SDK privacy setters, snake_case create fix); Part B planned (the SDK's older gaps, safe retries, SDK checks in CI) |
-| **2.0 — next** | Phase 144 | Environment configuration that works everywhere — every `.env.example` variable honoured from shell, container env or `.env`; provider keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE`); Web port, forwarded headers, `/health` + `/ready` (GitHub #33, #34, #35) |
+| **2.0 — done** | Phase 144 | Environment configuration that works everywhere — every `.env.example` variable honoured from shell, container env or `.env`; provider keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE`); Web port, forwarded headers, `/health` + `/ready` (GitHub #33, #34, #35) ✅ |
+| **2.0.1 — next** | Phase 134 | Postgres / Supabase — every known Postgres and Supabase issue in one phase: privacy flag missing from Postgres conversation lists (admins see private titles in Command Center), migrator copies only conversations + credentials, no Postgres test run, split SQLite/Postgres backend, Supabase RLS (was Phase 127) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -238,14 +239,14 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | File system access controls — admin-configurable directory allowlist and blocklist so Sovrant agents can only operate within declared paths; enforced at the tool level before Read/Write/Edit/Glob/Grep/Bash execute; denied accesses logged as `directory_access_denied` governance audit events; Governance page gains a "File System Access" section (Web + Desktop); V044 migration stores rules in `server_settings`; path traversal and symlink escapes are normalised before evaluation | Phase 124 | Planned |
 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator while agent works; clean visual hierarchy where the agent's answer is prominent and tool work is subordinate; consistent Web + Desktop parity | Phase 126 | Implemented — pending UAT |
 | Web search via integrations — move web search out of the hard-coded `WebSearchBackend` enum and into the Integration Gallery; add `IntegrationKind.HttpApi` for direct REST adapters (no MCP process); define `IWebSearchProvider` interface; ship DuckDuckGo (built-in free default), Brave, FireCrawl, Exa, Tavily as `HttpApi` catalog entries; add Crawl4AI as a scraper/fetcher integration; admin picks active search provider from Integrations page; remove `WebSearchBackend` enum; existing MCP search entries remain as alternatives; unit test coverage for WebFetchTool, search providers, and dispatch | Phase 125 | Planned |
-| Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 | Planned |
+| Supabase Row Level Security — enable RLS on all privacy-sensitive tables in the Supabase migration and write policies for the `owner_user_id` model; service-role key retains full unrestricted access (Supabase bypasses RLS for service role by design); anon/authenticated JWT callers are scoped to their own data at the database layer; complements the existing application-layer query filters | Phase 127 → 134 | Merged into Phase 134 |
 | Code generation quality gates — artifact security hardening; `.sln` + `Directory.Build.props` + CI for all 21 templates (every scaffold immediately runnable); `CodeValidateTool` (structural checks, no compiler in PATH); `CodeCreate` `next_steps` + `build_command` + LLM instruction update; `ArtifactManifest` code metadata | Phase 128 | ✅ Done |
 | Missions → Workflows rename and UX review — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover) ✅; dedicated Workflows page with plan review, Plan/Journal tabs, step output + artifact count, and linked chat session ✅; `WorkflowSchedulerService` background execution ✅; goal-first launch form (team picker, run-mode) still open; positioning callout distinguishing AI-driven workflows from trigger-automation (n8n/Zapier/Make); Phase 119 run-modes surfaced in the launch form; plus dual-path execution — Claude Agent SDK dynamic workflow orchestration when a qualifying Claude tier is active, otherwise Sovrant's own workflow engine as the base version (model/tier gate TBD) | Phase 129 | In progress (v1.5) — see Current Focus table above for shipped items |
 | OpenRouter account registration & key issuance in-app — "Get an OpenRouter key" button on the Providers setup flow (Web + Desktop) drives OpenRouter's OAuth PKCE flow (`openrouter.ai/auth`) so a user can register a new OpenRouter account or sign into an existing one and receive a working API key without ever leaving Sovrant or hand-copying a key; reuses the PKCE code-challenge/verifier plumbing and loopback callback listener built for Phase 101's MCP OAuth; issued key is written straight into the encrypted keystore and activated as a provider profile like a manually-entered key | Phase 130 | Planned |
 | Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
 | Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
 | Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — Postgres check moved to Phase 134 |
-| Postgres / Supabase backend audit — real Postgres test target (skipped when unavailable), store-by-store parity with the SQLite suites, schema diff V001–V048 vs `PostgresSchema.sql`, split-backend query audit, SQLite→Postgres migrator check; closes Phase 133's open Postgres criterion | Phase 134 | Planned |
+| Postgres / Supabase — the single home for every Postgres and Supabase issue: privacy and missing columns in Postgres conversation lists, migrator completeness, real Postgres test target, store-by-store parity, schema diff V001–V048, split-backend audit, Supabase RLS (was Phase 127); closes Phase 133's open Postgres criterion | Phase 134 | Planned — next (2.0.1) |
 | App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Built |
 | Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Built |
 | Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Built |
@@ -11539,7 +11540,7 @@ Two things to get right before this ships, not after:
 
 ## Phase 127 — Supabase Row Level Security
 
-**Status:** Planned
+**Status:** Merged into **Phase 134 — Postgres / Supabase** (2026-10-06), as its Part C. This section stays as the detailed design.
 
 ### Why
 
@@ -12420,41 +12421,73 @@ UNFILED
 
 ---
 
-## Phase 134 — Postgres / Supabase Backend Audit
+## Phase 134 — Postgres / Supabase
 
-**Status:** Planned (2026-10-02) — SQLite remains the primary, fully verified backend; this phase brings the optional Postgres/Supabase backend (Phase 40C) up to the same standard.
+**Status:** Planned — next (2.0.1). Re-scoped 2026-10-06 as **the single roadmap item for every Postgres and Supabase issue**; Phase 127 (Supabase RLS) is folded in as Part C. SQLite remains the primary, fully verified backend; this phase brings the optional Postgres/Supabase backend (Phase 40C) up to the same standard. **Rule:** any new Postgres or Supabase problem is added to the issue list below, not to a new phase.
 
 ### Why
 
-The Postgres/Supabase backend replaces a subset of stores (sessions, credentials, knowledge, MCP trust rules, attributions, and — since Phase 133 — conversation folders) while everything else stays on SQLite. It has drifted without anyone running it end to end:
+The Postgres/Supabase backend replaces a subset of stores (sessions, credentials, knowledge, MCP trust rules, attributions, and, since Phase 133, conversation folders) while everything else stays on SQLite. Nobody runs it end to end, and every Postgres code path is verified only by compiling. It has drifted:
 
 - `PostgresSessionStore.SearchAsync` selected three columns while its shared row reader read a fourth, so search failed on Postgres (found and fixed during Phase 133, never caught by a test).
-- `PostgresSchema.sql` tracked schema version 43 while the SQLite schema had reached 47.
-- Phase 133's `PostgresSessionFolderStore` follows the same rules as the SQLite store and builds, but has never run against a live database.
-- There is no automated Postgres test run at all — every Postgres code path is verified only by compiling.
+- `PostgresSchema.sql` lagged the SQLite schema (43 vs 47) until it was brought to 48 for 2.0.
+- Phase 133's `PostgresSessionFolderStore` builds but has never run against a live database.
+- On 2026-10-06, checking the privacy copy found three more privacy bugs (below), two of them already shipped in 2.0.0.
+
+### Known issues (found so far)
+
+**Fixed on `development` (2026-10-06, `198135b`, ships in 2.0.1):**
+- [x] **New conversations were public on Postgres:** `PostgresSessionStore.AppendAsync` didn't set `is_private`, so the column default (0) applied. It now inserts `is_private = 1`, matching SQLite.
+- [x] **The SQLite → Postgres migrator dropped privacy:** every migrated conversation became public. It now copies `is_private`.
+
+**Open, in priority order:**
+1. **Privacy: Postgres conversation lists never read `is_private` or `workspace_id`.** `ListWithTitlesAsync` selects `session_id, title, updated_at, user_id, folder_id, agent_name` only, so every listed conversation reports `IsPrivate = false` and no workspace. Effects:
+   - **Admins see private conversation titles** in Command Center, because `ShouldMask` sees "not private". This is a privacy leak.
+   - **Shared conversations never reach teammates' Home → Activity,** because the visibility check needs a workspace.
+   - Privacy shows wrongly anywhere the list drives it.
+   - `labels` and the other Phase 133 fields are missing too.
+   Fix: select and map every field the SQLite list returns, and add a parity test.
+2. **Conversations already public on Postgres:** anything created there before `198135b` is stored public. Owners can set them back to Private; decide whether 2.0.1 needs a one-off "make all private" admin action or release note.
+3. **The migrator is incomplete:** it copies only `sessions` (8 columns: no `workspace_id`, `folder_id`, `agent_name`, `labels`), `session_entries` and `credentials`. Knowledge pages, MCP trust rules, knowledge attributions and conversation folders all live on Postgres under this backend but aren't migrated, so switching an existing install to Postgres loses them.
+4. **No Postgres test run:** see Part A.
+5. **Split backend:** users, workspaces, workflows, agent runs, memory and the rest stay on SQLite under the Postgres backend. So a "Postgres" install still needs a local SQLite file and can't run as several instances. Document it plainly now; decide in Part B what moves.
+6. **Supabase RLS isn't enabled:** see Part C (was Phase 127).
 
 ### What ships
 
+**Part A: Audit and tests**
 1. **A real Postgres test target.** A Testcontainers (or `SOVRANT_TEST_PG` connection-string) fixture so the store tests run against Postgres in CI and locally, skipped cleanly when no Postgres is available.
-2. **Store-by-store parity tests.** Run the existing SQLite store test suites (sessions, credentials, knowledge, trust rules, attributions, conversation folders) against the Postgres implementations, and fix every divergence.
-3. **Schema audit.** Walk V001–V048 against `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/`: every table, column, index, constraint, and default; idempotent re-run on an already-initialised database; correct `sovrant_schema_version`.
-4. **Split-backend audit.** List which stores live on Postgres vs SQLite under the Supabase backend, and check every cross-store query or join (e.g. Phase 133 labels read `workflows`/`agent_runs` from SQLite while sessions are on Postgres) for correctness.
-5. **SQLite → Postgres migrator check** against a copy of a real database, including V043+ rows and Phase 133 folders.
-6. **Supabase specifics:** connection-string handling, RLS interaction (Phase 127), and the `20261002000000_session_folders.sql` migration applied via the Supabase CLI.
+2. **Store-by-store parity tests.** Run the existing SQLite store test suites (sessions, credentials, knowledge, trust rules, attributions, conversation folders) against the Postgres implementations, and fix every divergence (issue 1 first).
+3. **Schema audit.** Walk V001–V048 against `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/`: every table, column, index, constraint and default; idempotent re-run on an initialised database; correct `sovrant_schema_version`.
+4. **SQLite → Postgres migrator:** copy every Postgres-backed table and every column (issue 3), then verify against a copy of a real database, including V043+ rows and Phase 133 folders.
+5. **Supabase specifics:** connection-string handling and the `20261002000000_session_folders.sql` migration applied with the Supabase CLI.
+
+**Part B: Split-backend audit**
+6. List which stores live on Postgres vs SQLite under the Supabase backend, document it in the README / `docs/`, and check every cross-store query or join (e.g. Phase 133 labels read `workflows`/`agent_runs` from SQLite while sessions are on Postgres) for correctness.
+7. Decide which remaining stores move to Postgres, and in what order, so a Postgres install can run without a local SQLite file and as more than one instance.
+
+**Part C: Supabase Row Level Security (was Phase 127)**
+8. Enable RLS on privacy-sensitive tables with `owner_user_id` policies; the service role keeps full access. Full design in the Phase 127 section.
 
 ### Acceptance criteria
 
+- [ ] Issue 1 fixed: Postgres conversation lists return `is_private`, `workspace_id`, `labels` and every other field the SQLite list returns; Command Center masks private Postgres conversations; a parity test covers it
+- [ ] Issue 2 decided and documented in the 2.0.1 CHANGELOG
 - [ ] Postgres test fixture runs locally and in CI; skipped (not failed) when unavailable
 - [ ] Every Postgres-backed store passes the same test suite as its SQLite twin
 - [ ] Schema diff V001–V048 vs `PostgresSchema.sql` is empty (or every difference is documented and intentional)
 - [ ] `PostgresSchema.sql` re-runs cleanly on an initialised database; `sovrant_schema_version` matches the SQLite head
-- [ ] SQLite → Postgres migration verified on a copy of a real database
+- [ ] Migrator copies every Postgres-backed table and column; verified on a copy of a real database
 - [ ] Conversation folders (Phase 133) verified on Postgres: nesting, depth limit, cycle refusal, sibling-name uniqueness, delete-moves-contents-up, ownership 404s
+- [ ] Which stores are on Postgres vs SQLite is documented for admins
+- [ ] Supabase RLS policies in place (Part C)
 
 ### Relationship to other phases
 
-- **Phase 40C** built the backend; **Phase 127** (Supabase RLS) builds on it — this audit should land first or alongside.
-- **Phase 133** left one acceptance criterion open ("same behavior on the SQLite and Postgres folder stores") — closed by this phase.
+- **Phase 40C** built the backend.
+- **Phase 127** (Supabase RLS) is now Part C of this phase.
+- **Phase 133** left one acceptance criterion open ("same behavior on the SQLite and Postgres folder stores"), which this phase closes.
+- **Multi-user Web (GitHub #32)** and multi-instance hosting depend on Part B.
 
 ---
 
