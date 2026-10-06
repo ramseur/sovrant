@@ -73,7 +73,7 @@ public sealed class SqliteToPostgresMigrator(IPostgresConnectionFactory postgres
     {
         using var readCmd = sqlite.CreateCommand();
         readCmd.CommandText = """
-            SELECT session_id, user_id, model, started_at, updated_at, title, mcp_servers
+            SELECT session_id, user_id, model, started_at, updated_at, title, mcp_servers, is_private
             FROM sessions WHERE session_id = $sid
             """;
         readCmd.Parameters.AddWithValue("$sid", sessionId);
@@ -88,12 +88,14 @@ public sealed class SqliteToPostgresMigrator(IPostgresConnectionFactory postgres
         var updatedAt  = reader.GetString(4);
         var title      = await reader.IsDBNullAsync(5, ct).ConfigureAwait(false) ? (object)DBNull.Value : reader.GetString(5);
         var mcpServers = await reader.IsDBNullAsync(6, ct).ConfigureAwait(false) ? (object)DBNull.Value : reader.GetString(6);
+        // Carry privacy over: without it every migrated conversation became public (column default 0).
+        var isPrivate  = await reader.IsDBNullAsync(7, ct).ConfigureAwait(false) ? 1 : (int)reader.GetInt64(7);
 
         using var pg = postgres.CreateConnection();
         using var writeCmd = pg.CreateCommand();
         writeCmd.CommandText = """
-            INSERT INTO sessions (session_id, user_id, model, started_at, updated_at, title, mcp_servers)
-            VALUES ($1,$2,$3,$4,$5,$6,$7)
+            INSERT INTO sessions (session_id, user_id, model, started_at, updated_at, title, mcp_servers, is_private)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
             ON CONFLICT (session_id) DO NOTHING
             """;
         writeCmd.Parameters.AddWithValue(sid);
@@ -103,6 +105,7 @@ public sealed class SqliteToPostgresMigrator(IPostgresConnectionFactory postgres
         writeCmd.Parameters.AddWithValue(updatedAt);
         writeCmd.Parameters.AddWithValue(title);
         writeCmd.Parameters.AddWithValue(mcpServers);
+        writeCmd.Parameters.AddWithValue(isPrivate);
         var rows = await writeCmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
         return rows > 0;
     }

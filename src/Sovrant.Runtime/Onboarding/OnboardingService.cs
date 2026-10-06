@@ -137,11 +137,12 @@ public sealed class OnboardingService(IServiceProvider services)
             .. Shared,
             new(IconNames.Projects, "Projects", "Keep the files and conversations for a piece of work together.", "Open Projects", WelcomeTarget.Projects),
             new(IconNames.Integrations, "Integrations", "Your admin connects MCP servers and platforms so agents can work in your tools.", null, null, AdminManaged: true),
-            // Only claim redaction when the Trust Boundary is on (it's off by default). Activity is visible
-            // to teammates in shared workspaces unless marked Private (V030 defaults is_private to 0).
+            // Only claim redaction when the Trust Boundary is on (it's off by default). New conversations,
+            // agent runs and workflows are created private (is_private = 1); making one Public shows it to
+            // teammates in the same workspace (Home → Activity) and to admins.
             new(IconNames.Private, "Privacy & governance", trustBoundaryOn
-                ? "Mark a conversation Private and teammates won't see it. Sensitive data is redacted before it reaches a model, and your admin decides which tools agents may use."
-                : "Mark a conversation Private and teammates won't see it. Your admin decides which tools agents may use.", null, null, AdminManaged: true),
+                ? "Your conversations are private by default. Make one Public to share it with your workspace. Sensitive data is redacted before it reaches a model, and your admin decides which tools agents may use."
+                : "Your conversations are private by default. Make one Public to share it with your workspace. Your admin decides which tools agents may use.", null, null, AdminManaged: true),
         ];
 
     private static readonly WelcomeArea[] Shared =

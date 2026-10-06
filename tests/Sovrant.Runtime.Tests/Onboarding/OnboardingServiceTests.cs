@@ -7,6 +7,7 @@ using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Onboarding;
 using Sovrant.Runtime.Preferences;
 using Sovrant.Runtime.Providers;
+using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.TrustBoundary;
 
@@ -172,6 +173,21 @@ public sealed class OnboardingServiceTests : IAsyncDisposable
 
         var privacy = welcome.Areas.Single(a => a.IconName == IconNames.Private);
         Assert.Equal(mentionsRedaction, privacy.Description.Contains("redacted", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Privacy_Copy_Matches_The_Real_Default()
+    {
+        // The member copy promises private-by-default; a new conversation must really be stored private,
+        // whichever way it's created (first message, or a title set before the first message).
+        var privacy = OnboardingService.Areas(isAdmin: false, trustBoundaryOn: false).Single(a => a.IconName == IconNames.Private);
+        Assert.Contains("private by default", privacy.Description, StringComparison.Ordinal);
+
+        var sessions = new SqliteSessionStore(_storage);
+        await sessions.AppendAsync("s-first-message", new SessionEntry("e1", DateTimeOffset.UtcNow, "user", "hi"), ownerUserId: "sam");
+        await sessions.SetTitleAsync("s-title-first", "Untitled", ownerUserId: "sam");
+        Assert.True(await sessions.GetIsPrivateAsync("s-first-message"));
+        Assert.True(await sessions.GetIsPrivateAsync("s-title-first"));
     }
 
     private static KnowledgePage Agent(string slug, string tier) =>

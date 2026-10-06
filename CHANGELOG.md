@@ -7,6 +7,17 @@ Versions correspond to tags on the `main` branch.
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Postgres: new conversations were public:** the Postgres store didn't set `is_private` when it created a conversation, so the column default (0, public) applied. New conversations are now private, as on SQLite. Conversations created on Postgres before this fix keep their current setting; owners can make any of them Private from the chat header.
+- **SQLite → Postgres migration made every conversation public:** the migrator didn't copy `is_private`. It does now.
+- **Home said conversations were public by default:** the member "Privacy & governance" card now says "Your conversations are private by default. Make one Public to share it with your workspace." A test checks the copy against the real default.
+- **Web chat privacy tooltip:** "Public" now says it's visible to your workspace and admins (it said admins only).
+
+---
+
 ## [2.0.0] — 2026-10-06
 
 **A major release:** the app (`Directory.Build.props`) and the JS SDK (`@sovrant/sdk`) both move to **2.0.0**, because the Missions → Workflows rename removes the `/v1/missions*` API and the SDK's mission methods (see Breaking changes).

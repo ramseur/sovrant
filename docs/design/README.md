@@ -327,7 +327,8 @@ Roadmap Phase 140. It takes Rahul Singh's first-run login (his issue #27) and hi
 
 **Updated at build time (2026-10-05):**
 - **Admin-only areas:** Integrations, Trust Boundary / Governance and Workspaces are admin-only pages, so members now see *Integrations* and *Privacy & governance* described with "Managed by your admin" and **no link** (`.wb.managed`), plus *Projects*. The Welcome page is never a way into an admin page.
-- **Privacy copy:** the check above failed. Conversations are public to teammates in a shared workspace unless marked Private (`is_private` defaults to 0), so the copy is now "Mark a conversation Private and teammates won't see it". Redaction is only mentioned when the Trust Boundary is on.
+- **Privacy copy:** redaction is only mentioned when the Trust Boundary is on.
+- **Correction (2026-10-06):** the 2026-10-05 note here said conversations are public by default, because the `is_private` column defaults to 0. That was wrong. Every code path that creates a conversation, agent run or workflow writes `is_private = 1`; the column default only covers rows that predate V030. The member copy is now "Your conversations are private by default. Make one Public to share it with your workspace." Public means teammates in the same workspace (Home → Activity) and admins can see it; Private means only you, and admins see a masked "(private)" row in Command Center. The same check found that the Postgres store created new conversations as public, and the SQLite → Postgres migrator dropped privacy; both are fixed.
 
 **Verified:** rendered in headless Edge, on both mocks:
 - **Login:** all four states (buttons, notes, spinner).

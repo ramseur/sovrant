@@ -83,7 +83,7 @@
     <!-- Privacy toggle + token count — sits between messages and input, matching Desktop layout -->
     <div class="chat-bottom-bar">
         <button class="privacy-toggle @(_isPrivate ? "private" : "public")"
-                title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to admins")"
+                title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to your workspace and admins")"
                 @onclick="TogglePrivacyAsync">
             <span class="privacy-icon">
                 @if (_isPrivate)

@@ -14,10 +14,12 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
     {
         using var conn = factory.CreateConnection();
 
+        // New conversations are private by default, matching SqliteSessionStore (the column's
+        // DEFAULT 0 only exists for rows that predate V030).
         using var ensureCmd = conn.CreateCommand();
         ensureCmd.CommandText = $"""
-            INSERT INTO sessions (session_id, user_id, model, started_at, updated_at)
-            VALUES ($1, $2, $3, {UtcNow}, {UtcNow})
+            INSERT INTO sessions (session_id, user_id, model, started_at, updated_at, is_private)
+            VALUES ($1, $2, $3, {UtcNow}, {UtcNow}, 1)
             ON CONFLICT (session_id) DO UPDATE SET updated_at = {UtcNow}
             """;
         ensureCmd.Parameters.AddWithValue(sessionId);
