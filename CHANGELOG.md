@@ -15,6 +15,12 @@ Versions correspond to tags on the `main` branch.
 - **SQLite → Postgres migration made every conversation public:** the migrator didn't copy `is_private`. It does now.
 - **Home said conversations were public by default:** the member "Privacy & governance" card now says "Your conversations are private by default. Make one Public to share it with your workspace." A test checks the copy against the real default.
 - **Web chat privacy tooltip:** "Public" now says it's visible to your workspace and admins (it said admins only).
+- **Desktop chat text overflow (long-open known issue):** no longer reproduces since the Phase 137 chat rebuild. Long URLs, long link text, unbroken words, long inline code and wide table cells all wrap inside the reply; code blocks scroll sideways in their own box. A headless test now guards it.
+
+### Internal
+
+- **Desktop:** all 72 `TextBox.Watermark` uses renamed to `PlaceholderText` (Avalonia 12 marks `Watermark` obsolete). The Desktop build is free of AVLN5001 warnings.
+- **New `Sovrant.Hosting` project:** ASP.NET Core hosting helpers shared by Web and Server only, so Desktop and the CLI don't pull in ASP.NET Core. `ForwardedHeadersSetup` now lives there once instead of being copied into both apps.
 
 ---
 

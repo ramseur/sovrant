@@ -30,7 +30,7 @@
                        FontSize="14"
                        Foreground="{DynamicResource TextPrimary}" />
             <TextBox x:Name="ResponseInput"
-                     Watermark="Type your response..."
+                     PlaceholderText="Type your response..."
                      AcceptsReturn="True"
                      TextWrapping="Wrap"
                      MinHeight="60"

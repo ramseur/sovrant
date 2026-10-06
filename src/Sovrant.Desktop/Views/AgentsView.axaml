@@ -35,7 +35,7 @@
             </DockPanel>
 
             <TextBox Text="{Binding SearchText}"
-                     Watermark="Search agents..."
+                     PlaceholderText="Search agents..."
                      CornerRadius="8" Padding="12,8" />
         </StackPanel>
 
@@ -214,7 +214,7 @@
                                     <TextBlock Text="Run one-shot" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextPrimary}" />
                                     <TextBox Text="{Binding RunPrompt, Mode=TwoWay}"
-                                             Watermark="Describe the task for the agent…"
+                                             PlaceholderText="Describe the task for the agent…"
                                              AcceptsReturn="True" MinHeight="56"
                                              CornerRadius="6" Padding="8,6" />
                                     <StackPanel Orientation="Horizontal" Spacing="12">
@@ -280,7 +280,7 @@
                                 <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextSecondary}" />
                                 <TextBox Text="{Binding EditName, Mode=TwoWay}"
-                                         Watermark="kebab-case-name"
+                                         PlaceholderText="kebab-case-name"
                                          CornerRadius="6" Padding="8,6"
                                          FontFamily="Consolas,Menlo,monospace" />
                             </StackPanel>
@@ -290,7 +290,7 @@
                                 <TextBlock Text="Description" FontSize="12" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextSecondary}" />
                                 <TextBox Text="{Binding EditDescription, Mode=TwoWay}"
-                                         Watermark="Short description (optional)"
+                                         PlaceholderText="Short description (optional)"
                                          CornerRadius="6" Padding="8,6" />
                             </StackPanel>
 
@@ -320,7 +320,7 @@
                                            FontSize="12" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextSecondary}" />
                                 <TextBox Text="{Binding EditTools, Mode=TwoWay}"
-                                         Watermark="read_file, write_file, run_command, …"
+                                         PlaceholderText="read_file, write_file, run_command, …"
                                          CornerRadius="6" Padding="8,6" />
                             </StackPanel>
 
@@ -329,7 +329,7 @@
                                 <TextBlock Text="System Prompt" FontSize="12" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextSecondary}" />
                                 <TextBox Text="{Binding EditPrompt, Mode=TwoWay}"
-                                         Watermark="You are a helpful assistant…"
+                                         PlaceholderText="You are a helpful assistant…"
                                          AcceptsReturn="True" MinHeight="160"
                                          CornerRadius="6" Padding="8,6"
                                          FontFamily="Consolas,Menlo,monospace"

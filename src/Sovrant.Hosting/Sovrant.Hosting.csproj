@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- ASP.NET Core hosting helpers shared by Sovrant.Web and Sovrant.Server only.
+       Kept out of Sovrant.Api / Sovrant.Runtime so Desktop and the CLI don't pull in ASP.NET Core. -->
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+</Project>

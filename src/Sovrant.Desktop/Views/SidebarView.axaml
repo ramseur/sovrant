@@ -159,7 +159,7 @@
                         <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.NewFolder}" Size="16"
                               Foreground="{DynamicResource TextSecondary}" />
                     </Button>
-                    <TextBox Watermark="Search conversations..."
+                    <TextBox PlaceholderText="Search conversations..."
                              Text="{Binding SearchText}"
                              CornerRadius="9"
                              Padding="10,7"

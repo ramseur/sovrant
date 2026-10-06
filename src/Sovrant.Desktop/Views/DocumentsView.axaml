@@ -29,7 +29,7 @@
             </DockPanel>
 
             <TextBox Text="{Binding SearchText}"
-                     Watermark="Search templates..."
+                     PlaceholderText="Search templates..."
                      CornerRadius="8"
                      Padding="12,8" />
         </StackPanel>
@@ -197,7 +197,7 @@
                                              FontFamily="Consolas,Menlo,monospace"
                                              FontSize="12"
                                              MinHeight="160"
-                                             Watermark='Enter JSON satisfying the field schema. Example: {"project_name": "..."}' />
+                                             PlaceholderText='Enter JSON satisfying the field schema. Example: {"project_name": "..."}' />
                                 </StackPanel>
                             </Expander>
 

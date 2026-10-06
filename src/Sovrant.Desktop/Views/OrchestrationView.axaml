@@ -120,14 +120,14 @@
                                     <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextSecondary}" />
                                     <TextBox Text="{Binding CreateName, Mode=TwoWay}"
-                                             Watermark="my-team"
+                                             PlaceholderText="my-team"
                                              CornerRadius="6" Padding="8,6" />
                                 </StackPanel>
                                 <StackPanel Spacing="4">
                                     <TextBlock Text="Description" FontSize="12" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextSecondary}" />
                                     <TextBox Text="{Binding CreateDescription, Mode=TwoWay}"
-                                             Watermark="Optional"
+                                             PlaceholderText="Optional"
                                              CornerRadius="6" Padding="8,6" />
                                 </StackPanel>
                                 <StackPanel Spacing="4">
@@ -206,7 +206,7 @@
                                 <StackPanel Spacing="8"
                                             DataContext="{Binding $parent[UserControl].DataContext}">
                                     <TextBox Text="{Binding RunGoal, Mode=TwoWay}"
-                                             Watermark="Describe the goal or task for this team…"
+                                             PlaceholderText="Describe the goal or task for this team…"
                                              AcceptsReturn="True" MinHeight="60"
                                              CornerRadius="6" Padding="8,6" />
                                     <StackPanel Orientation="Horizontal" Spacing="12">
@@ -385,7 +385,7 @@
                                             <TextBlock Text="Name" FontSize="12" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource TextSecondary}" />
                                             <TextBox Text="{Binding AddMemberName, Mode=TwoWay}"
-                                                     Watermark="member-name"
+                                                     PlaceholderText="member-name"
                                                      CornerRadius="6" Padding="8,6" />
                                         </StackPanel>
                                         <StackPanel Spacing="4">

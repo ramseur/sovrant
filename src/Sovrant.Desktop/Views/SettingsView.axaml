@@ -111,7 +111,7 @@
                                Foreground="{DynamicResource TextSecondary}" />
                     <TextBox Text="{Binding ApiKey}"
                              PasswordChar="*"
-                             Watermark="{Binding ApiKeyWatermark}"
+                             PlaceholderText="{Binding ApiKeyWatermark}"
                              CornerRadius="8"
                              Padding="12,8" />
                 </StackPanel>
@@ -121,7 +121,7 @@
                     <TextBlock Text="Base URL" FontSize="13" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
                     <TextBox Text="{Binding BaseUrl}"
-                             Watermark="https://api.openai.com/v1"
+                             PlaceholderText="https://api.openai.com/v1"
                              CornerRadius="8"
                              Padding="12,8" />
                     <TextBlock Text="Auto-filled when you select a provider. Edit for custom endpoints."
@@ -164,7 +164,7 @@
                         BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
                     <StackPanel Spacing="8">
                         <TextBox Text="{Binding NewProfileName}"
-                                 Watermark="Display name (or leave blank for auto)"
+                                 PlaceholderText="Display name (or leave blank for auto)"
                                  CornerRadius="8" Padding="10,6" FontSize="12" />
                         <Button Content="Add Provider"
                                 Command="{Binding AddProviderCommand}"
@@ -293,7 +293,7 @@
                     <TextBlock Text="Server URL" FontSize="13" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
                     <TextBox Text="{Binding ConnectionServerUrl}"
-                             Watermark="https://my-server:5443 or http://localhost:5200"
+                             PlaceholderText="https://my-server:5443 or http://localhost:5200"
                              CornerRadius="8"
                              Padding="12,8" />
                     <TextBlock Text="The URL of your Sovrant Server instance."

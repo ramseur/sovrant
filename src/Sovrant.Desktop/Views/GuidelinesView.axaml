@@ -25,7 +25,7 @@
                 </StackPanel>
             </DockPanel>
             <TextBox Text="{Binding SearchText}"
-                     Watermark="Search guidelines..."
+                     PlaceholderText="Search guidelines..."
                      CornerRadius="8" Padding="12,8"
                      IsVisible="{Binding !IsEditing}" />
         </StackPanel>

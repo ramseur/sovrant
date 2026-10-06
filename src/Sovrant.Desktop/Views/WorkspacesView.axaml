@@ -37,7 +37,7 @@
                         <TextBlock Text="New Team Workspace" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                         <TextBox Text="{Binding NewWorkspaceName}"
-                                 Watermark="Workspace name"
+                                 PlaceholderText="Workspace name"
                                  FontSize="12" Padding="8,6" CornerRadius="6" />
                         <Button Content="Create"
                                 Command="{Binding CreateWorkspaceCommand}"
@@ -169,7 +169,7 @@
                                         <TextBlock Text="Add Member" FontSize="12" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextPrimary}" />
                                         <TextBox Text="{Binding AddMemberUserId}"
-                                                 Watermark="Email or username"
+                                                 PlaceholderText="Email or username"
                                                  FontSize="12" Padding="8,6" CornerRadius="6" />
                                         <ComboBox ItemsSource="{Binding RoleOptions}"
                                                   SelectedItem="{Binding AddMemberRole}"

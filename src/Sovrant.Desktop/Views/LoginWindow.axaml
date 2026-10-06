@@ -44,7 +44,7 @@
       <StackPanel Spacing="6">
         <TextBlock Text="Email" FontSize="13"/>
         <TextBox x:Name="EmailBox" Text="{Binding Email, Mode=TwoWay}"
-                 Watermark="you@example.com"
+                 PlaceholderText="you@example.com"
                  IsEnabled="{Binding !IsBusy}"/>
       </StackPanel>
 
@@ -53,7 +53,7 @@
         <TextBlock Text="Password" FontSize="13"/>
         <TextBox x:Name="PasswordBox" Text="{Binding Password, Mode=TwoWay}"
                  PasswordChar="•"
-                 Watermark="{Binding PasswordWatermark}"
+                 PlaceholderText="{Binding PasswordWatermark}"
                  IsEnabled="{Binding !IsBusy}"/>
       </StackPanel>
 

@@ -106,7 +106,7 @@
                         <TextBlock Text="{Binding ApiKeyLabel}" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextSecondary}" />
                         <TextBox Text="{Binding ApiKey}"
-                                 Watermark="{Binding ApiKeyWatermark}"
+                                 PlaceholderText="{Binding ApiKeyWatermark}"
                                  PasswordChar="•"
                                  CornerRadius="8"
                                  Padding="10,8" />
@@ -117,7 +117,7 @@
                         <TextBlock Text="Base URL" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextSecondary}" />
                         <TextBox Text="{Binding BaseUrl}"
-                                 Watermark="Auto-filled for known providers"
+                                 PlaceholderText="Auto-filled for known providers"
                                  CornerRadius="8"
                                  Padding="10,8"
                                  FontSize="12" />
@@ -167,7 +167,7 @@
                         <TextBlock Text="Server URL" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextSecondary}" />
                         <TextBox Text="{Binding RemoteServerUrl}"
-                                 Watermark="http://localhost:5200"
+                                 PlaceholderText="http://localhost:5200"
                                  CornerRadius="8"
                                  Padding="10,8" />
                     </StackPanel>

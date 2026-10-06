@@ -38,7 +38,7 @@
                        FontSize="12"
                        Foreground="{DynamicResource TextMuted}" />
             <TextBox x:Name="ConfirmInput"
-                     Watermark="Type to confirm..."
+                     PlaceholderText="Type to confirm..."
                      Padding="10,8"
                      CornerRadius="6"
                      FontSize="13"

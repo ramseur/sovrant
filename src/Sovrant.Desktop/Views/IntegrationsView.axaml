@@ -111,7 +111,7 @@
                        IsVisible="{Binding ActiveTab, Converter={x:Static conv:EqualityToBoolConverter.Instance}, ConverterParameter=connected}">
                 <TextBox DockPanel.Dock="Top"
                          Text="{Binding SearchText}"
-                         Watermark="Search servers..."
+                         PlaceholderText="Search servers..."
                          CornerRadius="8" Padding="12,8" Margin="0,0,0,8" />
                 <ScrollViewer>
                     <StackPanel>
@@ -302,7 +302,7 @@
                                                        FontSize="12" FontWeight="SemiBold"
                                                        Foreground="{DynamicResource TextSecondary}" />
                                             <TextBox Text="{Binding GalleryClientId}"
-                                                     Watermark="Your OAuth app client ID"
+                                                     PlaceholderText="Your OAuth app client ID"
                                                      CornerRadius="6" Padding="10,7" />
                                         </StackPanel>
 
@@ -341,7 +341,7 @@
                                                        Foreground="{DynamicResource TextSecondary}" />
                                             <TextBox Text="{Binding GalleryApiKey}"
                                                      PasswordChar="•"
-                                                     Watermark="Paste your key here"
+                                                     PlaceholderText="Paste your key here"
                                                      CornerRadius="6" Padding="10,7" />
                                         </StackPanel>
 
@@ -412,7 +412,7 @@
                                     <TextBox Text="{Binding NewServerJson}"
                                              AcceptsReturn="True" TextWrapping="Wrap"
                                              MinHeight="180"
-                                             Watermark='Paste mcpServers JSON here…'
+                                             PlaceholderText='Paste mcpServers JSON here…'
                                              FontFamily="Consolas,Menlo,monospace"
                                              FontSize="11" Padding="8,6" CornerRadius="6" />
                                     <TextBlock FontSize="11" Foreground="{DynamicResource TextMuted}"
@@ -427,14 +427,14 @@
                                         <TextBlock Text="Server Name" FontSize="12" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextSecondary}" />
                                         <TextBox Text="{Binding NewServerName}"
-                                                 Watermark="e.g. filesystem"
+                                                 PlaceholderText="e.g. filesystem"
                                                  CornerRadius="6" Padding="10,7" />
                                     </StackPanel>
                                     <StackPanel Spacing="4">
                                         <TextBlock Text="Command" FontSize="12" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextSecondary}" />
                                         <TextBox Text="{Binding NewServerCommand}"
-                                                 Watermark="e.g. npx"
+                                                 PlaceholderText="e.g. npx"
                                                  FontFamily="Consolas,Menlo,monospace"
                                                  CornerRadius="6" Padding="10,7" />
                                     </StackPanel>
@@ -442,7 +442,7 @@
                                         <TextBlock Text="Arguments (space-separated)" FontSize="12" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextSecondary}" />
                                         <TextBox Text="{Binding NewServerArgs}"
-                                                 Watermark="-y @modelcontextprotocol/server-filesystem /tmp"
+                                                 PlaceholderText="-y @modelcontextprotocol/server-filesystem /tmp"
                                                  FontFamily="Consolas,Menlo,monospace"
                                                  CornerRadius="6" Padding="10,7" />
                                     </StackPanel>
@@ -451,7 +451,7 @@
                                                    Foreground="{DynamicResource TextSecondary}" />
                                         <TextBox Text="{Binding NewServerEnvVars}"
                                                  AcceptsReturn="True" MinHeight="72"
-                                                 Watermark="GITHUB_PERSONAL_ACCESS_TOKEN=ghp_..."
+                                                 PlaceholderText="GITHUB_PERSONAL_ACCESS_TOKEN=ghp_..."
                                                  FontFamily="Consolas,Menlo,monospace"
                                                  FontSize="11" Padding="8,6" CornerRadius="6" />
                                     </StackPanel>
@@ -464,14 +464,14 @@
                                         <TextBlock Text="Server Name" FontSize="12" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextSecondary}" />
                                         <TextBox Text="{Binding NewServerName}"
-                                                 Watermark="e.g. my-mcp-server"
+                                                 PlaceholderText="e.g. my-mcp-server"
                                                  CornerRadius="6" Padding="10,7" />
                                     </StackPanel>
                                     <StackPanel Spacing="4">
                                         <TextBlock Text="Endpoint URL" FontSize="12" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextSecondary}" />
                                         <TextBox Text="{Binding NewServerUrl}"
-                                                 Watermark="https://api.example.com/mcp"
+                                                 PlaceholderText="https://api.example.com/mcp"
                                                  CornerRadius="6" Padding="10,7" />
                                     </StackPanel>
                                     <StackPanel Spacing="4">
@@ -479,7 +479,7 @@
                                                    Foreground="{DynamicResource TextSecondary}" />
                                         <TextBox Text="{Binding NewServerBearer}"
                                                  PasswordChar="•"
-                                                 Watermark="Sets Authorization: Bearer …"
+                                                 PlaceholderText="Sets Authorization: Bearer …"
                                                  CornerRadius="6" Padding="10,7" />
                                     </StackPanel>
                                     <StackPanel Spacing="4">
@@ -487,7 +487,7 @@
                                                    Foreground="{DynamicResource TextSecondary}" />
                                         <TextBox Text="{Binding NewServerHeadersJson}"
                                                  AcceptsReturn="True" MinHeight="60"
-                                                 Watermark="{}{&quot;X-My-Header&quot;: &quot;value&quot;}"
+                                                 PlaceholderText="{}{&quot;X-My-Header&quot;: &quot;value&quot;}"
                                                  FontFamily="Consolas,Menlo,monospace"
                                                  FontSize="11" Padding="8,6" CornerRadius="6" />
                                     </StackPanel>
@@ -646,7 +646,7 @@
                                                         </Button>
                                                         <TextBox Grid.Column="2"
                                                                  Text="{Binding Key}"
-                                                                 Watermark="KEY"
+                                                                 PlaceholderText="KEY"
                                                                  FontFamily="Consolas,Menlo,monospace"
                                                                  FontSize="11" CornerRadius="5" Padding="8,5" />
                                                         <TextBlock Grid.Column="3" Text="=" VerticalAlignment="Center"
@@ -654,7 +654,7 @@
                                                                    Foreground="{DynamicResource TextMuted}" FontSize="12" />
                                                         <TextBox Grid.Column="4"
                                                                  Text="{Binding Value}"
-                                                                 Watermark="value"
+                                                                 PlaceholderText="value"
                                                                  FontFamily="Consolas,Menlo,monospace"
                                                                  FontSize="11" CornerRadius="5" Padding="8,5" />
                                                     </Grid>
@@ -755,7 +755,7 @@
                                                     <TextBlock Text="Tool Pattern (glob)" FontSize="11" FontWeight="SemiBold"
                                                                Foreground="{DynamicResource TextSecondary}" />
                                                     <TextBox Text="{Binding NewRulePattern}"
-                                                             Watermark="e.g. delete_* or *_remove"
+                                                             PlaceholderText="e.g. delete_* or *_remove"
                                                              FontFamily="Consolas,Menlo,monospace"
                                                              FontSize="12" CornerRadius="6" Padding="8,6" />
                                                 </StackPanel>
@@ -763,7 +763,7 @@
                                                     <TextBlock Text="Reason (optional)" FontSize="11" FontWeight="SemiBold"
                                                                Foreground="{DynamicResource TextSecondary}" />
                                                     <TextBox Text="{Binding NewRuleReason}"
-                                                             Watermark="e.g. Bulk deletes require manager approval"
+                                                             PlaceholderText="e.g. Bulk deletes require manager approval"
                                                              FontSize="12" CornerRadius="6" Padding="8,6" />
                                                 </StackPanel>
                                                 <StackPanel Grid.Row="2" Grid.Column="0" Spacing="4" Margin="0,0,8,0">

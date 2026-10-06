@@ -30,6 +30,7 @@
     <ProjectReference Include="..\Sovrant.Runtime\Sovrant.Runtime.csproj" />
     <ProjectReference Include="..\Sovrant.Tools\Sovrant.Tools.csproj" />
     <ProjectReference Include="..\Sovrant.Mcp\Sovrant.Mcp.csproj" />
+    <ProjectReference Include="..\Sovrant.Hosting\Sovrant.Hosting.csproj" />
   </ItemGroup>
 
   <ItemGroup>

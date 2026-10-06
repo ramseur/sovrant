@@ -398,7 +398,7 @@
                         <!-- Add member form -->
                         <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto" HorizontalAlignment="Stretch">
                             <TextBox Grid.Column="0" Text="{Binding NewMemberEmail}"
-                                     Watermark="User email or ID"
+                                     PlaceholderText="User email or ID"
                                      CornerRadius="8" Padding="10,6" FontSize="12" Margin="0,0,6,0" />
                             <ComboBox Grid.Column="1" ItemsSource="{Binding MemberRoles}"
                                       SelectedItem="{Binding NewMemberRole}"
@@ -499,7 +499,7 @@
                         <TextBlock Text="New team workspace" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                         <TextBox Text="{Binding NewWorkspaceName}"
-                                 Watermark="Name"
+                                 PlaceholderText="Name"
                                  FontSize="13" Padding="8,6" CornerRadius="6" />
                         <Button Content="Create"
                                 Command="{Binding CreateWorkspaceCommand}"

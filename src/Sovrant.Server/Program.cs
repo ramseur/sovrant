@@ -181,8 +181,8 @@ builder.Services.AddRateLimiter(options =>
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
 // Phase 144 (GitHub #33): behind a reverse proxy, trust X-Forwarded-* from known proxies.
-Sovrant.Server.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
-    Environment.GetEnvironmentVariable(Sovrant.Server.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
+Sovrant.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
+    Environment.GetEnvironmentVariable(Sovrant.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
 
 var app = builder.Build();
 // First in the pipeline, so HTTPS redirection, rate limiting and logging see the real client.

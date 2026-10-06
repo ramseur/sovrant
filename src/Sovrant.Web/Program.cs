@@ -92,8 +92,8 @@ public static class Program
             builder.Services.AddHttpsRedirection(o => o.HttpsPort = webHttpsPort);
 
         // Phase 144 (GitHub #33): behind a reverse proxy, trust X-Forwarded-* from known proxies.
-        Sovrant.Web.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
-            Environment.GetEnvironmentVariable(Sovrant.Web.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
+        Sovrant.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
+            Environment.GetEnvironmentVariable(Sovrant.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
 
         // WebSessionService is a singleton used by all Blazor circuits.
         // For embedded mode it is populated after session restore or login.

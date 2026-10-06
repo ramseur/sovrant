@@ -28,7 +28,7 @@
             </DockPanel>
 
             <TextBox Text="{Binding SearchText}"
-                     Watermark="Search tools..."
+                     PlaceholderText="Search tools..."
                      CornerRadius="8"
                      Padding="12,8" />
         </StackPanel>

@@ -92,7 +92,7 @@
                             <TextBlock Text="Connection String" FontSize="12" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextSecondary}" />
                             <TextBox Text="{Binding PgConnectionUrl}"
-                                     Watermark="Host=localhost;Database=sovrant;Username=postgres;Password=…"
+                                     PlaceholderText="Host=localhost;Database=sovrant;Username=postgres;Password=…"
                                      FontSize="13" CornerRadius="6" Padding="10,8" />
                             <TextBlock Text="Npgsql connection string. The target database must already exist; Sovrant creates its own tables on schema init."
                                        FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
@@ -232,7 +232,7 @@
                             <TextBlock Text="Project URL" FontSize="12" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextSecondary}" />
                             <TextBox Text="{Binding ProjectUrl}"
-                                     Watermark="https://your-project.supabase.co"
+                                     PlaceholderText="https://your-project.supabase.co"
                                      FontSize="13" CornerRadius="6" Padding="10,8" />
                         </StackPanel>
 
@@ -240,7 +240,7 @@
                             <TextBlock Text="Service Role Key" FontSize="12" FontWeight="SemiBold"
                                        Foreground="{DynamicResource TextSecondary}" />
                             <TextBox Text="{Binding ServiceRoleKey}"
-                                     Watermark="eyJ..."
+                                     PlaceholderText="eyJ..."
                                      PasswordChar="•"
                                      FontSize="13" CornerRadius="6" Padding="10,8" />
                             <TextBlock Text="Found in Supabase → Project Settings → API → service_role key."

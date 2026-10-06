@@ -147,7 +147,7 @@
                     <Grid>
                             <TextBox x:Name="InputBox"
                                      Text="{Binding InputText}"
-                                     Watermark="{Binding InputWatermark}"
+                                     PlaceholderText="{Binding InputWatermark}"
                                      AcceptsReturn="True"
                                      TextWrapping="Wrap"
                                      Classes="composer-input"
@@ -213,7 +213,7 @@
                 IsVisible="{Binding IsRememberOpen}">
             <StackPanel Spacing="6">
                 <TextBox Text="{Binding RememberText}"
-                         Watermark="What should I remember? (e.g. Always check tests before committing)"
+                         PlaceholderText="What should I remember? (e.g. Always check tests before committing)"
                          AcceptsReturn="True" MinHeight="48" TextWrapping="Wrap"
                          FontSize="12" />
                 <DockPanel>
