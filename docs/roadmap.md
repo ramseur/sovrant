@@ -12749,7 +12749,7 @@ Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted th
 
 ## Phase 139 — Friendly MCP Connection Errors
 
-**Status:** Planned (2026-10-05) — plan agreed; design mock next (the Integrations badge and the top-bar warning), then code.
+**Status:** Planned (2026-10-05) — plan agreed; design mock done 2026-10-06 (Admin → Platform Integrations: *Connected / Unreachable / Credentials / Top-bar menu*); code next.
 
 ### Why
 
@@ -12780,7 +12780,7 @@ On 2026-10-05 Desktop started during a brief DNS hiccup. `McpToolRegistrar.Regis
 - Health-checking servers that connected fine (only failed connections are retried).
 
 ### Acceptance criteria
-- [ ] Mock updated on both surfaces; parity diff still chrome-only
+- [x] Mock updated on both surfaces; parity diff still chrome-only
 - [ ] Each failure kind maps to its sentence (unit tests); credential errors never auto-retry
 - [ ] A server unreachable at startup reconnects on its own once reachable, and its tools appear without a restart
 - [ ] Console shows one line per failed connection, no stack traces

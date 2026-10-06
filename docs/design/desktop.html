@@ -396,6 +396,27 @@
   .patterns td.n{color:var(--brand);font-weight:600;white-space:nowrap}
   /* Phase 136 — icon vocabulary panel */
   .ctx .chip svg{width:14px;height:14px;flex-shrink:0;color:var(--t2)}
+  /* Phase 139 — friendly MCP connection errors */
+  .mcperr{display:flex;gap:11px;align-items:flex-start;border:1px solid;border-radius:10px;padding:12px 14px;margin:0 0 12px;font-size:12.5px;line-height:1.5}
+  .mcperr.warn{border-color:color-mix(in srgb,var(--warn) 40%,transparent);background:color-mix(in srgb,var(--warn) 9%,transparent)}
+  .mcperr.fail{border-color:color-mix(in srgb,var(--fail) 40%,transparent);background:color-mix(in srgb,var(--fail) 8%,transparent)}
+  .mcperr .ic{display:flex;margin-top:1px} .mcperr .ic svg{width:16px;height:16px}
+  .mcperr.warn .ic{color:var(--warn)} .mcperr.fail .ic{color:var(--fail)}
+  .mcperr .tx{display:flex;flex-direction:column;gap:2px} .mcperr b{font-weight:600;color:var(--t1)} .mcperr .mt{font-size:11.5px;color:var(--t3)}
+  .mcpwrap{position:relative;display:inline-flex}
+  .mcpchip{cursor:pointer} .mcpchip.open{border-color:var(--brand)}
+  .mcpwarn{display:inline-flex} .mcpwarn svg{width:13px!important;height:13px!important}
+  .mcpwarn.warn svg{color:var(--warn)!important} .mcpwarn.fail svg{color:var(--fail)!important}
+  .mcpmenu{position:absolute;top:34px;left:0;z-index:20;width:300px;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.18);padding:6px;font-size:12.5px;color:var(--t1)}
+  .mcpmenu .hd{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);padding:4px 8px 6px}
+  .mcprow{position:relative;display:flex;align-items:center;gap:9px;height:32px;padding:0 8px;border-radius:7px}
+  .mcprow:hover{background:var(--hover)} .mcprow .nm{flex:1;font-family:'JetBrains Mono',monospace;font-size:11.5px} .mcprow .tc{font-size:11.5px}
+  .mcprow .cb{width:15px;height:15px;border-radius:4px;border:1.5px solid var(--t3);display:flex;align-items:center;justify-content:center;color:#fff}
+  .mcprow .cb.on{background:var(--brand);border-color:var(--brand)} .mcprow .cb svg{width:10px!important;height:10px!important;color:#fff!important}
+  .mcprow.bad .nm{color:var(--t2)}
+  .mcprow .tip{position:absolute;right:4px;top:calc(100% + 4px);z-index:1;width:230px;background:var(--t1);color:var(--bg);font-size:11.5px;line-height:1.4;padding:7px 9px;border-radius:7px;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+  .mcpmenu .sep{height:1px;background:var(--border);margin:5px 2px}
+  .mcpmenu .ft{padding:6px 8px;font-size:12px;font-weight:600;color:var(--brand);cursor:pointer}
   .ivnote{font-size:12.5px;color:var(--t2);line-height:1.55;margin:0 0 12px;max-width:92ch}
   .ivh{display:flex;align-items:center;gap:12px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin:18px 0 8px}
   .ivsub{font-size:12px;font-weight:600;color:var(--t2);margin:12px 0 6px}
@@ -711,8 +732,8 @@ const S = {
     note:'Read-only Settings: same rows, a status pip instead of a control. This is where the expired key should have surfaced.'},
   platformint:{g:'admin',p:'Browse',t:'Platform Integrations',url:'/admin/integrations',sub:'1 MCP server',
     acts:[['Add server',1]],
-    items:[{n:'pixellab',mono:1,b:['0 tools'],tag:['Connected','b-ok']}],
-    note:'MCP servers are just another Browse list; the add-form lives in the detail pane.'},
+    items:[{n:'pixellab',mono:1,b:['12 tools'],tag:['Connected','b-ok']},{n:'github',mono:1,b:['26 tools'],tag:['Connected','b-ok']}],
+    note:'MCP servers are just another Browse list; the add-form lives in the detail pane. Phase 139: a server that fails to connect shows Unavailable, one plain sentence saying why, and Retry (toggles above).'},
   systemint:{g:'admin',p:'Browse',t:'System Integrations',url:'/admin/system-integrations',sub:'0 configured',
     acts:[['Add',1]], empty:1,
     note:'Slack, Teams, Discord, webhooks. Empty until one is configured.'},
@@ -745,7 +766,9 @@ function toggleFlyout(){ railFlyout=!railFlyout; document.getElementById('flyBtn
 function toggleRail(){ railOpen=!railOpen; document.getElementById('railBtn').classList.toggle('on',railOpen);
   document.getElementById('railBtn').textContent = railOpen?'Collapse rail':'Expand rail'; render(); }
 function setChatState(v){ chatState=v; render(); }
-let loginState='signin', welcomeRole='admin';
+let loginState='signin', welcomeRole='admin', mcpState='ok', mcpMenu=false;
+function setMcpState(v){ mcpState=v; render(); }
+function toggleMcpMenu(){ mcpMenu=!mcpMenu; render(); }
 function setLoginState(v){ loginState=v; render(); }
 function setWelcomeRole(v){ welcomeRole=v; render(); }
 function setOrchView(v){ orchView=v; render(); }
@@ -814,6 +837,7 @@ function phHTML(s){
 }
 
 function browseHTML(s){
+  if(s.t==='Platform Integrations') s=mcpScreen(s);
   const items=(s.items||[]).map((it,i)=>
     `<div class="item${i===0&&!s.empty?' on':''}"><div class="r1"><span class="nm${it.mono?' mono':''}">${it.n}</span>${it.tag?`<span class="badge ${it.tag[1]}">${it.tag[0]}</span>`:''}</div>
      <div class="meta">${(it.b||[]).map(b=>`<span>${b}</span>`).join('')}</div></div>`).join('');
@@ -824,6 +848,8 @@ function browseHTML(s){
   let detail;
   if(s.t==='Orchestration'){
     detail = orchView==='defaults' ? orchDefaultsHTML() : orchTeamDetailHTML(sel);
+  } else if(s.t==='Platform Integrations'){
+    detail = mcpDetailHTML();
   } else if(s.t==='Workflows'){
     detail = !sel ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick a workflow from the list to see its plan and journal.</div></div>` : workflowDetailHTML(sel);
   } else {
@@ -1138,8 +1164,44 @@ function ctxHTML(s){
   if(!s.g) return '';
   return `<div class="ctx">
     <span class="chip"><span class="dot"></span><span class="mono">gemma-4-31b-it</span><span class="mut">OpenRouter</span></span>
-    <span class="chip">${sv(ICONS.workspace)}Personal</span><span class="chip mut">${sv(ICONS.projects)}No project</span><span class="chip mut">${sv(ICONS.integrations)}Integrations</span>
+    <span class="chip">${sv(ICONS.workspace)}Personal</span><span class="chip mut">${sv(ICONS.projects)}No project</span>${mcpChipHTML()}
   </div>`;
+}
+
+/* Phase 139 — friendly MCP connection errors. One classifier turns a failure into a sentence plus
+   what to do; network failures retry in the background (10 s, 1 min, 5 min), credential errors don't. */
+const MCP_ERR={
+  network:{badge:['Unavailable','b-warn'],cls:'warn',title:'Couldn\u2019t reach api.pixellab.ai',
+    body:'Check your internet connection. Retrying automatically.',meta:'Next attempt in 52 s · attempt 2 of 3',
+    short:'Can\u2019t reach api.pixellab.ai. Retrying automatically.',row:'Unavailable · retrying',acts:[['Retry now',1],['Edit',0]]},
+  auth:{badge:['Unavailable','b-fail'],cls:'fail',title:'PixelLab rejected the credentials',
+    body:'Update the key in its settings below, then retry.',meta:'Not retried automatically: retrying can\u2019t fix a key.',
+    short:'PixelLab rejected the credentials. Update the key in Integrations.',row:'Unavailable · check key',acts:[['Update key',1],['Retry',0]]},
+};
+function mcpScreen(s){
+  if(mcpState==='ok') return s;
+  const e=MCP_ERR[mcpState];
+  return {...s,sub:'2 MCP servers · 1 unavailable',items:[{...s.items[0],b:['0 tools',e.row],tag:e.badge},s.items[1]]};
+}
+function mcpDetailHTML(){
+  const e=MCP_ERR[mcpState];
+  const head=`<div class="dhead"><div style="flex:1"><h3 class="mono">pixellab</h3><div class="dsub">HTTP · https://api.pixellab.ai/mcp</div></div>
+    <span class="badge ${e?e.badge[1]:'b-ok'}" style="margin:0">${e?e.badge[0]:'Connected'}</span></div>`;
+  const alert=e?`<div class="mcperr ${e.cls}"><span class="ic">${sv(ICONS.warning,2)}</span><div class="tx"><b>${e.title}</b><span>${e.body}</span><span class="mt">${e.meta}</span></div></div>
+    <div style="display:flex;gap:8px;margin:0 0 18px">${e.acts.map(([t,p])=>`<button class="btn${p?' pri':''}">${t==='Retry now'||t==='Retry'?sv(ICONS.refresh,2):''}${t}</button>`).join('')}</div>`:'';
+  const tools=e?`<span class="mut">0 — they appear when it reconnects</span>`:'12 (create_character, animate_character, …)';
+  return `${head}${alert}<dl class="kv"><dt>Transport</dt><dd>HTTP</dd><dt>URL</dt><dd>https://api.pixellab.ai/mcp</dd><dt>Credentials</dt><dd>PIXELLAB_API_KEY ••••••3f2a</dd><dt>Tools</dt><dd>${tools}</dd><dt>Workspaces</dt><dd>Personal</dd></dl>
+    ${e?'':`<div style="display:flex;gap:8px;margin-top:16px"><button class="btn">Edit</button><button class="btn">Disconnect</button></div>`}`;
+}
+function mcpChipHTML(){
+  const e=MCP_ERR[mcpState];
+  const chip=`<span class="chip mut mcpchip${mcpMenu?' open':''}" onclick="toggleMcpMenu()">${sv(ICONS.integrations)}${e?'1 active':'2 active'}${e?`<span class="mcpwarn ${e.cls}">${sv(ICONS.warning,2.2)}</span>`:''}${sv(ICONS.dropdown,2)}</span>`;
+  if(!mcpMenu) return chip;
+  const row=(n,on,tools,err)=>`<div class="mcprow${err?' bad':''}"><span class="cb${on?' on':''}">${on?sv(ICONS.allow,3):''}</span><span class="mono nm">${n}</span>
+    ${err?`<span class="mcpwarn ${err.cls}">${sv(ICONS.warning,2.2)}</span><span class="tip">${err.short}</span>`:`<span class="mut tc">${tools}</span>`}</div>`;
+  return `<span class="mcpwrap">${chip}<div class="mcpmenu"><div class="hd">Integrations for this chat</div>
+    ${row('github',true,'26 tools')}${row('pixellab',!e,'12 tools',e)}
+    <div class="sep"></div><div class="ft">Manage integrations →</div></div></span>`;
 }
 
 function render(){
@@ -1156,6 +1218,10 @@ function render(){
   } else if(cur==='login'){
     ct.style.display='flex';
     ct.innerHTML=[['signin','Sign in'],['firstrun','First run'],['approval','Approval'],['working','Working']].map(([k,t])=>`<button class="cbtn${loginState===k?' on':''}" onclick="setLoginState('${k}')">${t}</button>`).join('');
+  } else if(cur==='platformint'){
+    ct.style.display='flex';
+    ct.innerHTML=[['ok','Connected'],['network','Unreachable'],['auth','Credentials']].map(([k,t])=>`<button class="cbtn${mcpState===k?' on':''}" onclick="setMcpState('${k}')">${t}</button>`).join('')
+      +`<button class="cbtn${mcpMenu?' on':''}" onclick="toggleMcpMenu()">Top-bar menu</button>`;
   } else if(cur==='welcome'){
     ct.style.display='flex';
     ct.innerHTML=[['admin','Admin'],['member','Member']].map(([k,t])=>`<button class="cbtn${welcomeRole===k?' on':''}" onclick="setWelcomeRole('${k}')">${t}</button>`).join('');

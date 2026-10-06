@@ -296,7 +296,7 @@ Roadmap Phase 137. The Thread state already had right-aligned brand bubbles, fla
 - **Wide viewport:** the composer box is exactly 760px, with equal margins.
 - **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines.
 
-## Welcome & first-run onboarding (2026-10-05, design-only)
+## Welcome & first-run onboarding (2026-10-05, shipped to code same day)
 
 Roadmap Phase 140. It takes Rahul Singh's first-run login (his issue #27) and his welcome polish (#28) further: one first-run journey, and a welcome that uses the whole window.
 
@@ -335,6 +335,26 @@ Roadmap Phase 140. It takes Rahul Singh's first-run login (his issue #27) and hi
 - **Chat welcome:** 6 suggestions and 6 capability cards; checked at the default and maximized sizes.
 - **Dashboard:** the Show welcome button.
 - **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines.
+
+## Friendly MCP connection errors (2026-10-06, design-only)
+
+Roadmap Phase 139. A server that fails to connect is shown as Unavailable, with one plain sentence saying why and what to do, instead of stack traces in the console. Toggles on Admin → Platform Integrations: *Connected / Unreachable / Credentials*, plus *Top-bar menu*.
+
+**Platform Integrations** (Browse; now two servers, `pixellab` and `github`):
+- **List row:** an **Unavailable** badge, "0 tools", and a short reason ("Unavailable · retrying" or "Unavailable · check key"). The page subtitle reads "2 MCP servers · 1 unavailable".
+- **Detail pane:** the same badge, then an alert box (`warning` icon) with the sentence and what happens next:
+  - *Unreachable* (warn colour): "Couldn't reach api.pixellab.ai. Check your internet connection. Retrying automatically." Meta line "Next attempt in 52 s · attempt 2 of 3". Buttons **Retry now** (primary) and Edit.
+  - *Credentials* (fail colour): "PixelLab rejected the credentials. Update the key in its settings below, then retry." Meta line "Not retried automatically: retrying can't fix a key." Buttons **Update key** (primary) and Retry.
+- **Tools row:** "0 — they appear when it reconnects".
+- **Connected:** unchanged (badge, details, Edit / Disconnect).
+
+**Top bar** (every page with the context bar):
+- **Integrations chip:** the summary ("1 active") gains a small `warning` icon, coloured by kind, whenever a server is unavailable.
+- **Menu:** "Integrations for this chat" lists each server with its checkbox and tool count. An unavailable server is unchecked and shows the `warning` icon, with the short reason as a tooltip on hover (drawn below the row so it never leaves the window). "Manage integrations →" is the footer (admins only in code: the page is admin-only).
+
+**Not shown, by decision:** nothing in chat; the badge and top-bar warning are enough.
+
+**Verified:** rendered in headless Edge on both mocks: all three states (badge, alert title, buttons, list row, chip warning), the menu (rows, tooltip), and the chip warning on Chat. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass (only existing icons: `warning`, `refresh`, `integrations`, `allow`, `dropdown`).
 
 ## Open decisions
 
