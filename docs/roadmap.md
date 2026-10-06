@@ -255,7 +255,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Home — one page to see what's going on and how Sovrant can help: greeting + "Get started" pill, the current dashboard stats and activity, then the role-aware Get started checklist (collapses to "All set" and can be dismissed) and the "What Sovrant can do" cards; Dashboard → Home in the nav (URL unchanged); retires Phase 140's full-window Welcome (Web + Desktop) | Phase 141 | Built |
 | Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Built |
 | SDK & API parity — every app feature reachable over HTTP and the JS SDK. Part A (2.0, built): workflow plan / edit / cancel, MCP status + retry, privacy setters. Part B (planned): ~14 older server routes the SDK never wrapped, idempotent-only SDK retries, workflow left behind when planning fails, SDK type check + tests in CI | Phase 143 | Part A Built · Part B Planned |
-| Environment configuration that works everywhere — every documented env variable works from the shell, container env or `.env` on every app it applies to; provider API keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply every start); Web hosting parity (`SOVRANT_WEB_PORT`, forwarded headers, `/health` + `/ready`); docs match the code | Phase 144 | Planned |
+| Environment configuration that works everywhere — every documented env variable works from the shell, container env or `.env` on every app it applies to; provider API keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply every start); Web hosting parity (`SOVRANT_WEB_PORT`, forwarded headers, `/health` + `/ready`); docs match the code | Phase 144 | Built |
 
 ### v1.0 release polish ✅
 
@@ -13038,7 +13038,7 @@ The 2.0.0 release review compared every server route with every JS SDK call. Fea
 
 ## Phase 144 — Environment Configuration That Works Everywhere
 
-**Status:** Planned (2026-10-06) — plan agreed; code next. No UI, so no design mock.
+**Status:** Built (2026-10-06), not yet released. No UI, so no design mock.
 
 ### Why
 
@@ -13091,8 +13091,8 @@ GitHub issues from a containerised, multi-tenant deployment hit exactly this:
 - **Multi-user Web:** stays deferred (GitHub #32).
 
 ### Acceptance criteria
-- [ ] Every `.env.example` variable verified working from `.env` and from the process environment, on each app it's documented for
-- [ ] A fresh container with only `LLM_API_KEY` (+ optional `LLM_BASE_URL`, `SOVRANT_MODEL`) can chat after creating the admin account, with no provider setup
-- [ ] `SOVRANT_ENV_KEYS_OVERRIDE=true` re-applies env keys on restart; without it, admin edits survive restarts
-- [ ] Web: `SOVRANT_WEB_PORT`, forwarded headers, `/health`, `/ready`; Server: forwarded headers
-- [ ] Docs match the code; the guard test is in place
+- [x] Every `.env.example` variable verified working from `.env` and from the process environment, on each app it's documented for
+- [x] A fresh container with only `LLM_API_KEY` (+ optional `LLM_BASE_URL`, `SOVRANT_MODEL`) can chat after creating the admin account, with no provider setup
+- [x] `SOVRANT_ENV_KEYS_OVERRIDE=true` re-applies env keys on restart; without it, admin edits survive restarts
+- [x] Web: `SOVRANT_WEB_PORT`, forwarded headers, `/health`, `/ready`; Server: forwarded headers
+- [x] Docs match the code; the guard test is in place

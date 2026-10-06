@@ -180,7 +180,13 @@ builder.Services.AddRateLimiter(options =>
 });
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
+// Phase 144 (GitHub #33): behind a reverse proxy, trust X-Forwarded-* from known proxies.
+Sovrant.Server.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
+    Environment.GetEnvironmentVariable(Sovrant.Server.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
+
 var app = builder.Build();
+// First in the pipeline, so HTTPS redirection, rate limiting and logging see the real client.
+app.UseForwardedHeaders();
 
 if (bootstrapConfig.HasTls)
     app.UseHttpsRedirection();
@@ -228,16 +234,7 @@ app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 // Connect MCP servers if configured.
 await app.Services.InitializeRuntimeAsync().ConfigureAwait(false);
 
-// Seed the encrypted credential store with the LLM API key from env if no value
-// is persisted yet. This preserves the env-var bootstrap path while keeping the
-// secret out of MutableServerConfig and the HTTP surface.
-if (!string.IsNullOrEmpty(credentials.LlmApiKey))
-{
-    var credentialStore = app.Services.GetRequiredService<Sovrant.Runtime.Mcp.ICredentialStore>();
-    var existing = await credentialStore.RetrieveAsync(MutableApiKeyAuthProvider.LlmApiKeyCredentialKey).ConfigureAwait(false);
-    if (string.IsNullOrEmpty(existing))
-        await credentialStore.StoreAsync(MutableApiKeyAuthProvider.LlmApiKeyCredentialKey, credentials.LlmApiKey).ConfigureAwait(false);
-}
+// Env API keys (LLM_API_KEY, …) are imported by InitializeRuntimeAsync above (Phase 144).
 
 // Phase 88-C — re-sync MutableServerConfig from SovrantConfig now that
 // InitializeRuntimeAsync's ApplyUserPreferencesAsync has populated it from

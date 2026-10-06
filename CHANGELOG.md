@@ -64,6 +64,11 @@ Workflows that plan and run on their own, a new **Home** page with first-run onb
   - **Workflows:** `POST /v1/workflows/plan` (plan for review without running), `PUT /v1/workflows/{id}/plan` (edit the steps) and `POST /v1/workflows/{id}/cancel`.
   - **MCP status:** `GET /v1/mcp/servers` reports each server's state, a friendly reason and the next automatic retry; `POST /v1/mcp/servers/{name}/retry` (admin).
   - **SDK (`@sovrant/sdk` 2.0.0):** `planWorkflow`, `saveWorkflowPlan`, `cancelWorkflow`, `setWorkflowPrivacy`, `setSessionPrivacy`, `setAgentRunPrivacy` and `retryMcpServer`. `Workflow.status` now includes `awaitingHuman` and `cancelled`, and `Workflow` carries `plan_json`, `is_private` and `completed_at`.
+- **Environment configuration that works everywhere (Phase 144; GitHub #33, #34, #35):**
+  - **Provider keys from the environment:** `LLM_API_KEY` (alias `OPENAI_API_KEY`), `PROVIDER_API_KEY`, `OPENROUTER_API_KEY`, `BRAVE_API_KEY` and `FIRECRAWL_API_KEY` are imported into the encrypted credential store on first boot. After that the stored value wins, so changes made in the UI stick. `SOVRANT_ENV_KEYS_OVERRIDE=true` re-imports them on every start.
+  - **No setup for containers:** with `LLM_API_KEY` set, each signed-up user without a provider gets one for it, enabled for their personal workspace and active. `LLM_BASE_URL` sets its address (otherwise inferred from the key) and `SOVRANT_MODEL` the default model.
+  - **Web hosting:** `SOVRANT_WEB_PORT` (default 5100); `GET /health` and `GET /ready` (503 until start-up finishes) for container probes.
+  - **Reverse proxies (Web and Server):** `X-Forwarded-For/-Proto/-Host` are honoured from trusted proxies: loopback by default, plus `SOVRANT_TRUSTED_PROXIES` (IPs, CIDRs or `*`).
 
 ### Changed
 
@@ -87,6 +92,8 @@ Workflows that plan and run on their own, a new **Home** page with first-run onb
 
 ### Fixed
 
+- **Documented environment variables that did nothing:** `LLM_API_KEY`, `SOVRANT_MODEL`, `LLM_BASE_URL`, `OPENROUTER_API_KEY` and others were listed in `.env.example` but never read. All of them work now (Phase 144), and a test fails if `.env.example` documents a variable the code doesn't read.
+- **`.env` was loaded too late for some variables:** `SOVRANT_USER_ID` (Web, Desktop) and `SOVRANT_RUNTIME_MODE` (Web) were read before `.env` loaded. Every app now loads `.env` first.
 - **SDK `createWorkflow` ignored `session_id`, `workspace_id` and `project_id`:** the route didn't bind snake_case fields. It does now, like the other routes.
 - **Prompts sometimes needed sending twice:** OpenRouter (especially `:free` models) can answer HTTP 200 and then report a rate limit or busy upstream *inside* the stream, or close it empty. The turn "completed" in about 0.3 s with no reply.
   - **In-stream errors:** now surfaced as provider errors.

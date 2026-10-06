@@ -10,6 +10,7 @@ using Sovrant.Runtime;
 using Sovrant.Runtime.Config;
 using Sovrant.Runtime.Conversation;
 using Sovrant.Runtime.Mcp;
+
 using Sovrant.Runtime.Permissions;
 using Sovrant.Runtime.Storage;
 using Sovrant.Agents;
@@ -20,6 +21,9 @@ using Microsoft.Extensions.Hosting;
 using Spectre.Console;
 using System.CommandLine;
 using System.Text.Json;
+
+// Phase 144: .env first, before anything reads an environment variable.
+BootstrapConfigLoader.EnsureDotEnvLoaded();
 
 // ── NO_COLOR honoring ─────────────────────────────────────────────────────────
 // https://no-color.org/ — when NO_COLOR is set (any value), suppress ANSI color.

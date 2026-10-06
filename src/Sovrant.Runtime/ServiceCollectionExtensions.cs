@@ -498,6 +498,15 @@ public static class ServiceCollectionExtensions
             ?? Environment.UserName;
         await legacyMigrator.RunAsync(sovrantUserId, ct).ConfigureAwait(false);
 
+        // Phase 144 — provider keys from the environment (shell, container env or .env): imported
+        // into the encrypted store on first boot (or every start with SOVRANT_ENV_KEYS_OVERRIDE=true),
+        // and LLM_BASE_URL / SOVRANT_MODEL become the install-wide defaults. Runs before preferences
+        // are applied, so a fresh install with LLM_API_KEY skips provider setup entirely.
+        await Config.EnvCredentialSeeder.SeedAsync(
+            services.GetRequiredService<Mcp.ICredentialStore>(), Environment.GetEnvironmentVariable,
+            services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Runtime.EnvCredentialSeeder"), ct).ConfigureAwait(false);
+        Config.EnvCredentialSeeder.ApplyDefaults(services.GetRequiredService<SovrantConfig>(), Environment.GetEnvironmentVariable);
+
         // Phase 88-C — apply persisted user preferences and the active
         // provider's credential to the runtime SovrantConfig. The migrator
         // (88-F) imports legacy *.json into the DB on first boot; this step
@@ -600,6 +609,20 @@ public static class ServiceCollectionExtensions
         var profileStore = services.GetRequiredService<Providers.IProviderProfileStore>();
         var credentials = services.GetRequiredService<Mcp.ICredentialStore>();
         var config = services.GetRequiredService<SovrantConfig>();
+
+        // Phase 144 — a user with no provider yet gets one for LLM_API_KEY (no-op otherwise).
+        // Best-effort: it must never stop the user's saved preferences from applying.
+#pragma warning disable CA1031, CA1848 // best-effort, like the preference load around it
+        try
+        {
+            await Config.EnvCredentialSeeder.EnsureUserProviderAsync(services, userId, Environment.GetEnvironmentVariable, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Runtime.EnvCredentialSeeder")
+                .LogWarning(ex, "Could not create a provider from LLM_API_KEY for {UserId}", userId);
+        }
+#pragma warning restore CA1031, CA1848
 
         // Active provider profile resolution (tiered):
         //   1. Workspace-level profile (admin-set, overrides user preference)

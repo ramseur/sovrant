@@ -26,15 +26,17 @@ public static class Program
     /// <summary>Signals when runtime initialization (DB, model metadata) is complete.</summary>
     public static TaskCompletionSource RuntimeReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>The authenticated user's ID. Updated after login; falls back to OS identity until then.</summary>
-    public static string SovrantUserId { get; private set; } =
-        Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
+    /// <summary>The authenticated user's ID. Updated after login; falls back to SOVRANT_USER_ID or the OS identity until then.</summary>
+    public static string SovrantUserId { get; private set; } = Environment.UserName;
 
     /// <summary>True when running in remote mode (connecting to an external Sovrant.Server).</summary>
     public static bool IsRemoteMode { get; private set; }
 
     public static async Task Main(string[] args)
     {
+        // Phase 144: .env first, so every variable below (and in the runtime) honours it.
+        BootstrapConfigLoader.EnsureDotEnvLoaded();
+        SovrantUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
         var runtimeMode = Environment.GetEnvironmentVariable("SOVRANT_RUNTIME_MODE") ?? "embedded";
         var isRemote = string.Equals(runtimeMode, "remote", StringComparison.OrdinalIgnoreCase);
 
@@ -59,14 +61,16 @@ public static class Program
             supabaseKey = await minStore.RetrieveAsync(CredentialKeys.SupabaseServiceRoleKey).ConfigureAwait(false);
         }
 
-        const int WebHttpPort = 5100;
+        // Phase 144 (GitHub #33): SOVRANT_WEB_PORT overrides the HTTP port (default 5100).
+        var webHttpPort = int.TryParse(Environment.GetEnvironmentVariable("SOVRANT_WEB_PORT"), out var webPort) && webPort is > 0 and < 65536
+            ? webPort : 5100;
         const int WebHttpsPortDefault = 5101;
         var webHttpsPort = bootstrapConfig.GetHttpsPort(WebHttpsPortDefault);
 
         var builder = WebApplication.CreateBuilder(args);
         builder.WebHost.ConfigureKestrel(o =>
         {
-            o.ListenAnyIP(WebHttpPort);
+            o.ListenAnyIP(webHttpPort);
             if (bootstrapConfig.HasTls)
             {
                 o.ListenAnyIP(webHttpsPort, listenOpts =>
@@ -86,6 +90,10 @@ public static class Program
 
         if (bootstrapConfig.HasTls)
             builder.Services.AddHttpsRedirection(o => o.HttpsPort = webHttpsPort);
+
+        // Phase 144 (GitHub #33): behind a reverse proxy, trust X-Forwarded-* from known proxies.
+        Sovrant.Web.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
+            Environment.GetEnvironmentVariable(Sovrant.Web.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
 
         // WebSessionService is a singleton used by all Blazor circuits.
         // For embedded mode it is populated after session restore or login.
@@ -188,8 +196,29 @@ public static class Program
             await TryRestoreWebSessionAsync(app.Services, webSession).ConfigureAwait(false);
         }
 
+        // Forwarded headers first, so HTTPS redirection and links see the client's scheme/host.
+        app.UseForwardedHeaders();
+
         if (bootstrapConfig.HasTls)
             app.UseHttpsRedirection();
+
+        // Phase 144 (GitHub #34): unauthenticated probes for Docker HEALTHCHECK / Kubernetes.
+        // /health = liveness (+ DB status, same shape as Sovrant.Server); /ready = 503 until the
+        // runtime has finished starting (migrations applied, MCP servers attempted).
+        app.MapGet("/health", (IServiceProvider sp) =>
+        {
+            if (isRemote)
+                return Results.Ok(new { status = "ok", mode = "remote" });
+            var health = sp.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>().CheckHealth();
+            return Results.Ok(new
+            {
+                status = health.Ok ? "ok" : "degraded",
+                db = new { status = health.Ok ? "ok" : "error", schema_version = health.SchemaVersion, error = health.Error },
+            });
+        });
+        app.MapGet("/ready", () => RuntimeReady.Task.IsCompleted
+            ? Results.Ok(new { status = "ready" })
+            : Results.Json(new { status = "starting" }, statusCode: StatusCodes.Status503ServiceUnavailable));
 
         app.MapStaticAssets();
         app.UseAntiforgery();

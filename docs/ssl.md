@@ -142,11 +142,19 @@ Caddy handles certificate issuance and renewal automatically with no further con
 
 ## Forwarded headers
 
-When running behind a reverse proxy, enable forwarded-header processing so Sovrant sees the real client IP and scheme. This is already wired up in `Sovrant.Web` and `Sovrant.Server` — it activates automatically when a proxy is detected via the `X-Forwarded-Proto` header.
+Behind a reverse proxy, Sovrant.Web and Sovrant.Server honour `X-Forwarded-For`, `X-Forwarded-Proto` and `X-Forwarded-Host`, so they see the real client IP and scheme, and HTTPS redirection doesn't loop. Headers are only believed from **trusted proxies**:
 
-No extra configuration is needed.
+- **Default:** loopback only (a proxy on the same host).
+- **`SOVRANT_TRUSTED_PROXIES`:** comma-separated proxy IPs and/or CIDR networks, e.g. `172.18.0.0/16` for a Docker network, or `10.0.0.5`.
+- **`SOVRANT_TRUSTED_PROXIES=*`:** trust any sender. Only do this when the app is reachable solely through the proxy.
 
----
+When the proxy terminates TLS, leave `SOVRANT_TLS_*` unset and let the proxy handle HTTPS.
+
+**Ports:** Sovrant.Server listens on `SOVRANT_PORT` (default 5200), Sovrant.Web on `SOVRANT_WEB_PORT` (default 5100). The HTTPS port, when TLS is configured, is `SOVRANT_TLS_HTTPS_PORT`.
+
+**Health checks:** `GET /health` on both apps (liveness + database status). Sovrant.Web also has `GET /ready`, which returns 503 until start-up finishes. Both are unauthenticated, for Docker `HEALTHCHECK` and Kubernetes probes.
+
+**Sub-path hosting** (serving the app under `/sovrant/`) isn't supported yet.
 
 ## Ports reference
 
@@ -155,4 +163,4 @@ No extra configuration is needed.
 | `Sovrant.Web` | 5100 | 5101 |
 | `Sovrant.Server` + MCP | 5200 | 5443 |
 
-Override HTTPS ports with `SOVRANT_TLS_HTTPS_PORT`. HTTP ports are fixed and cannot be changed via env vars.
+Override the HTTP ports with `SOVRANT_WEB_PORT` (Web) and `SOVRANT_PORT` (Server), and the HTTPS port with `SOVRANT_TLS_HTTPS_PORT`.
