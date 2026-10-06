@@ -44,7 +44,7 @@
   <StackPanel Spacing="14">
 
     <!-- All set (checklist complete), until dismissed -->
-    <Border CornerRadius="12" Padding="16,12" BorderThickness="1" IsVisible="{Binding ShowAllSet}"
+    <Border CornerRadius="12" Padding="16,12" Margin="5,0" BorderThickness="1" IsVisible="{Binding ShowAllSet}"
             BorderBrush="{DynamicResource SurfaceBorder}" Background="{DynamicResource SurfaceCard}">
       <DockPanel>
         <Panel DockPanel.Dock="Left" Width="20" Height="20" Margin="0,0,12,0" VerticalAlignment="Center">
@@ -62,14 +62,15 @@
     <!-- Review 2026-10-06: the checklist runs across the container as numbered step tiles;
          What Sovrant can do sits below it, four across with full descriptions. -->
     <StackPanel Spacing="9" IsVisible="{Binding ShowChecklist}">
-      <DockPanel>
+      <!-- Tiles keep a 5px margin for their gaps (a negative outer margin got clipped on the right). -->
+      <DockPanel Margin="5,0">
         <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressText}" FontSize="12"
                    Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Bottom" />
         <TextBlock Text="{Binding ChecklistTitle}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
       </DockPanel>
-      <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="6" CornerRadius="3"
+      <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="6" CornerRadius="3" Margin="5,0"
                    Foreground="{DynamicResource BrandPrimary}" />
-      <ItemsControl ItemsSource="{Binding Checklist}" Margin="-5,0">
+      <ItemsControl ItemsSource="{Binding Checklist}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><UniformGrid Rows="1" Columns="{Binding $parent[UserControl].((vm:HomeGuideViewModel)DataContext).StepColumns}" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
@@ -108,8 +109,8 @@
 
     <!-- What Sovrant can do: four across, full descriptions, the whole card is the link -->
     <StackPanel Spacing="9" IsVisible="{Binding IsLoaded}">
-      <TextBlock Text="What Sovrant can do" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
-      <ItemsControl ItemsSource="{Binding Areas}" Margin="-5,0">
+      <TextBlock Text="What Sovrant can do" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" Margin="5,0" />
+      <ItemsControl ItemsSource="{Binding Areas}">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate><UniformGrid Columns="4" /></ItemsPanelTemplate>
         </ItemsControl.ItemsPanel>
