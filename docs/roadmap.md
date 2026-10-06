@@ -47,9 +47,9 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | Phase 142 | Home tabs — **Overview** (default: greeting, at a glance, Get started beside What Sovrant can do, laid out like the chat welcome; fits a laptop screen) and **Activity** (the stats and activity table); admin checklist reads "Set up Sovrant for your team"; time-neutral greeting; header wrapping fixed ✅ |
 | **2.0 — in progress** | Phase 143 | SDK & API parity — Part A done for 2.0 (workflow plan / edit / cancel routes, MCP status + retry over HTTP, SDK privacy setters, snake_case create fix); Part B planned (the SDK's older gaps, safe retries, SDK checks in CI) |
 | **2.0 — done** | Phase 144 | Environment configuration that works everywhere — every `.env.example` variable honoured from shell, container env or `.env`; provider keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE`); Web port, forwarded headers, `/health` + `/ready` (GitHub #33, #34, #35) ✅ |
-| **2.0.1 — in progress** | Phase 134 | Postgres / Supabase — every known Postgres and Supabase issue in one phase: privacy flag missing from Postgres conversation lists (admins see private titles in Command Center), migrator copies only conversations + credentials, no Postgres test run, split SQLite/Postgres backend, Supabase RLS (was Phase 127) |
-| **2.0.1 — built** | Stopgaps | Web: no automatic sign-in after a restart; Web and Server: file and shell tools off for members by default (admins can turn them on); README warns that Web is single-user until Phase 145 |
-| **2.1 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each user's own model and keys, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
+| **2.1.0 — in progress** | Phase 134 | Postgres / Supabase — every known Postgres and Supabase issue in one phase: privacy flag missing from Postgres conversation lists (admins see private titles in Command Center), migrator copies only conversations + credentials, no Postgres test run, split SQLite/Postgres backend, Supabase RLS (was Phase 127) |
+| **2.1.0 — built** | Stopgaps | Web: no automatic sign-in after a restart; Web and Server: file and shell tools off for members by default (admins can turn them on); README warns that Web is single-user until Phase 145 |
+| **2.1.0 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each user's own model and keys, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -248,7 +248,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Skill import from git repo / URL — Skills page gains an import action that fetches `.md` skill files from a git repo URL (optional subpath/ref) or a single raw file URL, validates each against the skill frontmatter schema, previews the batch with per-file pass/fail reasons and slug-collision handling, and writes accepted items as `User`-tier `knowledge_pages` overlay rows (never mutating `BuiltIn` rows); records source URL for a later "check for updates" re-import; private repos take an optional token in the encrypted keystore; one-directional ingestion only, no marketplace browsing, no scheduled auto-sync | Phase 131 | Planned |
 | Durable streams for agent-to-agent communication — evolve Phase 57's `coordination_events` mailbox from a single-row-per-message, single-target queue into an append-only, sequence-numbered stream per channel with per-consumer offset tracking so a crashed or restarted agent resumes exactly where it left off instead of losing or re-processing messages; adds multi-subscriber fan-out (more than one agent can tail the same channel independently), optional live push over the existing SignalR hub for in-process consumers alongside the current poll-on-turn-start path, bounded retry with dead-lettering after N failed acknowledgements, and configurable retention; extends to claw-to-claw coordination over the Phase 50 federation bus, where network drops make resumable offsets especially valuable | Phase 132 | Planned |
 | Conversation folders — per-user folder tree (up to 5 levels, across all workspaces) for every conversation type; adjacency-list `session_folders` table + `sessions.folder_id` (V048, additive); no stored conversation type — sidebar labels derived from live links (agent, workflow, swarm/team runs via new `agent_runs.session_id`, webhook); work not started in chat gets a linked conversation (option A); deleting a folder never deletes conversations; Web + Desktop rail tree, ⋯ menus, Move dialog, chat-header breadcrumb | Phase 133 | ✅ Built — Postgres check moved to Phase 134 |
-| Postgres / Supabase — the single home for every Postgres and Supabase issue: privacy and missing columns in Postgres conversation lists, migrator completeness, real Postgres test target, store-by-store parity, schema diff V001–V048, split-backend audit, Supabase RLS (was Phase 127); closes Phase 133's open Postgres criterion | Phase 134 | Planned — next (2.0.1) |
+| Postgres / Supabase — the single home for every Postgres and Supabase issue: privacy and missing columns in Postgres conversation lists, migrator completeness, real Postgres test target, store-by-store parity, schema diff V001–V048, split-backend audit, Supabase RLS (was Phase 127); closes Phase 133's open Postgres criterion | Phase 134 | Planned — next (2.1.0) |
 | App sidebar — collapsible nav groups (one open at a time, sub-pages inline) + always-visible Conversations section pinned below the nav on every page; collapsed rail uses keyboard-accessible flyouts for sub-pages | Phase 135 | Built |
 | Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Built |
 | Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Built |
@@ -259,7 +259,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Built |
 | SDK & API parity — every app feature reachable over HTTP and the JS SDK. Part A (2.0, built): workflow plan / edit / cancel, MCP status + retry, privacy setters. Part B (planned): ~14 older server routes the SDK never wrapped, idempotent-only SDK retries, workflow left behind when planning fails, SDK type check + tests in CI | Phase 143 | Part A Built · Part B Planned |
 | Environment configuration that works everywhere — every documented env variable works from the shell, container env or `.env` on every app it applies to; provider API keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply every start); Web hosting parity (`SOVRANT_WEB_PORT`, forwarded headers, `/health` + `/ready`); docs match the code | Phase 144 | Built |
-| Multi-user Web — per-browser sign-in (HttpOnly cookie, 8 h sliding + 30-day "Remember me"), per-tab services instead of process-wide singletons, per-user model / provider / keys, headless mode with per-user Server sign-in, per-conversation Bash and a path to safe file/shell tools for members (with Phase 124), multi-user tests + load test (GitHub #32) | Phase 145 | Planned — next (2.1) |
+| Multi-user Web — per-browser sign-in (HttpOnly cookie, 8 h sliding + 30-day "Remember me"), per-tab services instead of process-wide singletons, per-user model / provider / keys, headless mode with per-user Server sign-in, per-conversation Bash and a path to safe file/shell tools for members (with Phase 124), multi-user tests + load test (GitHub #32) | Phase 145 | Planned — next (2.1.0) |
 
 ### v1.0 release polish ✅
 
@@ -12426,7 +12426,7 @@ UNFILED
 
 ## Phase 134 — Postgres / Supabase
 
-**Status:** Planned — next (2.0.1). Re-scoped 2026-10-06 as **the single roadmap item for every Postgres and Supabase issue**; Phase 127 (Supabase RLS) is folded in as Part C. SQLite remains the primary, fully verified backend; this phase brings the optional Postgres/Supabase backend (Phase 40C) up to the same standard. **Rule:** any new Postgres or Supabase problem is added to the issue list below, not to a new phase.
+**Status:** Planned — next (2.1.0). Re-scoped 2026-10-06 as **the single roadmap item for every Postgres and Supabase issue**; Phase 127 (Supabase RLS) is folded in as Part C. SQLite remains the primary, fully verified backend; this phase brings the optional Postgres/Supabase backend (Phase 40C) up to the same standard. **Rule:** any new Postgres or Supabase problem is added to the issue list below, not to a new phase.
 
 ### Why
 
@@ -12439,13 +12439,13 @@ The Postgres/Supabase backend replaces a subset of stores (sessions, credentials
 
 ### Known issues (found so far)
 
-**Fixed on `development` (2026-10-06, ships in 2.0.1):**
+**Fixed on `development` (2026-10-06, ships in 2.1.0):**
 - [x] **New conversations were public on Postgres:** `PostgresSessionStore.AppendAsync` didn't set `is_private`, so the column default (0) applied. It now inserts `is_private = 1`, matching SQLite.
 - [x] **The SQLite → Postgres migrator dropped privacy:** every migrated conversation became public. It now copies `is_private`.
 - [x] **Postgres conversation lists never read `is_private` or `workspace_id`** (was open issue 1): admins saw private titles in Command Center, and shared conversations never reached teammates' Activity. The list now selects the same columns as SQLite and reads them by name. The same check found that `GetIsPrivateAsync` threw (INTEGER cast to `bool`) and `UpdatePrivacyAsync` failed (boolean into an INTEGER column); both fixed. `PostgresPrivacyTests` (Integration tests, runs when `SOVRANT_TEST_PG` is set) covers it.
 
 **Open, in priority order:**
-1. **Conversations already public on Postgres:** anything created there before `198135b` is stored public. Owners can set them back to Private; decide whether 2.0.1 needs a one-off "make all private" admin action or release note.
+1. **Conversations already public on Postgres:** anything created there before `198135b` is stored public. Owners can set them back to Private; decide whether 2.1.0 needs a one-off "make all private" admin action or release note.
 2. **The migrator is incomplete:** it copies only `sessions` (8 columns: no `workspace_id`, `folder_id` or `agent_name`; labels aren't stored, they're derived when listing), `session_entries` and `credentials`. Knowledge pages, MCP trust rules, knowledge attributions and conversation folders all live on Postgres under this backend but aren't migrated, so switching an existing install to Postgres loses them.
 3. **Too few Postgres tests, and none has run yet:** one exists (`PostgresPrivacyTests`, opt-in via `SOVRANT_TEST_PG`) but has **never been run against a real database**, so the privacy fix above is verified by compiling only. First step: start Docker, run a throwaway container (`docker run -d --name sovrant-pg-test -p 55432:5432 -e POSTGRES_PASSWORD=sovrant -e POSTGRES_DB=sovrant_test postgres:16`), set `SOVRANT_TEST_PG=Host=localhost;Port=55432;Username=postgres;Password=sovrant;Database=sovrant_test`, and run the Integration tests: once on the pre-fix code to confirm the test catches the bugs, once on the fix. The rest of Part A follows.
 4. **Split backend:** users, workspaces, workflows, agent runs, memory and the rest stay on SQLite under the Postgres backend. So a "Postgres" install still needs a local SQLite file and can't run as several instances. Document it plainly now; decide in Part B what moves.
@@ -12471,7 +12471,7 @@ The Postgres/Supabase backend replaces a subset of stores (sessions, credentials
 
 - [x] Postgres conversation lists return `is_private`, `workspace_id` and every other stored field the SQLite list returns; privacy reads and writes work; covered by `PostgresPrivacyTests` (labels are derived, not stored)
 - [ ] `PostgresPrivacyTests` run and passing against a real Postgres (not yet run; see open issue 3)
-- [ ] Already-public Postgres conversations: decided and documented in the 2.0.1 CHANGELOG
+- [ ] Already-public Postgres conversations: decided and documented in the 2.1.0 CHANGELOG
 - [ ] Postgres test fixture runs locally and in CI; skipped (not failed) when unavailable
 - [ ] Every Postgres-backed store passes the same test suite as its SQLite twin
 - [ ] Schema diff V001–V048 vs `PostgresSchema.sql` is empty (or every difference is documented and intentional)
@@ -13133,7 +13133,7 @@ GitHub issues from a containerised, multi-tenant deployment hit exactly this:
 
 ## Phase 145 — Multi-user Web (teams of 10–1000)
 
-**Status:** Planned (2026-10-06) — plan agreed; next after the 2.0.1 stopgaps. GitHub #32 stays open until this ships.
+**Status:** Planned (2026-10-06) — plan agreed; next after the 2.1.0 stopgaps. GitHub #32 stays open until this ships.
 
 ### Why
 
@@ -13142,7 +13142,7 @@ Sovrant.Web is meant to host teams of 10–1000 people, either on its own ("mono
 | Shared across all users today | Effect |
 |---|---|
 | `WebSessionService` (singleton) + static `Program.SovrantUserId` (26 call sites) | Everyone acts as the last user to sign in |
-| One stored Web sign-in token, restored at startup | After a restart, any visitor is signed in as the last user with no password (**fixed as a 2.0.1 stopgap**) |
+| One stored Web sign-in token, restored at startup | After a restart, any visitor is signed in as the last user with no password (**fixed as a 2.1.0 stopgap**) |
 | `ActiveContextService` (singleton) | Shared workspace, project, model, MCP servers, current chat |
 | `BlazorConfirmationHandler` (singleton) | A tool approval can appear, and be approved, in another user's browser |
 | Permission mode (singleton policy) | One user's mode applies to everyone |
@@ -13157,8 +13157,8 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 
 | Question | Decision |
 |---|---|
-| Stopgap before this phase | Fix the automatic sign-in after a restart now (2.0.1), and say plainly in the README, CHANGELOG and PR/tag messages that Web is single-user until Phase 145. We're pre-release, so no other mitigation. |
-| File and shell tools for members | **Short term (2.0.1):** off for non-admins on Web by default; an admin can turn them on. **Long term:** the path in Part D. |
+| Stopgap before this phase | Fix the automatic sign-in after a restart now (2.1.0), and say plainly in the README, CHANGELOG and PR/tag messages that Web is single-user until Phase 145. We're pre-release, so no other mitigation. |
+| File and shell tools for members | **Short term (2.1.0):** off for non-admins on Web by default; an admin can turn them on. **Long term:** the path in Part D. |
 | Sign-in lifetime | 8-hour sliding session, plus an optional 30-day "Remember me" |
 | SSO | Later, through Supabase Auth (Phase 40C). The cookie design leaves room for it. |
 | Headless mode | Each user signs in to Server with their own account; `SOVRANT_API_TOKEN` becomes optional (service use only) |
@@ -13183,7 +13183,7 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 
 **Part D — Tools on a shared server**
 11. Per-conversation Bash working directory (`ShellSessionState` per session).
-12. **Stopgap (2.0.1):** file and shell tools (Read, Write, Edit, Glob, Grep, Bash, and other tools that touch the server's disk) are off for non-admins on Web by default, with an admin setting to turn them on.
+12. **Stopgap (2.1.0):** file and shell tools (Read, Write, Edit, Glob, Grep, Bash, and other tools that touch the server's disk) are off for non-admins on Web by default, with an admin setting to turn them on.
 13. **Path for members:** each workspace (and personal workspace) gets its own working folder on the server; members' file and shell tools are confined to it using Phase 124's enforcement (allowed/blocked directories, applied per workspace). Phase 124 is a prerequisite for turning member tools on by default. Later option: run Bash in a per-workspace container for OS-level isolation.
 
 **Part E — Proof**
@@ -13197,7 +13197,7 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 - Desktop changes (single-user).
 
 ### Acceptance criteria
-- [x] 2.0.1 stopgaps built (2026-10-06, on `development`): no automatic sign-in after restart (`WebSignInGuardTests`); member file/shell tools off by default on Web and Server (`MemberHostToolPolicy`; Server reads `AmbientPrincipal`, set per request and per scheduled workflow; Governance toggle on Web + Desktop; `SOVRANT_GOVERNANCE_MEMBER_FILE_TOOLS`); README + CHANGELOG warning
+- [x] 2.1.0 stopgaps built (2026-10-06, on `development`): no automatic sign-in after restart (`WebSignInGuardTests`); member file/shell tools off by default on Web and Server (`MemberHostToolPolicy`; Server reads `AmbientPrincipal`, set per request and per scheduled workflow; Governance toggle on Web + Desktop; `SOVRANT_GOVERNANCE_MEMBER_FILE_TOOLS`); README + CHANGELOG warning
 - [ ] Two browsers signed in as different users each see only their own identity, context, chats, approvals and model
 - [ ] No process-wide user state left in Web (`Program.SovrantUserId` gone; per-user services are scoped)
 - [ ] Sign-in cookie: HttpOnly, Secure on HTTPS, 8 h sliding, 30-day "Remember me"; sign-out and admin revoke work
@@ -13205,7 +13205,7 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 - [ ] Headless mode: each Web user is their own Server user; no shared token needed
 - [ ] Per-conversation Bash working directory
 - [ ] Multi-user tests and a load test of several hundred circuits; sizing guidance published
-- [ ] Design mock for the small UI changes (Remember me, signed-in indicator, admin active sign-ins) on both mocks
+- [x] Design mock for the small UI changes on both mocks (2026-10-06): "Keep me signed in for 30 days" + Timed out / Revoked notices on Login; account menu from the rail footer (lifetime, Sign out, Sign out of all browsers); Admin → Users "Signed in on" with Revoke and Sign out everywhere. Logged in `docs/design/README.md`
 - [ ] GitHub #32 closed with a reply
 
 ### Relationship to other phases

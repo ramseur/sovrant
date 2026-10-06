@@ -411,6 +411,23 @@ Roadmap Phase 142. With real activity, Phase 141's Home pushed the guide below t
 
 **Verified:** rendered in headless Edge on both mocks: 32 Overview combinations measured (overflow, cards visible, checklist rows, All set, managed cards), plus the Activity tab. Parity diff still 49 chrome-only lines.
 
+## Multi-user Web: per-browser sign-in (2026-10-06, design-only, Phase 145)
+
+Sign-in moves from one per server to one per browser, so the UI needs to show how long you stay signed in, let you sign out here or everywhere, and let admins see and end sign-ins. Three small changes, identical on both mocks.
+
+**Login** (`#login`, toggle *Timed out* / *Revoked*, or `#expired` / `#revoked`):
+- **"Keep me signed in on this browser for 30 days"** below the password. Hint: otherwise 8 hours, renewed while you're active; leave it off on a shared computer. Hidden on first run (the administrator signs up first; they can choose it next time).
+- Two reasons you land back on Sign in, in the warning style: **Timed out** (8 hours without activity) and **Revoked** (an admin signed you out of this browser).
+
+**Account menu** (rail footer, every screen; on Users toggle *Account menu* / *8-hour sign-in* / *Kept 30 days*, or `#users&acct` / `#users&kept`):
+- The footer row (avatar, name, role) opens it: name, email and role; how long this browser stays signed in (8 hours renewed while active, or kept 30 days until a date); how many browsers you're signed in on; **Sign out** and **Sign out of all browsers**. Text-only items: the icon vocabulary has no sign-out icon yet.
+
+**Admin → Users** (`#users`):
+- Each row says where the person is signed in ("Signed in on 2 browsers", "Not signed in", "Awaiting approval").
+- The detail adds **Signed in on**: one row per browser (device, IP, when signed in, kept 30 days), Last active, Expires, and **Revoke**. Below it, **Sign out everywhere** and Reset password (plus Approve for pending accounts).
+
+**Verified:** rendered in headless Edge, both mocks: login with the Revoked warning and the Remember-me box; Users with the account menu open in both lifetimes. First pass found the sign-ins table too wide for the detail pane; IP and sign-in time moved under the browser name and it fits. Parity diff still 49 chrome-only lines.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.

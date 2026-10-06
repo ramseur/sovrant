@@ -42,7 +42,7 @@ public static class HostToolAccess
 }
 
 /// <summary>
-/// Phase 145 stopgap (2.0.1): on a shared Web server, members (non-admins) can't use
+/// Phase 145 stopgap (2.1.0): on a shared Web server, members (non-admins) can't use
 /// <see cref="HostToolAccess.Tools"/> unless an admin has turned
 /// <see cref="GovernanceConfig.MemberFileTools"/> on. Admins are never blocked.
 /// </summary>

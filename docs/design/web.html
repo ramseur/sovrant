@@ -311,6 +311,27 @@
   .linfo{font-size:12.5px;line-height:1.5;color:var(--t1);background:var(--brand-soft);border:1px solid color-mix(in srgb,var(--brand) 35%,transparent);border-radius:9px;padding:10px 12px}
   .linfo b{font-weight:600}
   .lnote{font-size:12px;color:var(--t2);text-align:center;margin-top:-6px}
+  /* Phase 145 — per-browser sign-in */
+  .lrem{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--t1);cursor:pointer;margin-top:-4px}
+  .lrem input{width:16px;height:16px;accent-color:var(--brand);margin:0}
+  .lhint{font-size:12px;color:var(--t2);line-height:1.45;margin-top:-8px}
+  .lwarn{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:var(--t1);background:color-mix(in srgb,var(--warn) 12%,transparent);border:1px solid color-mix(in srgb,var(--warn) 38%,transparent);border-radius:9px;padding:10px 12px}
+  .lwarn svg{width:15px;height:15px;color:var(--warn);flex-shrink:0;margin-top:1px}
+  .acct{position:absolute;left:12px;right:12px;bottom:62px;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);padding:12px;z-index:20}
+  .acct .ah{display:flex;gap:10px;align-items:center;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .acct .an{font-size:13px;font-weight:600}
+  .acct .ae{font-size:12px;color:var(--t2)}
+  .acct .ab{font-size:12px;color:var(--t2);line-height:1.5;padding:10px 0;border-bottom:1px solid var(--border)}
+  .acct .ab b{color:var(--t1);font-weight:600}
+  .acct .ai{display:flex;align-items:center;gap:9px;width:100%;height:34px;border:none;background:transparent;color:var(--t1);font:inherit;font-size:13px;border-radius:8px;padding:0 8px;cursor:pointer;margin-top:4px}
+  .acct .ai:hover{background:var(--hover)}
+  .acct .ai svg{width:15px;height:15px;color:var(--t2)}
+  .frow.open{background:var(--hover)}
+  .sitbl td,.sitbl th{white-space:nowrap}
+  .sitbl td.dev{white-space:normal;width:100%}
+  .sitbl .sidev{font-size:13px;color:var(--t1)}
+  .sitbl .simeta{font-size:11.5px;color:var(--t2);margin-top:2px}
+  .sithis{font-size:11px;color:var(--brand);font-weight:600;margin-left:6px}
   .lok{display:flex;gap:9px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,transparent);border:1px solid color-mix(in srgb,var(--ok) 35%,transparent);border-radius:9px;padding:10px 12px}
   .lok svg{width:15px;height:15px;flex-shrink:0;margin-top:1px}
   .lbusy{display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;color:var(--t2)}
@@ -702,7 +723,7 @@ const ADMIN_GROUPS = {command:'Overview',users:'Access',governance:'Safety',diag
 
 const S = {
   login:{g:null,p:'Entry',t:'Login',url:'/login',
-    note:'No rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary). Phase 140: toggle Sign in / First run (no accounts yet → create the administrator) / Approval / Working.'},
+    note:'No rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary). Phase 140: toggle Sign in / First run (no accounts yet → create the administrator) / Approval / Working. Phase 145: sign-in is per browser — "Keep me signed in on this browser for 30 days" (otherwise 8 hours, renewed while active; hidden on first run), and two reasons you can land back here: Timed out and Revoked (an admin signed you out).'},
   dashboard:{g:'dashboard',p:'Overview',t:'Home',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
     stats:[['My workflows',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
     note:'Phase 142 — Home has two tabs: Overview (opens first; the guide, centred like the chat welcome, sized for a laptop screen) and Activity (the stats and activity table). Toggles: Admin / Member, First visit / Returning / All set / Dismissed, Overview / Activity, and At a glance (a compact stats row on Overview, still undecided). Command Center keeps the plain Overview pattern.'},
@@ -767,10 +788,13 @@ const S = {
   command:{g:'admin',p:'Overview',t:'Command Center',url:'/command',sub:'What is Sovrant doing right now?',
     stats:[['Workflows',0],['Team runs',0],['Agent runs',0],['Sessions',2],['Claws',0]],
     note:'Same pattern as Dashboard, everyone\'s activity instead of yours. Two screens, one design.'},
-  users:{g:'admin',p:'Browse',t:'Users',url:'/admin',sub:'1 user',
+  users:{g:'admin',p:'Browse',t:'Users',url:'/admin',sub:'4 users',
     acts:[['Invite',1]],
-    items:[{n:'ramseur@anant.us',mono:1,b:['Personal workspace'],tag:['Owner','b-brand']}],
-    note:'Since V043 the user id is the email, so the row leads with it.'},
+    items:[{n:'sam@example.com',mono:1,b:['Member','Signed in on 2 browsers'],tag:['Active','b-ok']},
+           {n:'ramseur@anant.us',mono:1,b:['Admin','Signed in on 1 browser'],tag:['Owner','b-brand']},
+           {n:'priya@example.com',mono:1,b:['Member','Not signed in'],tag:null},
+           {n:'jordan@example.com',mono:1,b:['Member','Awaiting approval'],tag:['Pending','b-warn']}],
+    note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side.'},
   workspaces:{g:'admin',p:'Browse',t:'Workspaces',url:'/admin/workspaces',sub:'1 workspace',
     items:[{n:'Personal',b:['ws-personal-ramseur-anant.us'],tag:['Personal','b-mut']}],
     note:'Provider enablement per workspace lives in this detail pane — the setting that hid OpenRouter.'},
@@ -830,6 +854,10 @@ function setHomeState(v){ homeState=v; render(); }
 function setMcpState(v){ mcpState=v; render(); }
 function toggleMcpMenu(){ mcpMenu=!mcpMenu; render(); }
 function setLoginState(v){ loginState=v; render(); }
+/* Phase 145 — account menu (rail footer) and Admin → Users sign-ins. */
+let acctMenu=false, acctRemember=false;
+function toggleAcct(){ acctMenu=!acctMenu; render(); }
+function setAcctRemember(v){ acctRemember=v; acctMenu=true; render(); }
 function setWelcomeRole(v){ welcomeRole=v; render(); }
 function setOrchView(v){ orchView=v; render(); }
 
@@ -867,7 +895,8 @@ function railHTML(s){
     <div class="railbody"><div class="navg">${navs}</div>
     ${convo}</div>
     ${fly}
-    ${railOpen?`<div class="foot"><div class="frow"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
+    ${railOpen&&acctMenu?acctMenuHTML():''}
+    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
   </div>`;
 }
 
@@ -895,6 +924,41 @@ function phHTML(s){
   return `<div class="ph"><div><h2>${s.t}</h2>${s.sub?`<div class="sub">${s.sub}</div>`:''}</div><div class="acts">${acts}</div></div>`;
 }
 
+/* Phase 145 — the account menu: who you are, how long this browser stays signed in, sign out here
+   or everywhere. Opens from the rail footer on every screen. */
+function acctMenuHTML(){
+  const life = acctRemember
+    ? `<b>Kept signed in for 30 days</b> on this browser (until 5 Nov). You chose "Keep me signed in".`
+    : `<b>Signed in for 8 hours</b>, renewed while you're active. Signed in today at 09:12.`;
+  return `<div class="acct" role="menu">
+    <div class="ah"><div class="av">ER</div><div><div class="an">ramseur</div><div class="ae">ramseur@anant.us · Admin</div></div></div>
+    <div class="ab">${life}<br>Signed in on 1 browser.</div>
+    <button class="ai" role="menuitem">Sign out</button>
+    <button class="ai" role="menuitem">Sign out of all browsers</button>
+  </div>`;
+}
+
+/* Phase 145 — Admin → Users detail: every browser this person is signed in on, with Revoke. */
+function usersDetailHTML(sel){
+  if(!sel) return `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick a person to see where they're signed in.</div></div>`;
+  const signins = sel.n==='sam@example.com'
+    ? [['Chrome on Windows','10.0.4.21','today 08:47','2 min ago','8 h idle',0],
+       ['Safari on iPhone','198.51.100.7','2 Oct','Yesterday','5 Nov',1]]
+    : sel.n==='ramseur@anant.us'
+    ? [['Edge on Windows','127.0.0.1','today 09:12','Just now','8 h idle',0]]
+    : [];
+  const rows = signins.map(([d,ip,si,la,ex,rem],i)=>`<tr><td class="dev"><div class="sidev">${d}${sel.n==='ramseur@anant.us'&&i===0?'<span class="sithis">This browser</span>':''}</div><div class="simeta">${ip} · signed in ${si}${rem?' · kept 30 days':''}</div></td><td>${la}</td><td>${ex}</td><td style="text-align:right"><button class="btn">Revoke</button></td></tr>`).join('');
+  const table = signins.length
+    ? `<div class="tablewrap" style="margin:0"><table class="sitbl"><thead><tr><th>Browser</th><th>Last active</th><th>Expires</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : `<div class="lhint" style="margin:0">${sel.n==='jordan@example.com'?'Waiting for approval — no sign-ins yet.':'Not signed in anywhere.'}</div>`;
+  return `<div class="dhead"><div style="flex:1"><h3>${sel.n}</h3><div class="dsub">${(sel.b||[]).join(' · ')}</div></div>
+      ${sel.tag?`<span class="badge ${sel.tag[1]}" style="margin:0">${sel.tag[0]}</span>`:''}</div>
+    <dl class="kv"><dt>Role</dt><dd>${sel.b[0]}</dd><dt>Workspace</dt><dd>ws-personal-${sel.n.replace(/[@.]/g,'-')}</dd><dt>Joined</dt><dd>2026-09-14</dd></dl>
+    <h4 style="margin:14px 0 8px;font-size:13px">Signed in on</h4>
+    ${table}
+    <div style="display:flex;gap:8px;margin-top:16px">${signins.length?'<button class="btn">Sign out everywhere</button>':''}${sel.n==='jordan@example.com'?'<button class="btn pri">Approve</button>':''}<button class="btn">Reset password</button></div>`;
+}
+
 function browseHTML(s){
   if(s.t==='Platform Integrations') s=mcpScreen(s);
   const items=(s.items||[]).map((it,i)=>
@@ -909,6 +973,8 @@ function browseHTML(s){
     detail = orchView==='defaults' ? orchDefaultsHTML() : orchTeamDetailHTML(sel);
   } else if(s.t==='Platform Integrations'){
     detail = mcpDetailHTML();
+  } else if(s.t==='Users'){
+    detail = usersDetailHTML(sel);
   } else if(s.t==='Workflows'){
     detail = !sel ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick a workflow from the list to see its plan and journal.</div></div>` : workflowDetailHTML(sel);
   } else {
@@ -1159,7 +1225,12 @@ function entryHTML(){
     ? `<div class="lhead"><div class="lw">Sovrant</div><div class="ls">Welcome! Let's set up your server.</div></div>
        <div class="linfo"><b>First-time setup</b> — no accounts exist yet. The first account you create becomes the <b>administrator</b>, with full control over registration, approvals, providers and workspaces.</div>`
     : `<div class="lhead"><div class="lw">Sovrant</div><div class="ls">Sign in to continue.</div></div>`;
-  const ok=st==='approval'?`<div class="lok">${sv(ICONS.done,2)}<span>Account created. An administrator must approve it before you can sign in.</span></div>`:'';
+  const ok=st==='approval'?`<div class="lok">${sv(ICONS.done,2)}<span>Account created. An administrator must approve it before you can sign in.</span></div>`
+    : st==='expired'?`<div class="lwarn">${sv(ICONS.warning,2)}<span>You were signed out after 8 hours without activity. Sign in again to pick up where you left off.</span></div>`
+    : st==='revoked'?`<div class="lwarn">${sv(ICONS.warning,2)}<span>An administrator signed you out of this browser. Sign in again, or ask them if you didn't expect this.</span></div>`:'';
+  /* Phase 145 — sign-in lasts 8 h, renewed while you're active; "Keep me signed in" makes it 30 days on this browser. */
+  const remember=first?'':`<label class="lrem"><input type="checkbox"> Keep me signed in on this browser for 30 days</label>
+    <div class="lhint">Otherwise you're signed out after 8 hours without activity. Leave this off on a shared computer.</div>`;
   const dis=working?' disabled':'';
   const fields=`<div class="fld"><label>Email</label><input class="li" placeholder="you@example.com"${working?' value="alex@example.com"':''}${dis}></div>
     <div class="fld"><label>Password</label><input class="li" type="password" placeholder="${first?'Choose a password':'Password'}"${working?' value="password123"':''}${dis}></div>`;
@@ -1168,7 +1239,7 @@ function entryHTML(){
     : `<button class="lbtn">Sign in</button>
        <div class="lrule">Don't have an account?</div>
        <button class="lbtn sec">Create account</button>${st==='approval'?`<div class="lnote">New accounts need administrator approval before first sign-in.</div>`:''}`;
-  return `<div class="entry"><div class="lcard">${head}${ok}${fields}${actions}</div></div>`;
+  return `<div class="entry"><div class="lcard">${head}${ok}${fields}${remember}${actions}</div></div>`;
 }
 
 /* Phase 140 — "Welcome to Sovrant": once per user after first sign-in (and after provider setup on
@@ -1318,7 +1389,11 @@ function render(){
     ct.innerHTML=`<button class="cbtn${orchView==='team'?' on':''}" onclick="setOrchView('team')">Team</button><button class="cbtn${orchView==='defaults'?' on':''}" onclick="setOrchView('defaults')">Defaults</button>`;
   } else if(cur==='login'){
     ct.style.display='flex';
-    ct.innerHTML=[['signin','Sign in'],['firstrun','First run'],['approval','Approval'],['working','Working']].map(([k,t])=>`<button class="cbtn${loginState===k?' on':''}" onclick="setLoginState('${k}')">${t}</button>`).join('');
+    ct.innerHTML=[['signin','Sign in'],['firstrun','First run'],['approval','Approval'],['working','Working'],['expired','Timed out'],['revoked','Revoked']].map(([k,t])=>`<button class="cbtn${loginState===k?' on':''}" onclick="setLoginState('${k}')">${t}</button>`).join('');
+  } else if(cur==='users'){
+    ct.style.display='flex';
+    ct.innerHTML=`<button class="cbtn${acctMenu?' on':''}" onclick="toggleAcct()">Account menu</button>`
+      +[[false,'8-hour sign-in'],[true,'Kept 30 days']].map(([v,t])=>`<button class="cbtn${acctMenu&&acctRemember===v?' on':''}" onclick="setAcctRemember(${v})">${t}</button>`).join('');
   } else if(cur==='platformint'){
     ct.style.display='flex';
     ct.innerHTML=[['ok','Connected'],['network','Unreachable'],['auth','Credentials']].map(([k,t])=>`<button class="cbtn${mcpState===k?' on':''}" onclick="setMcpState('${k}')">${t}</button>`).join('')
@@ -1393,6 +1468,11 @@ function buildIconRef(){
   if(h.has('member')) welcomeRole='member';
   if(h.has('activity')) homeTab='activity';
   for(const st of ['first','returning','allset','dismissed']) if(h.has(st)) homeState=st;
+  if(h.has('users')) cur='users';
+  if(h.has('login')) cur='login';
+  if(h.has('acct')) acctMenu=true;
+  if(h.has('kept')) { acctMenu=true; acctRemember=true; }
+  for(const st of ['expired','revoked']) if(h.has(st)) { cur='login'; loginState=st; }
 })();
 buildIndex(); render(); buildIconRef();
 </script>
