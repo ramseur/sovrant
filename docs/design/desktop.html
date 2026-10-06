@@ -316,12 +316,38 @@
   .lbtn[disabled]{opacity:.6;cursor:default;filter:none}
   .li[disabled]{opacity:.7}
   .wpage{flex:1;overflow:auto;background:var(--bg)}
+  /* Phase 142 — Home tabs: Overview (guide) + Activity (report) */
+  .htabs{display:flex;align-items:flex-end;gap:4px;padding:10px 22px 0;border-bottom:1px solid var(--border);flex-shrink:0}
+  .htab{height:36px;padding:0 14px;border:none;background:none;font:inherit;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px}
+  .htab:hover{color:var(--t1)} .htab.on{color:var(--t1);border-bottom-color:var(--brand)}
+  .htabs-r{margin-left:auto;display:flex;align-items:center;gap:10px;padding-bottom:5px;font-size:11.5px}
+  .htabs-r .mut{color:var(--t3)}
+  .hact-sub{padding:14px 22px 12px;font-size:12.5px;color:var(--t2);line-height:1.5;flex-shrink:0} .hact-sub a{color:var(--brand);cursor:pointer}
+  .hover{width:100%;max-width:1080px;margin:0 auto;padding:12px 28px 16px;display:flex;flex-direction:column;gap:14px;box-sizing:border-box;flex-shrink:0}
+  .hhero{text-align:center;display:flex;flex-direction:column;gap:6px;align-items:center;margin-bottom:6px}
+  .hhero h2{margin:0;font-size:26px;font-weight:700;letter-spacing:-.02em}
+  .hhero p{margin:0;max-width:760px;font-size:14px;line-height:1.55;color:var(--t2)}
+  .hglance{display:flex;flex-wrap:wrap;justify-content:center;gap:6px}
+  .hg{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 13px;border:1px solid var(--border);border-radius:999px;background:var(--card);color:var(--t2);font:inherit;font-size:12px;line-height:1;white-space:nowrap;cursor:pointer}
+  .hg b{font-size:13px;font-weight:700;color:var(--t1);line-height:1} .hg span{line-height:1} .hg:hover{border-color:var(--brand)}
+  .hcols{display:grid;grid-template-columns:minmax(300px,0.9fr) minmax(0,1.1fr);gap:18px;align-items:start}
+  .hcols.one{grid-template-columns:1fr}
+  .hcol{display:flex;flex-direction:column;gap:9px;min-width:0}
+  .hcheck{padding:12px 16px;gap:4px}
+  .hcheck .wli{padding:7px 0}
+  .hcard .hd.one{-webkit-line-clamp:1}
+  .hcards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .hcards.wide{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .hcard{display:flex;flex-direction:column;gap:4px;padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--card);cursor:pointer;min-width:0}
+  .hcard:hover{border-color:var(--brand)} .hcard.managed{cursor:default} .hcard.managed:hover{border-color:var(--border)}
+  .hct{display:flex;align-items:center;gap:8px} .hct b{font-size:13px;font-weight:600;flex:1;min-width:0} .hct .arr{color:var(--brand);font-weight:600}
+  .hct .wi{width:24px;height:24px;border-radius:7px;flex-shrink:0} .hct .wi svg{width:14px;height:14px}
+  .hcard .hd{font-size:11.5px;line-height:1.45;color:var(--t2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .hcard .go{font-size:11.5px;font-weight:600;color:var(--brand);margin-top:auto} .hcard .mg{font-size:11px;color:var(--t3);margin-top:auto}
+  @media (max-width:1100px){ .hcols{grid-template-columns:1fr} }
   /* Phase 141 — Home */
   .ph.home h2{font-size:22px;letter-spacing:-.01em}
   .ph.home .sub{max-width:62ch;line-height:1.5}
-  .gspill{display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 13px 0 9px;border-radius:999px;border:1px solid color-mix(in srgb,var(--brand) 45%,transparent);background:var(--brand-soft);color:var(--t1);font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
-  .gspill:hover{border-color:var(--brand)}
-  .gspill .ring{width:16px;height:16px;border-radius:50%;background:conic-gradient(var(--brand) calc(var(--p)*1%),color-mix(in srgb,var(--brand) 22%,transparent) 0);-webkit-mask:radial-gradient(circle 5px,transparent 98%,#000 100%);mask:radial-gradient(circle 5px,transparent 98%,#000 100%)}
   .ph.home ~ .stats, .ph.home ~ .tablewrap, .hsec{flex-shrink:0}
   .hempty{padding:34px 20px;text-align:center;display:flex;flex-direction:column;gap:6px}
   .hempty .h{font-size:14px;font-weight:600} .hempty .p{font-size:12.5px;color:var(--t2)}
@@ -665,7 +691,7 @@ const S = {
     note:'No rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary). Phase 140: toggle Sign in / First run (no accounts yet → create the administrator) / Approval / Working.'},
   dashboard:{g:'dashboard',p:'Overview',t:'Home',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
     stats:[['My workflows',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
-    note:'Phase 141 — Home: the Dashboard and the Phase 140 Welcome in one place. Greeting + Get started pill, then your activity, then the Get started checklist and What Sovrant can do. Toggle Admin / Member and First visit / Returning / All set. Command Center keeps the plain Overview pattern.'},
+    note:'Phase 142 — Home has two tabs: Overview (opens first; the guide, centred like the chat welcome, sized for a laptop screen) and Activity (the stats and activity table). Toggles: Admin / Member, First visit / Returning / All set / Dismissed, Overview / Activity, and At a glance (a compact stats row on Overview, still undecided). Command Center keeps the plain Overview pattern.'},
   chat:{g:'chat',p:'Conversation',t:'Chat',url:'/',note:'The one genuinely bespoke shape. Welcome state until the first message, then thread + collapsed work strips (Phase 126) + composer. Conversations (Phase 133 folders) now live in the rail on every screen (Phase 135) — per-user tree, up to 5 levels, derived link labels; use the toggles above for the folder menu, Move dialog, and drag-and-drop states.'},
   artifacts:{g:'knowledge',p:'Browse',t:'Artifacts',url:'/artifacts',sub:'1 artifact',
     items:[{n:'finance-chatbot-customization-plan.md',mono:1,b:['5.0 KB','text/markdown','2026-06-03'],tag:null}],
@@ -783,7 +809,9 @@ function toggleFlyout(){ railFlyout=!railFlyout; document.getElementById('flyBtn
 function toggleRail(){ railOpen=!railOpen; document.getElementById('railBtn').classList.toggle('on',railOpen);
   document.getElementById('railBtn').textContent = railOpen?'Collapse rail':'Expand rail'; render(); }
 function setChatState(v){ chatState=v; render(); }
-let loginState='signin', welcomeRole='admin', homeState='returning', mcpState='ok', mcpMenu=false;
+let loginState='signin', welcomeRole='admin', homeState='returning', homeTab='overview', homeGlance=false, mcpState='ok', mcpMenu=false;
+function setHomeTab(v){ homeTab=v; render(); }
+function toggleGlance(){ homeGlance=!homeGlance; render(); }
 function setHomeState(v){ homeState=v; render(); }
 function setMcpState(v){ mcpState=v; render(); }
 function toggleMcpMenu(){ mcpMenu=!mcpMenu; render(); }
@@ -1154,7 +1182,7 @@ function homeAreas(admin){
   ];
 }
 function homeTasks(admin){
-  const st=homeState, first=st==='first', all=st==='allset';
+  const st=homeState, first=st==='first', all=st==='allset'||st==='dismissed';
   return admin?[
       [true,'Connect a model provider','OpenRouter connected',''],
       [all||!first,'Enable providers for a workspace','Admins choose what each workspace can use','Open Workspaces'],
@@ -1168,31 +1196,55 @@ function homeTasks(admin){
       [all,'Explore Knowledge','Skills and templates your agents use','Open Knowledge'],
     ];
 }
-function homeScrollToChecklist(){
-  const body=document.querySelector('.content .body'), t=document.getElementById('getstarted');
-  body.scrollTo({top:body.scrollTop+t.getBoundingClientRect().top-body.getBoundingClientRect().top-12,behavior:'smooth'});
+/* "My agent runs" → "agent run(s)", "Shared (public)" → "shared"; singular when the count is 1. */
+function glanceLabel(l,v){
+  const base=l.replace(/^My /,'').replace(/ \(public\)$/,'').toLowerCase();
+  return v===1 ? base.replace(/s$/,'') : base;
 }
 function homeHTML(s){
+  /* Phase 142 — Home has two tabs. Overview (always opens first) is the guide, centred like the chat
+     welcome and sized to fit a laptop screen; Activity is the report (stats + table), unchanged. */
   const admin=welcomeRole==='admin', first=homeState==='first', name=admin?'Alex':'Sam';
   const tasks=homeTasks(admin), done=tasks.filter(t=>t[0]).length, complete=done===tasks.length;
   const greeting=first?`Welcome to Sovrant, ${name}`:`Good morning, ${name}`;
-  const pill=complete?'':`<button class="gspill" onclick="homeScrollToChecklist()"><span class="ring" style="--p:${Math.round(done/tasks.length*100)}"></span>Get started · ${done} of ${tasks.length}</button>`;
-  const stats=(first?s.stats.map(([l])=>[l,0]):s.stats).map(([l,v])=>`<div class="stat"><div class="lab">${l}</div><div class="val${v===0?' zero':''}">${v}</div></div>`).join('');
-  const rows=[['session','Fix OpenRouter 401 fallback bug','Recent','4h ago'],['agent-run','adhoc-template · architect','succeeded','Jun 10'],['session','Draft v1.5.0 changelog','Recent','1d ago']]
-    .map(([k,t,st,when])=>`<tr><td><span class="badge b-mut" style="margin:0">${k}</span></td><td><span class="ttl">${t}</span></td><td class="mut">${st}</td><td class="mut">${admin?'alex':'sam'}@example.com</td><td class="num">${when}</td></tr>`).join('');
-  const activity=first
-    ? `<div class="tablewrap hempty"><div class="h">Nothing yet</div><div class="p">Start a chat or run an agent — your activity and your teammates' public activity will appear here.</div></div>`
-    : `<div class="tablewrap"><table><thead><tr><th>Kind</th><th>Title</th><th>Status</th><th>Owner</th><th>Last activity</th></tr></thead><tbody>${rows}</tbody></table></div>`;
-  const checklist=complete
-    ? `<div class="hsec" id="getstarted"><div class="allset"><span class="ck">${sv(ICONS.allow,3)}</span><span class="tx"><b>All set</b> — you've finished getting started.</span><button class="btn ghost sm">Dismiss</button></div></div>`
-    : `<div class="hsec" id="getstarted"><div class="hsech"><h3>${admin?'Get started: set up your server':'Get started'}</h3><span class="mut">${done} of ${tasks.length} done</span></div>
-        <div class="wcheck"><div class="wbar"><i style="width:${Math.round(done/tasks.length*100)}%"></i></div>
-        ${tasks.map(([d,t,sub,act])=>`<div class="wli${d?' done':''}"><span class="ck">${d?sv(ICONS.allow,3):''}</span><span class="tx">${t}<span class="sub2">${sub}</span></span>${d?'<span class="okl">Done</span>':`<span class="act">${act} →</span>`}</div>`).join('')}</div></div>`;
-  const cards=`<div class="hsec"><div class="hsech"><h3>What Sovrant can do</h3></div>
-      <div class="wgrid hgrid">${homeAreas(admin).map(([ic,t,d,go])=>`<div class="wb${go?'':' managed'}"><div class="wi">${sv(ICONS[ic])}</div><b>${t}</b><span>${d}</span>${go?`<div class="go">${go} →</div>`:`<div class="mg">Managed by your admin</div>`}</div>`).join('')}</div></div>`;
-  return `<div class="ph home"><div><h2>${greeting}</h2><div class="sub">Your private AI workspace. Bring any model, keep your data, and stay in control of what your agents can do.</div></div>
-      <div class="acts">${pill}<button class="btn ghost">${sv(I.refresh,2)}Refresh</button></div></div>
-    <div class="stats">${stats}</div>${activity}${checklist}${cards}`;
+  const statVals=first?s.stats.map(([l])=>[l,0]):s.stats;
+  const tabs=`<div class="htabs" role="tablist">
+      <button class="htab${homeTab==='overview'?' on':''}" role="tab" onclick="setHomeTab('overview')">Overview</button>
+      <button class="htab${homeTab==='activity'?' on':''}" role="tab" onclick="setHomeTab('activity')">Activity</button>
+      ${homeTab==='activity'?`<span class="htabs-r"><span class="mut">Last updated 5:47 AM</span><button class="btn ghost sm">${sv(I.refresh,2)}Refresh</button></span>`:''}
+    </div>`;
+
+  if(homeTab==='activity'){
+    const stats=statVals.map(([l,v])=>`<div class="stat"><div class="lab">${l}</div><div class="val${v===0?' zero':''}">${v}</div></div>`).join('');
+    const rows=[['session','Fix OpenRouter 401 fallback bug','Recent','4h ago'],['agent-run','adhoc-template · architect','succeeded','Jun 10'],['session','Draft v1.5.0 changelog','Recent','1d ago'],
+                ['workflow','Summarize the roadmap in one sentence','Completed','Sep 9'],['session','Workspace provider visibility','Recent','2d ago']]
+      .map(([k,t,st,when])=>`<tr><td><span class="badge b-mut" style="margin:0">${k}</span></td><td><span class="ttl">${t}</span></td><td class="mut">${st}</td><td class="mut">${admin?'alex':'sam'}@example.com</td><td class="num">${when}</td></tr>`).join('');
+    const table=first
+      ? `<div class="tablewrap hempty"><div class="h">Nothing yet</div><div class="p">Start a chat or run an agent — your activity and your teammates' public activity will appear here.</div></div>`
+      : `<div class="tablewrap"><table><thead><tr><th>Kind</th><th>Title</th><th>Status</th><th>Owner</th><th>Last activity</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    return `${tabs}<div class="hact-sub">Your activity across every workspace you belong to — plus your teammates' public activity. <a>What are these?</a></div>
+      <div class="stats">${stats}</div>${table}`;
+  }
+
+  const glance=homeGlance
+    ? `<div class="hglance">${statVals.map(([l,v])=>`<button class="hg" onclick="setHomeTab('activity')" title="Open Activity"><b>${v}</b><span>${glanceLabel(l,v)}</span></button>`).join('')}</div>`
+    : '';
+  const showChecklist=!complete, showAllSet=complete&&homeState!=='dismissed';
+  const checklist=showChecklist
+    ? `<section class="hcol"><div class="hsech"><h3>${admin?'Get started: set up your server':'Get started'}</h3><span class="mut">${done} of ${tasks.length} done</span></div>
+        <div class="wcheck hcheck"><div class="wbar"><i style="width:${Math.round(done/tasks.length*100)}%"></i></div>
+        ${tasks.map(([d,t,sub,act])=>`<div class="wli${d?' done':''}"><span class="ck">${d?sv(ICONS.allow,3):''}</span><span class="tx">${t}<span class="sub2">${sub}</span></span>${d?'<span class="okl">Done</span>':`<span class="act">${act} →</span>`}</div>`).join('')}</div></section>`
+    : '';
+  const allset=showAllSet
+    ? `<div class="allset"><span class="ck">${sv(ICONS.allow,3)}</span><span class="tx"><b>All set</b> — you've finished getting started.</span><button class="btn ghost sm">Dismiss</button></div>`
+    : '';
+  const cards=`<section class="hcol"><div class="hsech"><h3>What Sovrant can do</h3></div>
+      <div class="hcards${showChecklist?'':' wide'}">${homeAreas(admin).map(([ic,t,d,go])=>`<div class="hcard${go?'':' managed'}" title="${go||'Managed by your admin'}"><div class="hct"><span class="wi">${sv(ICONS[ic])}</span><b>${t}</b>${go?'<span class="arr">→</span>':''}</div><span class="hd${go?'':' one'}">${d}</span>${go?'':'<span class="mg">Managed by your admin</span>'}</div>`).join('')}</div></section>`;
+  return `${tabs}<div class="hover">
+      <div class="hhero"><h2>${greeting}</h2><p>Your private AI workspace. Bring any model, keep your data, and stay in control of what your agents can do.</p></div>
+      ${glance}${allset}
+      <div class="hcols${showChecklist?'':' one'}">${checklist}${cards}</div>
+    </div>`;
 }
 
 function ctxHTML(s){
@@ -1261,7 +1313,10 @@ function render(){
     ct.style.display='flex';
     ct.innerHTML=[['admin','Admin'],['member','Member']].map(([k,t])=>`<button class="cbtn${welcomeRole===k?' on':''}" onclick="setWelcomeRole('${k}')">${t}</button>`).join('')
       +`<span class="tsep"></span>`
-      +[['first','First visit'],['returning','Returning'],['allset','All set']].map(([k,t])=>`<button class="cbtn${homeState===k?' on':''}" onclick="setHomeState('${k}')">${t}</button>`).join('');
+      +[['first','First visit'],['returning','Returning'],['allset','All set'],['dismissed','Dismissed']].map(([k,t])=>`<button class="cbtn${homeState===k?' on':''}" onclick="setHomeState('${k}')">${t}</button>`).join('')
+      +`<span class="tsep"></span>`
+      +[['overview','Overview'],['activity','Activity']].map(([k,t])=>`<button class="cbtn${homeTab===k?' on':''}" onclick="setHomeTab('${k}')">${t}</button>`).join('')
+      +`<button class="cbtn${homeGlance?' on':''}" onclick="toggleGlance()">At a glance</button>`;
   } else { ct.style.display='none'; }
   let inner='';
   if(s.p==='Entry') inner=entryHTML();
@@ -1317,5 +1372,13 @@ function buildIconRef(){
     ${Object.entries(BRANDS).map(([g,list])=>`<div class="ivsub">${g}</div><div class="bwrap">${list.map(brand).join('')}</div>`).join('')}
     <div class="ivsub">Category icons</div><div class="ivgrid">${VOCAB.filter(v=>v[3]==='Brand fallback').map(cell).join('')}</div>`;
 }
+/* Deep links for reviews: #home&glance&member&activity&first … opens Home in that state. */
+(function(){ const h=new Set(location.hash.slice(1).split('&').filter(Boolean));
+  if(h.has('home')) cur='dashboard';
+  if(h.has('glance')) homeGlance=true;
+  if(h.has('member')) welcomeRole='member';
+  if(h.has('activity')) homeTab='activity';
+  for(const st of ['first','returning','allset','dismissed']) if(h.has(st)) homeState=st;
+})();
 buildIndex(); render(); buildIconRef();
 </script>

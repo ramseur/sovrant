@@ -379,6 +379,28 @@ Roadmap Phase 141. The Dashboard becomes **Home**, and Phase 140's full-window W
 
 **Verified:** rendered in headless Edge, on both mocks, for admin and member in all three states: greeting, pill text, stats, empty state vs rows, checklist rows, All set line, 8 cards, managed cards (members only). The pill scrolls the app area (not the page) to the checklist; the subtitle lines up with the title on Home, Command Center and Skills. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass.
 
+## Home tabs: Overview + Activity (2026-10-06, design-only)
+
+Roadmap Phase 142. With real activity, Phase 141's Home pushed the guide below the fold (on a laptop you saw part of the checklist and none of the cards), and the header subtitle didn't wrap beside the pill. Home now has two tabs; it always opens on **Overview**. Toggles on Home: *Admin / Member*, *First visit / Returning / All set / Dismissed*, *Overview / Activity*, *At a glance*.
+
+**Tabs:** an underline tab strip at the top of the page: **Overview | Activity**. Activity's right side carries "Last updated" and Refresh.
+
+**Overview** (the guide, laid out like the chat welcome):
+- **Hero:** centred greeting (26px; "Welcome to Sovrant, Alex" on the first visit) and the tagline on one line.
+- **At a glance (kept at review):** a centred row of six small pills ("14 sessions", "1 agent run", "1 shared", …), each opening Activity. Review fixes: the text sat at the top of the pill (baseline alignment), so it's now centred with even padding; labels are singular for 1, and "shared (public)" became "shared". The tagline got 6px more room below it, and the page's top and bottom padding were trimmed to keep the laptop fit.
+- **Get started (left) and What Sovrant can do (right), side by side;** they stack below 1100px. The checklist is the Phase 141 one with tighter rows.
+- **Cards:** compact cards in a 2-column grid. Each has an icon, a title with "→", and a two-line description; the whole card is the link. Members' admin-managed cards keep "Managed by your admin" with a one-line description.
+- **When done:** the checklist collapses to the "All set" line above the cards, and the cards spread to 4 columns. After Dismiss, only the cards remain.
+- **No Get started pill:** the checklist is already in view.
+
+**Activity:** the report, unchanged: a one-line description with "What are these?", the six stat tiles, and the activity table (or "Nothing yet").
+
+**Laptop check:** the mock browser frame sized to a maximized 1366×768 browser (1366×700 including the mock's tab and address bars). All 16 Overview states (two roles, four checklist states, at a glance on and off) fit without scrolling on both mocks. The first pass overflowed by 55–100px while the checklist was in progress, which led to the compact cards.
+
+**Review links:** `web.html#home&glance` (also `&member`, `&first`, `&allset`, `&dismissed`, `&activity`) opens Home in that state.
+
+**Verified:** rendered in headless Edge on both mocks: 32 Overview combinations measured (overflow, cards visible, checklist rows, All set, managed cards), plus the Activity tab. Parity diff still 49 chrome-only lines.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.
