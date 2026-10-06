@@ -39,8 +39,18 @@
                     }
                 </div>
             </button>
-            <button class="rail-footer-settings" title="Log out"
-                    @onclick="LogoutAsync">&#x21AA;</button>
+            @if (!Program.IsRemoteMode)
+            {
+                @* Phase 145: sign-out posts to /auth/logout, which ends this browser's sign-in and clears its cookie. *@
+                <form class="signout-form" method="post" action="/auth/logout">
+                    <AntiforgeryToken />
+                    <button class="rail-footer-settings" type="submit" title="Sign out">&#x21AA;</button>
+                </form>
+            }
+            else
+            {
+                <button class="rail-footer-settings" title="Sign out" @onclick="LogoutAsync">&#x21AA;</button>
+            }
         </div>
     </aside>
 
@@ -75,8 +85,9 @@
 
     protected override void OnInitialized()
     {
+        // Phase 145: carry why a refused cookie was refused (timed out / revoked) to the Sign in notice.
         if (!Session.IsAuthenticated)
-            Nav.NavigateTo("/login", forceLoad: false);
+            Nav.NavigateTo(Session.SignedOutReason is { } why ? $"/login?reason={why}" : "/login", forceLoad: false);
         Nav.LocationChanged += OnLocationChanged;
         MarkKnowledgeVisited(Nav.Uri);
     }
@@ -117,6 +128,7 @@
     private void OnCommandOutput(string output) { /* could show toast */ }
     private void OnInjectMessage(string msg) => Nav.NavigateTo($"/?inject={Uri.EscapeDataString(msg)}");
 
+    /// <summary>Remote mode only (process-wide sign-in until Phase 145 Part C).</summary>
     private void LogoutAsync()
     {
         Session.SignOut();

@@ -2,6 +2,7 @@
 @using Sovrant.Web.Services
 @inject IServiceProvider Services
 @inject ActiveContextService ActiveContext
+@inject Sovrant.Web.Services.WebSessionService Session
 
 @* Phase 133 — "Move to folder" picker, shared by the sidebar's ⋯ menus and the
    chat header's Move button. Moves either a conversation or a folder. Folders
@@ -84,7 +85,7 @@
     private IReadOnlyList<(SessionFolder Folder, int Depth, SessionFolderError? Refusal)> _rows = [];
 
     private SessionSidebarService Sidebar => SessionSidebarService.From(Services);
-    private static string Me => Sovrant.Web.Program.SovrantUserId;
+    private string Me => Session.UserId ?? string.Empty;
 
     /// <summary>Opens the picker for a conversation currently in <paramref name="currentFolderId"/>.</summary>
     public Task OpenForSessionAsync(string sessionId, string title, string? currentFolderId) =>

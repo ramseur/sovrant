@@ -42,7 +42,7 @@ internal static class AuthRoutes
         if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
             return Results.BadRequest(new { error = "Email and password are required." });
 
-        var result = await identity.RegisterAsync(req.Email, req.Password, ctx.RequestAborted)
+        var result = await identity.RegisterAsync(req.Email, req.Password, ct: ctx.RequestAborted)
             .ConfigureAwait(false);
 
         if (!result.Success)
@@ -68,7 +68,7 @@ internal static class AuthRoutes
         if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
             return Results.BadRequest(new { error = "Email and password are required." });
 
-        var result = await identity.LoginAsync(req.Email, req.Password, ctx.RequestAborted)
+        var result = await identity.LoginAsync(req.Email, req.Password, ct: ctx.RequestAborted)
             .ConfigureAwait(false);
 
         return result.Success

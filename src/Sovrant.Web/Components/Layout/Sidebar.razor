@@ -2,6 +2,7 @@
 @using Sovrant.Web.Services
 @inject IJSRuntime JS
 @inject IServiceProvider Services
+@inject Sovrant.Web.Services.WebSessionService Session
 @implements IDisposable
 
 <aside class="sidebar">
@@ -172,7 +173,7 @@
     private CancellationTokenSource? _timerCts;
 
     private SessionSidebarService Folders => SessionSidebarService.From(Services);
-    private static string Me => Sovrant.Web.Program.SovrantUserId;
+    private string Me => Session.UserId ?? string.Empty;
 
     // ── rows ────────────────────────────────────────────────────────────────
 

@@ -11,6 +11,12 @@ Versions correspond to tags on the `main` branch.
 
 > **Pre-release notice: Sovrant.Web is single-user per server.** One Web server holds one signed-in user for every browser, so people sharing a Web server see each other's data and act as each other. Use Web for one person at a time, or Sovrant.Server for teams. Per-browser sign-in for teams of 10–1000 is Phase 145 (GitHub #32). The two stopgaps below reduce the risk until then.
 
+### Added
+
+- **Web: each browser signs in separately (Phase 145, part A).** Sign-in sets an HttpOnly cookie for that browser, so two people on one Web server are two different users, each with their own workspace, model, conversations and Home. Signed out after **1 hour** without activity (renewed by activity) and after **12 hours** regardless; **"Keep me signed in on this browser for 30 days"** on the sign-in page. All three are env-settable: `SOVRANT_WEB_IDLE_MINUTES`, `SOVRANT_WEB_MAX_SESSION_HOURS`, `SOVRANT_WEB_REMEMBER_DAYS` (`0` hides the checkbox). Sign out (this browser) and Sign out of all browsers are on Settings. If you're signed out by the timeout or by an admin, the sign-in page says why. Remote mode (Web in front of Server) still uses one sign-in until part C.
+
+> **Migration note:** **V049 (additive):** new `web_sign_ins` table, one row per browser sign-in (only a hash of the cookie token is stored). Existing data is untouched. SQLite only for now: under the Postgres backend, users and sign-ins stay on SQLite (Phase 134 Part B).
+
 ### Security
 
 - **Web: no automatic sign-in after a restart.** Web saved the last sign-in token and restored it at startup for the whole server, so after a restart any visitor was signed in as that user without a password. Web no longer saves the token, deletes one left by an older version, and everyone signs in again after a restart. A guard test keeps it that way.

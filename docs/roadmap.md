@@ -13133,7 +13133,9 @@ GitHub issues from a containerised, multi-tenant deployment hit exactly this:
 
 ## Phase 145 — Multi-user Web (teams of 10–1000)
 
-**Status:** Planned (2026-10-06) — plan agreed; next after the 2.1.0 stopgaps. GitHub #32 stays open until this ships.
+**Status:** In progress (2026-10-06). GitHub #32 stays open until this ships.
+- **Built — Part A, identity per browser (embedded mode):** V049 `web_sign_ins` + `IWebSignInService` (1 h idle, 12 h absolute, 30-day remember, env-settable); cookie scheme + `/auth/login`, `/auth/register`, `/auth/logout` (this browser / all), `/auth/ping`; Login is a real form post with "Keep me signed in" and Timed out / Revoked notices; `WebSessionService`, `IPrincipalAccessor` and `ActiveContextService` are per circuit; the static `Program.SovrantUserId` is gone (22 call sites now use the tab's user); chat turns run as their owner (pool keyed by owner, `AmbientPrincipal` per turn and per request). Verified live: two browsers signed in as different users at once, remember-me cookie, wrong password, CSRF rejected, sign out one / all, admin revoke → "An administrator signed you out".
+- **Still to do in Part A:** per-tab approvals and permission mode (the confirmation handler and policy are still process-wide), the activity ping + expiry check inside an open tab, the account menu and Admin → Users sign-ins with Revoke, automated multi-user tests.
 
 ### Why
 

@@ -3,6 +3,7 @@
 @using Sovrant.Runtime
 @using Sovrant.Runtime.Auth
 @using Sovrant.Runtime.Mcp
+@using Sovrant.Web.Auth
 @using Sovrant.Web.Services
 @inject IIdentityService IdentityService
 @inject WebSessionService Session
@@ -10,7 +11,10 @@
 @inject IServiceProvider Services
 
 @* Phase 140 — first-run admin sign-up (from Rahul Singh's issue #27): with no accounts yet, the
-   first account created becomes the administrator; success uses the success style, not errors. *@
+   first account created becomes the administrator; success uses the success style, not errors.
+   Phase 145 — embedded mode signs in per browser: the form posts to /auth/login or /auth/register,
+   which set an HttpOnly cookie (a Blazor circuit can't). Messages come back in the query string.
+   Remote mode keeps the in-page flow until Phase 145 Part C. *@
 <div class="login-card">
     <div class="login-title">Sovrant</div>
 
@@ -27,6 +31,10 @@
         <div class="login-sub" style="margin-bottom:8px">Sign in to continue.</div>
     }
 
+    @if (_warning is not null)
+    {
+        <div class="login-warn"><SovrantIcon Name="@IconNames.Warning" Size="15" /><span>@_warning</span></div>
+    }
     @if (_infoMessage is not null)
     {
         <div class="login-success"><SovrantIcon Name="@IconNames.Done" Size="15" />@_infoMessage</div>
@@ -36,66 +44,111 @@
         <div class="login-error">@_errorMessage</div>
     }
 
-    <div class="login-field">
-        <label class="login-label">Email</label>
-        <input class="login-input"
-               type="email"
-               @bind="_email"
-               @bind:event="oninput"
-               placeholder="you@example.com"
-               disabled="@_busy" />
-    </div>
-
-    <div class="login-field">
-        <label class="login-label">Password</label>
-        <input class="login-input"
-               type="password"
-               @bind="_password"
-               @bind:event="oninput"
-               placeholder="@(_firstRun ? "Choose a password" : "Password")"
-               disabled="@_busy"
-               @onkeydown="OnKeyDown" />
-    </div>
-
-    @if (_firstRun)
+    @if (!Program.IsRemoteMode)
     {
-        <button class="login-btn" @onclick="RegisterAsync" disabled="@_busy">Create administrator account</button>
+        <form class="login-form" method="post" action="@(_firstRun ? "/auth/register" : "/auth/login")"
+              onsubmit="this.classList.add('busy')">
+            <AntiforgeryToken />
+            <div class="login-field">
+                <label class="login-label" for="login-email">Email</label>
+                <input id="login-email" class="login-input" type="email" name="email" value="@_email"
+                       placeholder="you@example.com" autocomplete="username" required />
+            </div>
+            <div class="login-field">
+                <label class="login-label" for="login-password">Password</label>
+                <input id="login-password" class="login-input" type="password" name="password"
+                       placeholder="@(_firstRun ? "Choose a password" : "Password")"
+                       autocomplete="@(_firstRun ? "new-password" : "current-password")" required />
+            </div>
+
+            @if (!_firstRun && _rememberDays > 0)
+            {
+                <label class="login-remember">
+                    <input type="checkbox" name="remember" />
+                    Keep me signed in on this browser for @_rememberDays days
+                </label>
+                <div class="login-hint">Otherwise you're signed out after @_idleText without activity. Leave this off on a shared computer.</div>
+            }
+
+            @if (_firstRun)
+            {
+                <button class="login-btn" type="submit">Create administrator account</button>
+            }
+            else
+            {
+                <button class="login-btn" type="submit">Sign in</button>
+                @if (_registrationOpen)
+                {
+                    <div class="login-divider"></div>
+                    <div class="login-sub">Don't have an account?</div>
+                    <button class="login-btn login-btn-secondary" type="submit" formaction="/auth/register">Create account</button>
+                    @if (_approvalRequired)
+                    {
+                        <div class="login-note">New accounts need administrator approval before first sign-in.</div>
+                    }
+                }
+            }
+            <div class="login-status" role="status" aria-live="polite">
+                <span class="login-spinner" aria-hidden="true"></span>@(_firstRun ? "Creating your administrator account…" : "Signing you in…")
+            </div>
+        </form>
     }
     else
     {
-        <button class="login-btn" @onclick="LoginAsync" disabled="@_busy">Sign in</button>
-
-        @if (_registrationOpen)
+        <div class="login-field">
+            <label class="login-label">Email</label>
+            <input class="login-input" type="email" @bind="_email" @bind:event="oninput" placeholder="you@example.com" disabled="@_busy" />
+        </div>
+        <div class="login-field">
+            <label class="login-label">Password</label>
+            <input class="login-input" type="password" @bind="_password" @bind:event="oninput"
+                   placeholder="@(_firstRun ? "Choose a password" : "Password")" disabled="@_busy" @onkeydown="OnKeyDown" />
+        </div>
+        @if (_firstRun)
         {
-            <div class="login-divider"></div>
-            <div class="login-sub">Don't have an account?</div>
-            <button class="login-btn login-btn-secondary" @onclick="RegisterAsync" disabled="@_busy">Create account</button>
-            @if (_approvalRequired)
+            <button class="login-btn" @onclick="RemoteRegisterAsync" disabled="@_busy">Create administrator account</button>
+        }
+        else
+        {
+            <button class="login-btn" @onclick="RemoteLoginAsync" disabled="@_busy">Sign in</button>
+            @if (_registrationOpen)
             {
-                <div class="login-note">New accounts need administrator approval before first sign-in.</div>
+                <div class="login-divider"></div>
+                <div class="login-sub">Don't have an account?</div>
+                <button class="login-btn login-btn-secondary" @onclick="RemoteRegisterAsync" disabled="@_busy">Create account</button>
+                @if (_approvalRequired)
+                {
+                    <div class="login-note">New accounts need administrator approval before first sign-in.</div>
+                }
             }
         }
-    }
-
-    @if (_busy)
-    {
-        <div class="login-status" role="status" aria-live="polite">
-            <span class="login-spinner" aria-hidden="true"></span>@_busyLabel
-        </div>
+        @if (_busy)
+        {
+            <div class="login-status" role="status" aria-live="polite">
+                <span class="login-spinner" aria-hidden="true"></span>@_busyLabel
+            </div>
+        }
     }
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "error")] public string? Error { get; set; }
+    [SupplyParameterFromQuery(Name = "info")] public string? Info { get; set; }
+    [SupplyParameterFromQuery(Name = "reason")] public string? Reason { get; set; }
+    [SupplyParameterFromQuery(Name = "email")] public string? EmailParam { get; set; }
 
     private string _email = string.Empty;
     private string _password = string.Empty;
     private string? _errorMessage;
     private string? _infoMessage;
+    private string? _warning;
     private string _busyLabel = string.Empty;
     private bool _busy;
     private bool _registrationOpen;
     private bool _firstRun;
     private bool _approvalRequired;
+    private int _rememberDays;
+    private string _idleText = "an hour";
 
     protected override async Task OnInitializedAsync()
     {
@@ -104,18 +157,46 @@
             Nav.NavigateTo("/dashboard", forceLoad: true); // already signed in → Home
             return;
         }
+
+        _email = EmailParam ?? string.Empty;
+        _errorMessage = string.IsNullOrWhiteSpace(Error) ? null : Error;
+        _infoMessage = Info switch
+        {
+            "approval" => "Account created. An administrator must approve it before you can sign in.",
+            "signedout" => "You're signed out.",
+            _ => null,
+        };
+
+        if (Services.GetService<WebSignInPolicy>() is { } policy)
+        {
+            _rememberDays = (int)Math.Round(policy.RememberLifetime.TotalDays);
+            _idleText = Describe(policy.IdleTimeout);
+            _warning = (Reason ?? Session.SignedOutReason) switch
+            {
+                WebAuth.ReasonTimedOut => $"You were signed out after {_idleText} without activity. Sign in again to pick up where you left off.",
+                WebAuth.ReasonRevoked => "An administrator signed you out of this browser. Sign in again, or ask them if you didn't expect this.",
+                _ => null,
+            };
+        }
+
         _firstRun = await IdentityService.IsFirstRunAsync().ConfigureAwait(false);
         _registrationOpen = await IdentityService.IsRegistrationOpenAsync().ConfigureAwait(false);
         _approvalRequired = !_firstRun && _registrationOpen
             && await IdentityService.IsApprovalRequiredAsync().ConfigureAwait(false);
     }
 
+    private static string Describe(TimeSpan t) =>
+        t == TimeSpan.FromHours(1) ? "an hour"
+        : t.TotalMinutes < 120 ? $"{(int)t.TotalMinutes} minutes"
+        : $"{t.TotalHours:0.#} hours";
+
+    // ── Remote mode (until Phase 145 Part C): one process-wide sign-in, in-page ─────────────
+
     private async Task OnKeyDown(KeyboardEventArgs e)
     {
         if (e.Key != "Enter") return;
-        // On first run there's nobody to sign in as yet: Enter creates the administrator.
-        if (_firstRun) await RegisterAsync();
-        else await LoginAsync();
+        if (_firstRun) await RemoteRegisterAsync();
+        else await RemoteLoginAsync();
     }
 
     private bool ValidateInput()
@@ -130,7 +211,7 @@
         return true;
     }
 
-    private async Task LoginAsync()
+    private async Task RemoteLoginAsync()
     {
         if (!ValidateInput()) return;
         _busy = true;
@@ -143,7 +224,7 @@
                 _errorMessage = result.Error ?? "Login failed.";
                 return;
             }
-            await SignInAndGoAsync(result.Token, result.UserId!, result.Role).ConfigureAwait(false);
+            RemoteSignIn(result.Token, result.UserId!, result.Role);
         }
         finally
         {
@@ -151,7 +232,7 @@
         }
     }
 
-    private async Task RegisterAsync()
+    private async Task RemoteRegisterAsync()
     {
         if (!ValidateInput()) return;
         _busy = true;
@@ -169,10 +250,7 @@
                 _infoMessage = "Account created. An administrator must approve it before you can sign in.";
                 return;
             }
-            // Honor the role the identity service assigned. Only the first registrant
-            // is "admin"; everyone else is "user" and must not inherit admin powers
-            // just because they happened to register through this form.
-            await SignInAndGoAsync(result.Token!, result.UserId!, result.Role).ConfigureAwait(false);
+            RemoteSignIn(result.Token!, result.UserId!, result.Role);
         }
         finally
         {
@@ -180,22 +258,13 @@
         }
     }
 
-    private async Task SignInAndGoAsync(string token, string userId, string? role)
+    private void RemoteSignIn(string token, string userId, string? role)
     {
-        // The sign-in token is not saved: a saved token was restored for every visitor after a
-        // restart (signing them in as the last user). Remote mode keeps it in memory for its API
-        // client only. Phase 145 replaces this with a per-browser sign-in cookie.
+        // Not saved: a saved token used to be restored for every visitor after a restart.
         if (Services.GetService<Sovrant.Client.Remote.SovrantRemoteOptions>() is { } remote)
             remote.ApiToken = token;
-        Program.SetUserId(userId);
         Session.SignIn(userId, role ?? "user", _email.Trim());
-        if (!Program.IsRemoteMode)
-            _ = Task.Run(async () =>
-            {
-                await Program.SeedUserAndWorkspaceAsync(Services, userId).ConfigureAwait(false);
-                await Services.ApplyUserPreferencesForUserAsync(userId).ConfigureAwait(false);
-            });
-        // Phase 141: every sign-in lands on Home (greeting, activity, Get started), like Desktop.
+        // Phase 141: every sign-in lands on Home.
         Nav.NavigateTo("/dashboard", forceLoad: true);
     }
 }

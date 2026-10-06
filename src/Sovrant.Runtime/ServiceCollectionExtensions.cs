@@ -279,6 +279,10 @@ public static class ServiceCollectionExtensions
                 sp.GetRequiredService<ISqliteConnectionFactory>(),
                 sp.GetRequiredService<ILogger<Sovrant.Runtime.Auth.SqliteTokenService>>()));
 
+        // Phase 145 — per-browser Web sign-ins (V049).
+        services.AddSingleton<Sovrant.Runtime.Auth.IWebSignInService>(sp =>
+            new Sovrant.Runtime.Auth.SqliteWebSignInService(sp.GetRequiredService<ISqliteConnectionFactory>()));
+
         // Phase 85 — password hasher + identity service
         services.AddSingleton<Sovrant.Runtime.Auth.IPasswordHasher,
             Sovrant.Runtime.Auth.Argon2idPasswordHasher>();

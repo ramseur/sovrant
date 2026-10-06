@@ -13,6 +13,7 @@ using Sovrant.Runtime.Storage;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Sovrant.Web.Adapters;
+using Sovrant.Web.Auth;
 using Sovrant.Web.Services;
 using Sovrant.Client.Remote;
 using Sovrant.Storage.Postgres;
@@ -26,8 +27,6 @@ public static class Program
     /// <summary>Signals when runtime initialization (DB, model metadata) is complete.</summary>
     public static TaskCompletionSource RuntimeReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>The authenticated user's ID. Updated after login; falls back to SOVRANT_USER_ID or the OS identity until then.</summary>
-    public static string SovrantUserId { get; private set; } = Environment.UserName;
 
     /// <summary>True when running in remote mode (connecting to an external Sovrant.Server).</summary>
     public static bool IsRemoteMode { get; private set; }
@@ -36,7 +35,6 @@ public static class Program
     {
         // Phase 144: .env first, so every variable below (and in the runtime) honours it.
         BootstrapConfigLoader.EnsureDotEnvLoaded();
-        SovrantUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
         var runtimeMode = Environment.GetEnvironmentVariable("SOVRANT_RUNTIME_MODE") ?? "embedded";
         var isRemote = string.Equals(runtimeMode, "remote", StringComparison.OrdinalIgnoreCase);
 
@@ -95,12 +93,24 @@ public static class Program
         Sovrant.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
             Environment.GetEnvironmentVariable(Sovrant.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
 
-        // WebSessionService is a singleton used by all Blazor circuits.
-        // For embedded mode it is populated after session restore or login.
-        // For remote mode it is pre-populated with the env/OS identity.
-        var webSession = new WebSessionService();
-        builder.Services.AddSingleton(webSession);
-        builder.Services.AddSingleton<IPrincipalAccessor>(webSession);
+        // Who is signed in (Phase 145): embedded mode reads each browser's sign-in cookie, one
+        // WebSessionService per circuit/request. Remote mode keeps one process-wide user until
+        // Phase 145 Part C signs each Web user in to Server separately.
+        if (isRemote)
+        {
+            var webSession = new WebSessionService();
+            builder.Services.AddSingleton(webSession);
+            builder.Services.AddSingleton<IPrincipalAccessor>(webSession);
+        }
+        else
+        {
+            builder.Services.AddSovrantWebAuth();
+            builder.Services.AddHttpContextAccessor();
+            builder.Services.AddScoped(sp => new WebSessionService(
+                sp.GetService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                sp.GetService<IHttpContextAccessor>()));
+            builder.Services.AddScoped<IPrincipalAccessor>(sp => sp.GetRequiredService<WebSessionService>());
+        }
 
         if (isRemote)
         {
@@ -155,7 +165,9 @@ public static class Program
             builder.Services.AddSingleton<IPermissionPolicy>(permissionPolicy);
             // Phase 145 stopgap: Web is shared, so members can't use file/shell tools unless an
             // admin allows it (Governance). Desktop and the CLI don't register this.
-            builder.Services.AddSingleton<Sovrant.Runtime.Tools.IHostToolPolicy, Sovrant.Runtime.Tools.MemberHostToolPolicy>();
+            // The caller is the ambient principal: set per request (below) and per chat turn.
+            builder.Services.AddSingleton<Sovrant.Runtime.Tools.IHostToolPolicy>(sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
+                AmbientPrincipal.Accessor, sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
             builder.Services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
             builder.Services.AddSingleton(config);
             var confirmationHandler = new BlazorConfirmationHandler();
@@ -164,7 +176,8 @@ public static class Program
             builder.Services.AddSingleton<IUserInputProvider, BlazorUserInputProvider>();
             builder.Services.AddSingleton<IAuthProvider>(mutableAuth);
             builder.Services.AddSingleton(mutableAuth);
-            builder.Services.AddSingleton<ActiveContextService>();
+            // Phase 145: workspace, project, model, MCP servers and current chat are per browser tab.
+            builder.Services.AddScoped<ActiveContextService>();
             builder.Services.AddScoped<ActiveSessionsService>();
             builder.Services.AddScoped<ChatSeedService>();
         }
@@ -221,8 +234,25 @@ public static class Program
             ? Results.Ok(new { status = "ready" })
             : Results.Json(new { status = "starting" }, statusCode: StatusCodes.Status503ServiceUnavailable));
 
+        if (!isRemote)
+        {
+            // Phase 145: each browser's sign-in cookie → its own user. The request's user also becomes
+            // the ambient principal, so tool policies and background work started here know who it is.
+            app.UseAuthentication();
+            app.Use(async (ctx, next) =>
+            {
+                var uid = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (uid is null) { await next(ctx).ConfigureAwait(false); return; }
+                using (AmbientPrincipal.Push(uid, ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value))
+                    await next(ctx).ConfigureAwait(false);
+            });
+            app.UseAuthorization();
+        }
+
         app.MapStaticAssets();
         app.UseAntiforgery();
+        if (!isRemote)
+            app.MapSovrantWebAuth();
 
         app.MapRazorComponents<Sovrant.Web.Components.App>()
             .AddInteractiveServerRenderMode();
@@ -265,23 +295,8 @@ public static class Program
                     await app.Services.InitializeRuntimeAsync().ConfigureAwait(false);
                     app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 
-                    // Only seed user/workspace if a session was restored at startup.
-                    // If not, the user hasn't logged in yet; Login.razor will seed after auth.
-                    if (webSession.IsAuthenticated)
-                    {
-                        await SeedUserAndWorkspaceAsync(app.Services, webSession.UserId!).ConfigureAwait(false);
-                        // Re-apply preferences for the authenticated user. InitializeRuntimeAsync
-                        // used the OS identity; this pass corrects it to the token's actual userId.
-                        await app.Services.ApplyUserPreferencesForUserAsync(webSession.UserId!).ConfigureAwait(false);
-                        // Sync mutableAuth with the DB-loaded config so the provider routes correctly.
-                        var auth = app.Services.GetService<Sovrant.Web.Adapters.MutableAuthProvider>();
-                        var cfg = app.Services.GetService<Sovrant.Runtime.Config.SovrantConfig>();
-                        if (auth is not null && cfg is not null && !string.IsNullOrWhiteSpace(cfg.ApiKey))
-                        {
-                            auth.ApiKey = cfg.ApiKey!;
-                            auth.BaseUrl = cfg.BaseUrl;
-                        }
-                    }
+                    // No one is signed in at startup (Phase 145: sign-in is per browser); each user's
+                    // row, workspace and preferences are set up when they sign in (/auth/login).
                 }
                 catch (Exception ex)
                 {
@@ -298,7 +313,6 @@ public static class Program
         await app.RunAsync();
     }
 
-    internal static void SetUserId(string userId) => SovrantUserId = userId;
 
     /// <summary>
     /// Earlier versions saved the last Web sign-in token and restored it at startup for the whole

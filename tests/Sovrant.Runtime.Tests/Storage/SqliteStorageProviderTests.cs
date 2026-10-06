@@ -36,7 +36,7 @@ public sealed class SqliteStorageProviderTests : IAsyncDisposable
         await _provider.InitializeAsync();
 
         // Schema head bumped to 48 by V048 (conversation folders, Phase 133).
-        Assert.Equal(48, _provider.SchemaVersion);
+        Assert.Equal(49, _provider.SchemaVersion);
     }
 
     [Fact]

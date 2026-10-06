@@ -2,6 +2,7 @@
 @using Sovrant.Web.Services
 @inject IServiceProvider Services
 @inject ActiveContextService ActiveContext
+@inject Sovrant.Web.Services.WebSessionService Session
 @implements IDisposable
 
 @* Phase 133 — top of an open conversation: where it's filed, what it's linked
@@ -45,7 +46,7 @@
     private string? _folderId;
     private string? _loadedFor;
 
-    private static string Me => Sovrant.Web.Program.SovrantUserId;
+    private string Me => Session.UserId ?? string.Empty;
 
     protected override void OnInitialized() => ActiveContext.OnDataChanged += OnDataChanged;
 
