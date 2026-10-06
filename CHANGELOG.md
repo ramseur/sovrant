@@ -3,15 +3,15 @@
 All notable changes to Sovrant are documented here.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versions correspond to tags on the `development` branch.
+Versions correspond to tags on the `main` branch.
 
 ---
 
-## [2.0.0] — Unreleased
+## [2.0.0] — 2026-10-06
 
 **A major release:** the app (`Directory.Build.props`) and the JS SDK (`@sovrant/sdk`) both move to **2.0.0**, because the Missions → Workflows rename removes the `/v1/missions*` API and the SDK's mission methods (see Breaking changes).
 
-Workflows that plan and run on their own, a new **Home** page with first-run onboarding, conversation folders, a refreshed app shell (sidebar, chat, icons) on Web and Desktop, friendly MCP connection errors, and Ollama only when you've actually set it up.
+Workflows that plan before they run (and run on their own on Sovrant.Server), a new **Home** page with first-run onboarding, conversation folders, a refreshed app shell (sidebar, chat, icons) on Web and Desktop, friendly MCP connection errors, Ollama only when you've actually set it up, environment configuration that works in containers, and an API and SDK that can do what the apps do.
 
 > **Migration notes:**
 > - **V047 (one-way rename):** renames `missions`→`workflows`, `mission_events`→`workflow_events` and `mission_scratchpad`→`workflow_scratchpad` (plus their indexes and the `mission_id`→`workflow_id` FK column) via `ALTER TABLE … RENAME`. No data loss: existing rows and their full event journals carry over. There is no realistic undo once written under the new names, so it was tested against a copy of a real dev database. `db/postgres/PostgresSchema.sql` and `db/supabase/migrations/` carry the equivalent guarded rename (idempotent, safe to re-run).
@@ -32,8 +32,8 @@ Workflows that plan and run on their own, a new **Home** page with first-run onb
 
 ### Added
 
-- **Workflows (Phase 129):** goals that plan and run on their own.
-  - **Background scheduler:** `WorkflowSchedulerService` advances Planning/Running workflows with bounded concurrency. Configure it with `SOVRANT_WORKFLOW_POLL_SECONDS` / `SOVRANT_WORKFLOW_MAX_CONCURRENT` or workspace settings.
+- **Workflows (Phase 129):** give Sovrant a goal; it plans the steps and works through them.
+  - **Background scheduler (Sovrant.Server):** `WorkflowSchedulerService` advances Planning/Running workflows with bounded concurrency. Configure it with `SOVRANT_WORKFLOW_POLL_SECONDS` / `SOVRANT_WORKFLOW_MAX_CONCURRENT` or workspace settings. Web and Desktop in embedded mode don't run the scheduler: a workflow advances when you press Run now / Resume or ask the Workflow tool.
   - **Workflows page (Web + Desktop):** goal, status, plan steps, event journal, and Run now / Resume / Cancel / Export. Plan and Journal are separate tabs, and the page refreshes live (every 4 s) while a workflow is planning or running.
   - **Plan first, then run:** "Generate Plan first" has the selected model break the goal into steps, which you can review and edit (add, remove, rewrite, change tier) before running. An edited plan is no longer silently re-planned.
   - **Real output:** the journal shows each step's actual output and artifact count, not just "Completed".
@@ -76,6 +76,7 @@ Workflows that plan and run on their own, a new **Home** page with first-run onb
   - **Nav groups:** Knowledge, Agents and Admin are collapsible groups with their pages inline. One group is open at a time, and the current page's group opens automatically.
   - **Collapsed rail:** opens a flyout of a group's pages on hover, click or Enter/Space. Chat's flyout lists the 5 most recent conversations.
   - **Restyle:** the left nav has line icons, an accent bar for the active item, and Admin's pages grouped under Overview / Access / Safety / System. The old per-group side panels are gone.
+  - **Brand mark:** shown only in the browser tab (Web) and title bar (Desktop). The rail's brand row is gone, and the collapse toggle sits on the rail's edge.
 - **Chat (Phase 137):** user messages are right-aligned bubbles with an initials avatar; assistant replies sit flat beside a neutral avatar, with one model · elapsed · Copy line.
   - **Layout:** the thread and composer share a centred column, capped at 760px.
   - **Send/Stop:** one brand icon button is Send, and becomes Stop while a reply is generating. Esc stops a reply on Web too.
@@ -116,6 +117,7 @@ Workflows that plan and run on their own, a new **Home** page with first-run onb
 - **Remote mode:** the session list read the wrong field and threw.
 - **Postgres:** session search failed (column mismatch).
 - **Desktop Orchestration buttons rendered transparent:** a brush lookup missed application resources.
+- **Desktop sign-in window ignored the theme:** its background pointed at a resource that didn't exist, and error text was hard-coded red. Both now use theme colours.
 - **Gemma 4 capability overrides had expired** (2026-07-01) and were being ignored; renewed.
 
 ### Internal
@@ -123,7 +125,7 @@ Workflows that plan and run on their own, a new **Home** page with first-run onb
 - New `Sovrant.Ui.Tests` project (xUnit v3 + Avalonia headless): icon vocabulary, no-emoji guard, headless render tests, and Desktop Home / Welcome / Integrations render tests.
 - Tests that change process environment variables now run in one non-parallel collection (fixes an intermittent `OllamaOptInTests` failure). The LSP Windows-path test is skipped on non-Windows hosts.
 - `docs/design/` (`web.html`, `desktop.html`, `README.md`) is the cross-platform design record; every UI phase is mocked there first.
-- Test suite: 2,452 tests.
+- Test suite: 2,474 tests (3 skipped on Windows).
 
 ---
 
