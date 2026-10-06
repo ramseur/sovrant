@@ -264,8 +264,8 @@ public partial class WorkflowsViewModel : ViewModelBase
     {
         if (SelectedWorkflow is null || IsTerminal(SelectedWorkflow.Status)) return;
 
-        await _store.AppendEventAsync(SelectedWorkflow.Id, WorkflowEventTypes.Cancelled, "{}").ConfigureAwait(true);
-        await _store.UpdateStateAsync(SelectedWorkflow.Id, WorkflowStatus.Cancelled, completedAt: DateTimeOffset.UtcNow).ConfigureAwait(true);
+        if (await _store.GetAsync(SelectedWorkflow.Id).ConfigureAwait(true) is { } workflow)
+            await _store.CancelAsync(workflow).ConfigureAwait(true);
         StatusMessage = "Workflow cancelled.";
         LoadAll();
     }

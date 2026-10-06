@@ -496,8 +496,7 @@
     {
         if (_selected is null || IsTerminal(_selected.Status)) return;
 
-        await WorkflowStore.AppendEventAsync(_selected.Id, WorkflowEventTypes.Cancelled, "{}");
-        await WorkflowStore.UpdateStateAsync(_selected.Id, WorkflowStatus.Cancelled, completedAt: DateTimeOffset.UtcNow);
+        await WorkflowStore.CancelAsync(_selected);
         _status = "Workflow cancelled.";
         await LoadAllAsync();
     }

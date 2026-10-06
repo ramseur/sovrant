@@ -660,13 +660,39 @@ export interface AgentRunFilter {
 export interface Workflow {
   id: string;
   goal: string;
-  status: "planning" | "running" | "completed" | "failed";
+  /** "awaitingHuman" = paused for review (e.g. a generated plan waiting to be run). */
+  status: WorkflowStatus;
+  /** The current plan as JSON (steps with intent, expected outcome and model tier). */
+  plan_json?: string;
   session_id?: string;
   workspace_id?: string;
   project_id?: string;
   owner_user_id?: string;
+  is_private?: boolean;
   created_at: string;
   updated_at: string;
+  completed_at?: string;
+}
+
+/** Workflow lifecycle states as the server sends them. */
+export type WorkflowStatus = "planning" | "running" | "awaitingHuman" | "completed" | "failed" | "cancelled";
+
+/** Request body for POST /v1/workflows/plan: create a workflow and generate its plan for review. */
+export interface GenerateWorkflowPlanRequest {
+  goal: string;
+  session_id?: string;
+  workspace_id?: string;
+  project_id?: string;
+}
+
+/** One step of a workflow plan (PUT /v1/workflows/:id/plan). */
+export interface WorkflowPlanStep {
+  /** What the step should do. */
+  intent: string;
+  /** What "done" looks like; defaults to "step completed successfully". */
+  expected_outcome?: string;
+  /** Model tier for the step; defaults to "standard". */
+  tier?: "high" | "standard" | "fast";
 }
 
 /** Request body for POST /v1/workflows. */
@@ -1144,6 +1170,15 @@ export interface CommandCenterState {
 export interface McpServerEntry {
   name: string;
   connected: boolean;
+  /** Connection state (2.0). */
+  state?: "connected" | "connecting" | "unavailable";
+  /** When unavailable: one friendly sentence, e.g. "Couldn't reach api.example.com. Check your internet connection. Retrying automatically." */
+  message?: string | null;
+  /** When unavailable: why. Credential failures are never retried automatically. */
+  kind?: "dns" | "unreachable" | "credentials" | "tls" | "other" | null;
+  /** True while an automatic background retry is scheduled. */
+  retrying?: boolean;
+  next_retry_at?: string | null;
 }
 
 // ── Knowledge Authoring ───────────────────────────────────────────────────

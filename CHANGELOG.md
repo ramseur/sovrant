@@ -60,6 +60,11 @@ Workflows that plan and run on their own, a new **Home** page with first-run onb
   - **Automatic retries:** network failures retry in the background after 10 s, 1 min and 5 min, so a server that was down at startup comes back, tools included, without a restart. Credential errors aren't retried.
   - **Console:** one line per failure. The full detail is in the log file.
 
+- **API & SDK parity for 2.0 (Phase 143):** the API and JS SDK can now do what the apps do.
+  - **Workflows:** `POST /v1/workflows/plan` (plan for review without running), `PUT /v1/workflows/{id}/plan` (edit the steps) and `POST /v1/workflows/{id}/cancel`.
+  - **MCP status:** `GET /v1/mcp/servers` reports each server's state, a friendly reason and the next automatic retry; `POST /v1/mcp/servers/{name}/retry` (admin).
+  - **SDK (`@sovrant/sdk` 2.0.0):** `planWorkflow`, `saveWorkflowPlan`, `cancelWorkflow`, `setWorkflowPrivacy`, `setSessionPrivacy`, `setAgentRunPrivacy` and `retryMcpServer`. `Workflow.status` now includes `awaitingHuman` and `cancelled`, and `Workflow` carries `plan_json`, `is_private` and `completed_at`.
+
 ### Changed
 
 - **App sidebar (Phase 135):** Conversations, with their folders, stay in the sidebar on every page.
@@ -82,6 +87,7 @@ Workflows that plan and run on their own, a new **Home** page with first-run onb
 
 ### Fixed
 
+- **SDK `createWorkflow` ignored `session_id`, `workspace_id` and `project_id`:** the route didn't bind snake_case fields. It does now, like the other routes.
 - **Prompts sometimes needed sending twice:** OpenRouter (especially `:free` models) can answer HTTP 200 and then report a rate limit or busy upstream *inside* the stream, or close it empty. The turn "completed" in about 0.3 s with no reply.
   - **In-stream errors:** now surfaced as provider errors.
   - **Empty replies:** count as failures.

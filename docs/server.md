@@ -978,6 +978,43 @@ Returns the full event journal.
 
 Query param: `format` (`markdown` default, or `json`).
 
+### Plan a Workflow — `POST /v1/workflows/plan` (2.0)
+
+Creates a workflow and has the model plan it **without running it**. Body: `goal` (required), and optional `session_id`, `workspace_id`, `project_id`. Returns `201` with the workflow in `awaitingHuman` and its plan in `plan_json`. Review or edit it with `PUT …/plan`, then `POST …/run` runs that exact plan. If planning fails, the response is `422` (not 5xx, so clients don't retry and create duplicates).
+
+### Edit a Plan — `PUT /v1/workflows/{id}/plan` (2.0)
+
+Replaces the plan with edited steps before the workflow runs. Body: `{ "steps": [ { "intent": "…", "expected_outcome": "…", "tier": "high|standard|fast" } ] }`; `expected_outcome` and `tier` are optional. Steps without an intent are dropped; `400` if none remain. `409` once the workflow has run (its plan is history by then). Owner or admin.
+
+### Cancel a Workflow — `POST /v1/workflows/{id}/cancel` (2.0)
+
+Journals a `cancelled` event and moves the workflow to `cancelled`. `409` if it already completed, failed or was cancelled. Owner or admin.
+
+### Workflow Privacy — `PATCH /v1/workflows/{id}/privacy`
+
+Body: `{ "isPrivate": true|false }`. Owner only. (Sessions and agent runs have the same route: `PATCH /v1/sessions/{id}/privacy`, `PATCH /v1/agent-runs/{id}/privacy`.)
+
+---
+
+## MCP Servers
+
+### List MCP Servers — `GET /v1/mcp/servers`
+
+Names and connection status only; configuration (commands, headers, env) is never returned. Each entry:
+
+| Field | Meaning |
+|---|---|
+| `name` | Server name |
+| `connected` | Whether a client is connected right now |
+| `state` | `connected`, `connecting` or `unavailable` (2.0) |
+| `message` | When unavailable: one friendly sentence, e.g. "Couldn't reach api.example.com. Check your internet connection. Retrying automatically." (2.0) |
+| `kind` | When unavailable: `dns`, `unreachable`, `credentials`, `tls` or `other` (2.0) |
+| `retrying` / `next_retry_at` | Whether an automatic retry is scheduled (after 10 s, 1 min, 5 min; never for `credentials`) (2.0) |
+
+### Retry an MCP Server — `POST /v1/mcp/servers/{name}/retry` (2.0)
+
+Admin only. Connects now (cancelling any scheduled retry) and returns the server's new status in the same shape. `404` for an unknown server.
+
 ---
 
 ## Engine Endpoints

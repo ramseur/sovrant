@@ -45,6 +45,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | Phase 139 | Friendly MCP connection errors — plain-language failure reasons, "Unavailable" badge + Retry, background retry for network failures (10 s / 1 min / 5 min, never for bad keys), one console line instead of stack traces ✅ |
 | **v1.5 — done** | Phase 141 | Home — the Welcome page merged into the Dashboard: greeting + Get started pill, your activity, then the Get started checklist ("All set" + Dismiss when done) and "What Sovrant can do"; Dashboard renamed Home; the full-window Welcome retired ✅ |
 | **v1.5 — done** | Phase 142 | Home tabs — **Overview** (default: greeting, at a glance, Get started beside What Sovrant can do, laid out like the chat welcome; fits a laptop screen) and **Activity** (the stats and activity table); admin checklist reads "Set up Sovrant for your team"; time-neutral greeting; header wrapping fixed ✅ |
+| **2.0 — in progress** | Phase 143 | SDK & API parity — Part A done for 2.0 (workflow plan / edit / cancel routes, MCP status + retry over HTTP, SDK privacy setters, snake_case create fix); Part B planned (the SDK's older gaps, safe retries, SDK checks in CI) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -252,6 +253,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Welcome & first-run onboarding — first-run admin sign-up on the login screen; a full-window, role-aware "Welcome to Sovrant" page on every user's first sign-in (what Sovrant is, info bubbles for each area, a get-started checklist ticked from real state); a bigger chat welcome that uses the whole main area (Web + Desktop) | Phase 140 | Built |
 | Home — one page to see what's going on and how Sovrant can help: greeting + "Get started" pill, the current dashboard stats and activity, then the role-aware Get started checklist (collapses to "All set" and can be dismissed) and the "What Sovrant can do" cards; Dashboard → Home in the nav (URL unchanged); retires Phase 140's full-window Welcome (Web + Desktop) | Phase 141 | Built |
 | Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Built |
+| SDK & API parity — every app feature reachable over HTTP and the JS SDK. Part A (2.0, built): workflow plan / edit / cancel, MCP status + retry, privacy setters. Part B (planned): ~14 older server routes the SDK never wrapped, idempotent-only SDK retries, workflow left behind when planning fails, SDK type check + tests in CI | Phase 143 | Part A Built · Part B Planned |
 
 ### v1.0 release polish ✅
 
@@ -12989,3 +12991,43 @@ Phase 141 put the guide *below* the activity. With more than a handful of activi
 - **Layout change after review:** Web `home-steps` (a grid of `--n` step tiles) and `home-cards` (four across, full descriptions, `home-card-go` action line). Desktop `HomeGuideView` has a one-row `UniformGrid` of steps (`StepColumns`, numbered via `WelcomeChecklistItem.Number`) and a four-column card grid.
 - **Greeting:** `OnboardingService.Greeting(name, firstVisit)` is time-neutral; the hour parameter is gone.
 - **Tests:** `HomeGuideRenderTests` (+1: headings, card columns; time-of-day cases replaced); `OnboardingServiceTests` greeting cases updated.
+
+---
+
+## Phase 143 — SDK & API Parity
+
+**Status:** Part A built (2026-10-06) for the 2.0.0 release; Part B planned, unscheduled.
+
+### Why
+
+The 2.0.0 release review compared every server route with every JS SDK call. Features shipped in this release lived only inside the apps (workflow plan-then-run and Cancel; MCP connection status), so the HTTP API and SDK couldn't do what the apps can. The SDK has also never wrapped a number of older routes. With a major version for both the app and `@sovrant/sdk`, the API should match the apps.
+
+### Part A — built for 2.0 (2026-10-06)
+- **Workflows:**
+  - `POST /v1/workflows/plan`: create + plan for review without running. Planning failures return 422, not 5xx, so retries can't create duplicates.
+  - `PUT /v1/workflows/{id}/plan`: edit steps before the run; 409 once it has run.
+  - `POST /v1/workflows/{id}/cancel`: 409 if already finished.
+  - Web, Desktop and the API now cancel through one shared `WorkflowCancellation.CancelAsync`.
+- **Create binding fix:** `POST /v1/workflows` now binds snake_case (`session_id`, `workspace_id`, `project_id`). The SDK's fields were silently ignored before (the default binding is camelCase).
+- **MCP status:** `GET /v1/mcp/servers` adds `state`, `message`, `kind`, `retrying` and `next_retry_at` (Phase 139 over HTTP); `POST /v1/mcp/servers/{name}/retry` (admin).
+- **SDK 2.0 additions:** `planWorkflow`, `saveWorkflowPlan`, `cancelWorkflow`, `setWorkflowPrivacy`, `setSessionPrivacy`, `setAgentRunPrivacy` and `retryMcpServer`.
+- **SDK types:** `Workflow.status` gains `awaitingHuman` and `cancelled`, plus `plan_json`, `is_private` and `completed_at`; `McpServerEntry` gets the status fields.
+- **Tests:** `WorkflowPlanRoutesTests` (6) and `McpServerStatusRoutesTests` (2).
+- **Not verified here:** the SDK's TypeScript check and vitest suite. Node.js isn't installed on the dev machine and there is no CI, so the SDK change was reviewed by hand.
+
+### Part B — planned (not scheduled)
+1. **Wrap the SDK's older gaps:**
+   - **Dashboard state:** `GET /v1/user-dashboard/state`, `GET /v1/command-center/state`.
+   - **Users:** `GET /v1/users/{id}/audit|usage|sessions`.
+   - **Sessions:** `GET /v1/sessions/active`.
+   - **Swarm:** `POST /v1/swarm/manager`, `GET /v1/swarm/{id}/children`, `GET /v1/swarm/openclaw/routes`.
+   - **MCP trust rules:** the 4 routes under `/v1/workspaces/{workspaceId}/mcp-trust-rules`.
+   - **Artifacts:** delete, zip and single-file download.
+2. **Safe SDK retries:** `fetchWithRetry` retries every method on 429/5xx, including non-idempotent POSTs such as `createWorkflow` and `runWorkflow`. Retry only idempotent methods (GET/PUT/DELETE/PATCH), or use an idempotency key on POSTs.
+3. **Workflow left behind when planning fails:** `WorkflowPlanningService.GenerateAsync` creates the workflow before planning. If planning throws, the workflow stays in Planning and the background scheduler may pick it up and run it. That has been true in the apps since Phase 129. Mark it Failed, or delete it, when planning fails.
+4. **SDK checks in CI:** add a CI workflow (none exists) that runs `tsc --noEmit` and `vitest` for `sdk/js`, alongside `dotnet test`, so SDK changes are compiled and tested automatically.
+5. **Request-field consistency:** audit request records for missing `JsonPropertyName` attributes, the bug class behind the create-binding fix above. Decide whether privacy's `isPrivate` stays camelCase or moves to `is_private`, accepting both for a transition.
+
+### Acceptance criteria
+- [x] Part A routes, SDK methods and types; server tests; docs (`docs/server.md`, README)
+- [ ] Part B items 1–5

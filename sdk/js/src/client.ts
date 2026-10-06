@@ -1,5 +1,7 @@
 import { parseSSEStream } from "./sse.js";
 import type {
+  GenerateWorkflowPlanRequest,
+  WorkflowPlanStep,
   AddProjectMemberRequest,
   AddTeamMemberRequest,
   AddTeamMemberResponse,
@@ -1113,6 +1115,44 @@ export class SovrantClient {
     return (await res.json()) as Workflow;
   }
 
+  /**
+   * Create a workflow and have the model plan it, without running it (2.0). The workflow comes
+   * back as "awaitingHuman" with its plan in plan_json; edit it with saveWorkflowPlan, then
+   * runWorkflow runs that exact plan.
+   */
+  async planWorkflow(request: GenerateWorkflowPlanRequest): Promise<Workflow> {
+    const res = await this.fetchWithRetry("/v1/workflows/plan", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+    return (await res.json()) as Workflow;
+  }
+
+  /** Replace a workflow's plan with edited steps (2.0). Fails with 409 once the workflow has run. */
+  async saveWorkflowPlan(workflowId: string, steps: WorkflowPlanStep[]): Promise<Workflow> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/plan`, {
+      method: "PUT",
+      body: JSON.stringify({ steps }),
+    });
+    return (await res.json()) as Workflow;
+  }
+
+  /** Cancel a workflow that hasn't finished (2.0). Fails with 409 if it already completed, failed or was cancelled. */
+  async cancelWorkflow(workflowId: string): Promise<Workflow> {
+    const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/cancel`, {
+      method: "POST",
+    });
+    return (await res.json()) as Workflow;
+  }
+
+  /** Make one of your workflows private or public (owner only). */
+  async setWorkflowPrivacy(workflowId: string, isPrivate: boolean): Promise<void> {
+    await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/privacy`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPrivate }),
+    });
+  }
+
   /** Get the full event journal for a workflow. */
   async getWorkflowEvents(workflowId: string): Promise<{ events: WorkflowEvent[] }> {
     const res = await this.fetchWithRetry(`/v1/workflows/${encodeURIComponent(workflowId)}/events`);
@@ -1363,10 +1403,36 @@ export class SovrantClient {
 
   // ── MCP Servers ───────────────────────────────────────────────────────
 
-  /** List connected and configured MCP servers (GET /v1/mcp/servers). */
+  /** List configured MCP servers with their connection state (GET /v1/mcp/servers). */
   async listMcpServers(): Promise<{ servers: McpServerEntry[] }> {
     const res = await this.fetchWithRetry("/v1/mcp/servers");
     return (await res.json()) as { servers: McpServerEntry[] };
+  }
+
+  /** Retry connecting to an MCP server now (admin; 2.0). Returns its new status. */
+  async retryMcpServer(name: string): Promise<McpServerEntry> {
+    const res = await this.fetchWithRetry(`/v1/mcp/servers/${encodeURIComponent(name)}/retry`, {
+      method: "POST",
+    });
+    return (await res.json()) as McpServerEntry;
+  }
+
+  // ── Privacy ───────────────────────────────────────────────────────────
+
+  /** Make one of your conversations private or public (owner only). */
+  async setSessionPrivacy(sessionId: string, isPrivate: boolean): Promise<void> {
+    await this.fetchWithRetry(`/v1/sessions/${encodeURIComponent(sessionId)}/privacy`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPrivate }),
+    });
+  }
+
+  /** Make one of your agent runs private or public (owner only). */
+  async setAgentRunPrivacy(runId: string, isPrivate: boolean): Promise<void> {
+    await this.fetchWithRetry(`/v1/agent-runs/${encodeURIComponent(runId)}/privacy`, {
+      method: "PATCH",
+      body: JSON.stringify({ isPrivate }),
+    });
   }
 
   // ── Knowledge Authoring ───────────────────────────────────────────────

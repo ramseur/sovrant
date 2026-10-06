@@ -40,7 +40,7 @@ public sealed class WorkflowRoutesTests : IClassFixture<SovrantWebAppFactory>
     public async Task Create_Then_Get_Returns201_And_Workflow()
     {
         var create = Auth(HttpMethod.Post, "/v1/workflows");
-        create.Content = JsonContent.Create(new { goal = "ship the refactor", ownerUserId = "alice" });
+        create.Content = JsonContent.Create(new { goal = "ship the refactor", owner_user_id = "alice" });
         var createResp = await _client.SendAsync(create);
         Assert.Equal(HttpStatusCode.Created, createResp.StatusCode);
 

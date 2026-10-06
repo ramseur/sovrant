@@ -718,6 +718,9 @@ GET    /v1/workflows/{id}       — get workflow state + current plan
 POST   /v1/workflows/{id}/run   — drive the workflow forward one cycle
 GET    /v1/workflows/{id}/events — full event journal (reconstructable history)
 GET    /v1/workflows/{id}/export — export as JSON or Markdown
+POST   /v1/workflows/plan       — create + plan for review, without running (2.0)
+PUT    /v1/workflows/{id}/plan  — replace the plan with edited steps before it runs (2.0)
+POST   /v1/workflows/{id}/cancel — cancel a workflow that hasn't finished (2.0)
 ```
 
 Workflows are durable (persisted to SQLite), workspace-scoped, and include a full append-only event journal so history is always reconstructable. The engine layer underneath provides crash-safe execution via `runtime_traces` — every state transition is committed before the corresponding side effect runs, so a crash mid-step leaves a recoverable trail.

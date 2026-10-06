@@ -97,7 +97,10 @@ export type {
   AgentRunFilter,
   // Workflows
   Workflow,
+  WorkflowStatus,
   CreateWorkflowRequest,
+  GenerateWorkflowPlanRequest,
+  WorkflowPlanStep,
   WorkflowEvent,
   // Swarm
   SwarmRunRequest,
