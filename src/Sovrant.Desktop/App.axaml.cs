@@ -341,8 +341,8 @@ public partial class App : Application
         var window = new MainWindow { DataContext = mainVm };
         desktop.MainWindow = window;
         desktop.ShutdownMode = ShutdownMode.OnMainWindowClose;
-        desktop.ShutdownRequested += (_, _) => Environment.Exit(0);
-        window.Closed += (_, _) => Environment.Exit(0);
+        desktop.ShutdownRequested += (_, _) => ExitApp();
+        window.Closed += (_, _) => ExitApp();
         MainWindow = window;
         window.Show();
         // Phase 141: always start on Home, and load it now that someone is signed in rather than on its 30 s timer.
@@ -380,6 +380,27 @@ public partial class App : Application
     }
 
     private const string StoredTokenKey = "sovrant.desktop.auth_token";
+
+    private static int s_exiting;
+
+    /// <summary>
+    /// Ends the process exactly once. Several events can ask to quit (main window Closed,
+    /// ShutdownRequested, the sign-in window), and Environment.Exit isn't safe to call twice.
+    /// A background watchdog ends the process if a clean exit stalls, so closing the app never
+    /// leaves a windowless process behind.
+    /// </summary>
+    internal static void ExitApp()
+    {
+        if (Interlocked.Exchange(ref s_exiting, 1) != 0)
+            return;
+        var watchdog = new Thread(() =>
+        {
+            Thread.Sleep(TimeSpan.FromSeconds(5));
+            System.Diagnostics.Process.GetCurrentProcess().Kill();
+        }) { IsBackground = true, Name = "exit-watchdog" };
+        watchdog.Start();
+        Environment.Exit(0);
+    }
 
     /// <summary>
     /// Clears the stored session, hides the main window, re-runs the login flow,
@@ -516,11 +537,13 @@ public partial class App : Application
 
         var loginWindow = new LoginWindow { DataContext = loginVm };
 
-        // Prevent closing without completing login.
-        loginWindow.Closing += (_, e) =>
+        // Closing the sign-in window without signing in quits the app. This used to call
+        // desktop.Shutdown() from Closing, which closes every window, including this one, so
+        // Closing fired again and recursed until the process crashed with a stack overflow.
+        loginWindow.Closed += (_, _) =>
         {
             if (!tcs.Task.IsCompleted)
-                desktop.Shutdown();
+                ExitApp();
         };
 
         loginWindow.Show();
@@ -559,14 +582,12 @@ public partial class App : Application
         setupVm.SetupCompleted += () =>
             Dispatcher.UIThread.Post(() => wizardWindow.Close());
 
-        // Prevent user from closing without completing setup.
-        wizardWindow.Closing += (_, e) =>
+        // Closing the wizard without completing setup quits the app. Done from Closed, not Closing:
+        // desktop.Shutdown() inside Closing re-closed this window and recursed into a stack overflow.
+        wizardWindow.Closed += (_, _) =>
         {
             if (setupVm.IsVisible)
-            {
-                // Wizard not completed — exit the app instead.
-                desktop.Shutdown();
-            }
+                ExitApp();
         };
 
         wizardWindow.Show();
