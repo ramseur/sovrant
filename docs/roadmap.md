@@ -12436,22 +12436,17 @@ The Postgres/Supabase backend replaces a subset of stores (sessions, credentials
 
 ### Known issues (found so far)
 
-**Fixed on `development` (2026-10-06, `198135b`, ships in 2.0.1):**
+**Fixed on `development` (2026-10-06, ships in 2.0.1):**
 - [x] **New conversations were public on Postgres:** `PostgresSessionStore.AppendAsync` didn't set `is_private`, so the column default (0) applied. It now inserts `is_private = 1`, matching SQLite.
 - [x] **The SQLite → Postgres migrator dropped privacy:** every migrated conversation became public. It now copies `is_private`.
+- [x] **Postgres conversation lists never read `is_private` or `workspace_id`** (was open issue 1): admins saw private titles in Command Center, and shared conversations never reached teammates' Activity. The list now selects the same columns as SQLite and reads them by name. The same check found that `GetIsPrivateAsync` threw (INTEGER cast to `bool`) and `UpdatePrivacyAsync` failed (boolean into an INTEGER column); both fixed. `PostgresPrivacyTests` (Integration tests, runs when `SOVRANT_TEST_PG` is set) covers it.
 
 **Open, in priority order:**
-1. **Privacy: Postgres conversation lists never read `is_private` or `workspace_id`.** `ListWithTitlesAsync` selects `session_id, title, updated_at, user_id, folder_id, agent_name` only, so every listed conversation reports `IsPrivate = false` and no workspace. Effects:
-   - **Admins see private conversation titles** in Command Center, because `ShouldMask` sees "not private". This is a privacy leak.
-   - **Shared conversations never reach teammates' Home → Activity,** because the visibility check needs a workspace.
-   - Privacy shows wrongly anywhere the list drives it.
-   - `labels` and the other Phase 133 fields are missing too.
-   Fix: select and map every field the SQLite list returns, and add a parity test.
-2. **Conversations already public on Postgres:** anything created there before `198135b` is stored public. Owners can set them back to Private; decide whether 2.0.1 needs a one-off "make all private" admin action or release note.
-3. **The migrator is incomplete:** it copies only `sessions` (8 columns: no `workspace_id`, `folder_id`, `agent_name`, `labels`), `session_entries` and `credentials`. Knowledge pages, MCP trust rules, knowledge attributions and conversation folders all live on Postgres under this backend but aren't migrated, so switching an existing install to Postgres loses them.
-4. **No Postgres test run:** see Part A.
-5. **Split backend:** users, workspaces, workflows, agent runs, memory and the rest stay on SQLite under the Postgres backend. So a "Postgres" install still needs a local SQLite file and can't run as several instances. Document it plainly now; decide in Part B what moves.
-6. **Supabase RLS isn't enabled:** see Part C (was Phase 127).
+1. **Conversations already public on Postgres:** anything created there before `198135b` is stored public. Owners can set them back to Private; decide whether 2.0.1 needs a one-off "make all private" admin action or release note.
+2. **The migrator is incomplete:** it copies only `sessions` (8 columns: no `workspace_id`, `folder_id`, `agent_name`, `labels`), `session_entries` and `credentials`. Knowledge pages, MCP trust rules, knowledge attributions and conversation folders all live on Postgres under this backend but aren't migrated, so switching an existing install to Postgres loses them.
+3. **Too few Postgres tests, and none has run yet:** one exists (`PostgresPrivacyTests`, opt-in via `SOVRANT_TEST_PG`) but has **never been run against a real database**, so the privacy fix above is verified by compiling only. First step: start Docker, run a throwaway container (`docker run -d --name sovrant-pg-test -p 55432:5432 -e POSTGRES_PASSWORD=sovrant -e POSTGRES_DB=sovrant_test postgres:16`), set `SOVRANT_TEST_PG=Host=localhost;Port=55432;Username=postgres;Password=sovrant;Database=sovrant_test`, and run the Integration tests: once on the pre-fix code to confirm the test catches the bugs, once on the fix. The rest of Part A follows.
+4. **Split backend:** users, workspaces, workflows, agent runs, memory and the rest stay on SQLite under the Postgres backend. So a "Postgres" install still needs a local SQLite file and can't run as several instances. Document it plainly now; decide in Part B what moves.
+5. **Supabase RLS isn't enabled:** see Part C (was Phase 127).
 
 ### What ships
 
@@ -12471,8 +12466,9 @@ The Postgres/Supabase backend replaces a subset of stores (sessions, credentials
 
 ### Acceptance criteria
 
-- [ ] Issue 1 fixed: Postgres conversation lists return `is_private`, `workspace_id`, `labels` and every other field the SQLite list returns; Command Center masks private Postgres conversations; a parity test covers it
-- [ ] Issue 2 decided and documented in the 2.0.1 CHANGELOG
+- [x] Postgres conversation lists return `is_private`, `workspace_id` and every other stored field the SQLite list returns; privacy reads and writes work; covered by `PostgresPrivacyTests` (labels are derived, not stored)
+- [ ] `PostgresPrivacyTests` run and passing against a real Postgres (not yet run; see open issue 3)
+- [ ] Already-public Postgres conversations: decided and documented in the 2.0.1 CHANGELOG
 - [ ] Postgres test fixture runs locally and in CI; skipped (not failed) when unavailable
 - [ ] Every Postgres-backed store passes the same test suite as its SQLite twin
 - [ ] Schema diff V001–V048 vs `PostgresSchema.sql` is empty (or every difference is documented and intentional)

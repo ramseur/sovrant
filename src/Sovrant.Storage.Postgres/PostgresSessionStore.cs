@@ -160,10 +160,10 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         using var conn = factory.CreateConnection();
         using var cmd = conn.CreateCommand();
         if (ownerUserId is null)
-            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, folder_id, agent_name FROM sessions ORDER BY updated_at DESC";
+            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, workspace_id, is_private, folder_id, agent_name FROM sessions ORDER BY updated_at DESC";
         else
         {
-            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, folder_id, agent_name FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC";
+            cmd.CommandText = "SELECT session_id, title, updated_at, user_id, workspace_id, is_private, folder_id, agent_name FROM sessions WHERE user_id = $1 ORDER BY updated_at DESC";
             cmd.Parameters.AddWithValue(ownerUserId);
         }
         return await ReadSessionItemsAsync(cmd, ct).ConfigureAwait(false);
@@ -217,7 +217,8 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         using var conn = factory.CreateConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "UPDATE sessions SET is_private = $1 WHERE session_id = $2 AND user_id = $3";
-        cmd.Parameters.AddWithValue(isPrivate);
+        // is_private is INTEGER (0/1) in the schema, as on SQLite; Postgres won't store a boolean in it.
+        cmd.Parameters.AddWithValue(isPrivate ? 1 : 0);
         cmd.Parameters.AddWithValue(sessionId);
         cmd.Parameters.AddWithValue(ownerUserId);
         await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
@@ -231,7 +232,7 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         cmd.Parameters.AddWithValue(sessionId);
         var result = await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false);
         if (result is null || result is DBNull) return null;
-        return (bool)result;
+        return Convert.ToInt64(result, CultureInfo.InvariantCulture) != 0; // INTEGER column, not boolean
     }
 
     public async Task SetMcpConnectionsAsync(string sessionId, IReadOnlyList<string>? servers, string? ownerUserId = null, CancellationToken ct = default)
@@ -285,22 +286,40 @@ internal sealed class PostgresSessionStore(IPostgresConnectionFactory factory) :
         var items = new List<SessionListItem>();
         while (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
-            // Search selects only the first three columns; list adds owner, folder, and agent.
+            // Search selects only session_id, title and updated_at; the list adds owner, workspace,
+            // privacy, folder and agent (the same columns as SqliteSessionStore). Columns are read by
+            // name so a query that omits one can't shift the others: the original reader went by
+            // position and never read is_private, so every Postgres row looked public (Phase 134).
             items.Add(new SessionListItem(
                 SessionId: reader.GetString(0),
                 Title: await reader.IsDBNullAsync(1, ct).ConfigureAwait(false) ? null : reader.GetString(1),
                 UpdatedAt: DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
-                OwnerUserId: await OptionalStringAsync(reader, 3, ct).ConfigureAwait(false),
-                FolderId: await OptionalStringAsync(reader, 4, ct).ConfigureAwait(false),
-                AgentName: await OptionalStringAsync(reader, 5, ct).ConfigureAwait(false)));
+                OwnerUserId: await OptionalStringAsync(reader, "user_id", ct).ConfigureAwait(false),
+                WorkspaceId: await OptionalStringAsync(reader, "workspace_id", ct).ConfigureAwait(false),
+                IsPrivate: await OptionalFlagAsync(reader, "is_private", ct).ConfigureAwait(false),
+                FolderId: await OptionalStringAsync(reader, "folder_id", ct).ConfigureAwait(false),
+                AgentName: await OptionalStringAsync(reader, "agent_name", ct).ConfigureAwait(false)));
         }
         return items;
     }
 
-    private static async Task<string?> OptionalStringAsync(NpgsqlDataReader reader, int ordinal, CancellationToken ct) =>
-        ordinal < reader.FieldCount && !await reader.IsDBNullAsync(ordinal, ct).ConfigureAwait(false)
-            ? reader.GetString(ordinal)
+    private static async Task<string?> OptionalStringAsync(NpgsqlDataReader reader, string column, CancellationToken ct) =>
+        Ordinal(reader, column) is { } i && !await reader.IsDBNullAsync(i, ct).ConfigureAwait(false)
+            ? reader.GetString(i)
             : null;
+
+    private static async Task<bool> OptionalFlagAsync(NpgsqlDataReader reader, string column, CancellationToken ct) =>
+        Ordinal(reader, column) is { } i
+        && !await reader.IsDBNullAsync(i, ct).ConfigureAwait(false)
+        && Convert.ToInt64(reader.GetValue(i), CultureInfo.InvariantCulture) != 0;
+
+    private static int? Ordinal(NpgsqlDataReader reader, string column)
+    {
+        for (var i = 0; i < reader.FieldCount; i++)
+            if (string.Equals(reader.GetName(i), column, StringComparison.Ordinal))
+                return i;
+        return null;
+    }
 
     public async Task SetAgentNameAsync(string sessionId, string agentName, string? ownerUserId = null, CancellationToken ct = default)
     {
