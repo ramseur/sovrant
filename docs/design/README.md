@@ -360,7 +360,7 @@ Roadmap Phase 139. A server that fails to connect is shown as Unavailable, with 
 
 **Verified:** rendered in headless Edge on both mocks: all three states (badge, alert title, buttons, list row, chip warning), the menu (rows, tooltip), and the chip warning on Chat. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass (only existing icons: `warning`, `refresh`, `integrations`, `allow`, `dropdown`).
 
-## Home: Dashboard + Welcome in one place (2026-10-06, design-only)
+## Home: Dashboard + Welcome in one place (2026-10-06, shipped to code same day)
 
 Roadmap Phase 141. The Dashboard becomes **Home**, and Phase 140's full-window Welcome retires: its content now sits below the activity, where people come back every day. Toggles on Home: *Admin / Member* and *First visit / Returning / All set*.
 

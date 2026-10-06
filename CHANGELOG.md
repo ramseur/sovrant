@@ -17,6 +17,13 @@ Versions correspond to tags on the `development` branch.
 
 - **Conversation folders (Phase 133)** — file any conversation into a per-user folder tree (up to 5 levels, across all workspaces) on Web and Desktop: folder rows with counts, ⋯ menus (new subfolder, rename, move, delete), a Move dialog, a chat-header breadcrumb with Move, search across folders, and drag and drop (conversations and folders) that refuses invalid drops while dragging. Deleting a folder moves its contents up a level; no conversation is ever deleted. Sidebar labels (`Agent · x`, `Workflow · Running`, `Swarm · n runs`, `Team · n runs`, `Webhook · source`) are derived from live links, never stored. New `ISessionFolderStore` (SQLite, Postgres, remote), `SessionFolderRules` / `SessionFolderTree` shared by both UIs, 5 endpoints (`/v1/session-folders`, `PUT /v1/sessions/{id}/folder`), SDK methods (`listSessionFolders`, `createSessionFolder`, `updateSessionFolder`, `deleteSessionFolder`, `moveSessionToFolder`). Swarm and team runs launched from a chat now record that conversation (`agent_runs.session_id`, via a new per-turn `TurnContext`); team runs started outside chat (Orchestration page, team-run API) and swarms started via `POST /v1/swarm` get a conversation of their own (id = run id, seeded with the goal, outcome appended when the run ends), so every run appears in the sidebar and can be filed. `POST /v1/swarm` now also records an `agent_runs` row.
 
+- **Home (Phase 141)** — the Dashboard and the Welcome page are now one page, **Home**, on Web and Desktop.
+  - **Greeting:** "Welcome to Sovrant, <name>" on your first visit, "Good morning / afternoon / evening" after that.
+  - **Get started pill:** shows your checklist progress and jumps to it.
+  - **Your activity:** unchanged, at the top.
+  - **Below it:** the role-aware Get started checklist, which collapses to "All set" with Dismiss when done, and the What Sovrant can do cards.
+  - **What it replaces:** the separate full-window Welcome page and the "Show welcome" button. `/welcome` now redirects to Home. A first sign-in and first-run provider setup land on Home.
+  - **Nav:** Dashboard is now called Home (the URL is still `/dashboard`).
 - **Friendly MCP connection errors (Phase 139)** — when an MCP server can't be reached, Sovrant now says why in one sentence instead of printing stack traces.
   - **Failure kinds:** couldn't resolve the host, not responding (timeout or refused), rejected credentials (401/403), or a certificate problem.
   - **Integrations (Web + Desktop):** an **Unavailable** badge, the reason, what happens next, and **Retry now**, or **Update key** for rejected credentials.

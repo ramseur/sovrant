@@ -157,8 +157,8 @@
                 AuthProvider.BaseUrl = parsed;
             }
 
-            // Phase 140: back to the Welcome page, where "Connect a model provider" now shows done.
-            Nav.NavigateTo("/welcome");
+            // Phase 141: on to Home, where "Connect a model provider" now shows done.
+            Nav.NavigateTo("/dashboard");
         }
         catch (Exception ex) { _status = $"Failed to save: {ex.Message}"; }
         finally { _saving = false; }

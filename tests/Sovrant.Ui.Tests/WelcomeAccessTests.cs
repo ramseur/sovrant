@@ -6,7 +6,7 @@ namespace Sovrant.Ui.Tests;
 
 /// <summary>
 /// Phase 140 — Integrations, Trust Boundary / Governance and Workspaces are admin-only today.
-/// Members may read about them on the Welcome page, but no Desktop link may lead into them,
+/// Members may read about them on Home, but no Desktop link may lead into them,
 /// and the navigation guard must refuse them however the request arrives.
 /// </summary>
 public class WelcomeAccessTests
@@ -16,7 +16,7 @@ public class WelcomeAccessTests
     {
         foreach (var target in Enum.GetValues<WelcomeTarget>())
         {
-            var page = WelcomeViewModel.PageFor(target, isAdmin: false);
+            var page = HomeGuideViewModel.PageFor(target, isAdmin: false);
             if (page is not null)
                 Assert.False(MainViewModel.IsAdminOnlyPage(page), $"{target} → {page} is an admin page");
         }
@@ -25,9 +25,9 @@ public class WelcomeAccessTests
     [Fact]
     public void Admin_Welcome_Links_Resolve_To_Their_Pages()
     {
-        Assert.Equal("AdminPlatformIntegrations", WelcomeViewModel.PageFor(WelcomeTarget.Integrations, isAdmin: true));
-        Assert.Equal("TrustBoundary", WelcomeViewModel.PageFor(WelcomeTarget.TrustBoundary, isAdmin: true));
-        Assert.Equal("AdminWorkspaces", WelcomeViewModel.PageFor(WelcomeTarget.Workspaces, isAdmin: true));
+        Assert.Equal("AdminPlatformIntegrations", HomeGuideViewModel.PageFor(WelcomeTarget.Integrations, isAdmin: true));
+        Assert.Equal("TrustBoundary", HomeGuideViewModel.PageFor(WelcomeTarget.TrustBoundary, isAdmin: true));
+        Assert.Equal("AdminWorkspaces", HomeGuideViewModel.PageFor(WelcomeTarget.Workspaces, isAdmin: true));
     }
 
     [Fact]

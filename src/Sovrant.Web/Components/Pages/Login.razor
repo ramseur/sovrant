@@ -195,8 +195,8 @@
                 await Program.SeedUserAndWorkspaceAsync(Services, userId).ConfigureAwait(false);
                 await Services.ApplyUserPreferencesForUserAsync(userId).ConfigureAwait(false);
             });
-        // Phase 140: a user's first sign-in lands on the Welcome page.
-        var target = await Onboarding.HasSeenWelcomeAsync(userId).ConfigureAwait(false) ? "/" : "/welcome";
+        // Phase 141: a user's first sign-in lands on Home, which greets them and shows Get started.
+        var target = await Onboarding.HasSeenWelcomeAsync(userId).ConfigureAwait(false) ? "/" : "/dashboard";
         Nav.NavigateTo(target, forceLoad: true);
     }
 }

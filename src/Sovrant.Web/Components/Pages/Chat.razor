@@ -57,7 +57,7 @@
                 </div>
                 @* Phase 140 — a compact "What Sovrant can do" strip; same areas as the Welcome page. *@
                 <div class="hero-caps">
-                    <div class="hero-caps-label"><span>What Sovrant can do</span><a href="/welcome">Show welcome →</a></div>
+                    <div class="hero-caps-label"><span>What Sovrant can do</span><a href="/dashboard">See everything on Home →</a></div>
                     <div class="hero-caps-row">
                         @foreach (var (icon, title, desc, href) in _capabilities)
                         {
@@ -235,7 +235,7 @@
             ? new[] { (IconNames.Integrations, "Integrations", "MCP tools and platforms", "/admin/integrations"),
                       (IconNames.Trust, "Trust Boundary", "Redaction and controls", "/trust-boundary") }
             : new[] { (IconNames.Projects, "Projects", "Files and chats together", "/projects"),
-                      (IconNames.Private, "Privacy", "You choose what teammates see", "/welcome") }),
+                      (IconNames.Private, "Privacy", "You choose what teammates see", "/dashboard") }),
     ];
 
 

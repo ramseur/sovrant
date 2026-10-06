@@ -5,7 +5,13 @@
 @using Sovrant.Runtime.Storage
 @using Sovrant.Runtime.Session
 @using Sovrant.Runtime.Governance
+@using Sovrant.Runtime.Onboarding
+@using Sovrant.Runtime.Config
+@inject SovrantConfig Config
 @using Sovrant.Web.Services
+@inject OnboardingService Onboarding
+@inject ActiveContextService ActiveContext
+@inject IJSRuntime JS
 @inject WebSessionService Session
 @inject UserDashboardAggregator Aggregator
 @inject IWorkflowStore WorkflowStore
@@ -15,10 +21,13 @@
 @inject NavigationManager Nav
 @implements IDisposable
 
-<div class="settings-page cc-page">
+@* Phase 141 — Home: the Dashboard and Phase 140's Welcome in one place. Greeting + Get started pill,
+   your activity, then the Get started checklist and What Sovrant can do (docs/design/web.html → Home). *@
+<div class="settings-page cc-page home-page">
     <div class="diag-header">
         <div>
-            <h1>Dashboard</h1>
+            <h1>@_greeting</h1>
+            <p class="text-secondary cc-subtitle">@OnboardingService.Tagline</p>
             <p class="text-secondary cc-subtitle">
                 Your activity across every workspace you belong to — plus your teammates' public activity.
                 <button type="button" class="btn-link cc-help-toggle" @onclick="() => _showHelp = !_showHelp">
@@ -31,7 +40,12 @@
             {
                 <span class="text-muted text-sm">Last updated: @_state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture)</span>
             }
-            <a class="btn-secondary" href="/welcome">Show welcome</a>
+            @if (_guide is { } g && g.DoneCount < g.Checklist.Count)
+            {
+                <button class="home-pill" @onclick="ScrollToChecklistAsync" title="Jump to Get started">
+                    <span class="home-ring" style="--p:@(Percent(g))"></span>Get started · @g.DoneCount of @g.Checklist.Count
+                </button>
+            }
             <button class="btn-secondary" @onclick="LoadAsync" disabled="@_loading">@(_loading ? "Refreshing…" : "Refresh")</button>
         </div>
     </div>
@@ -170,9 +184,148 @@
             </div>
         }
     }
+
+    @if (_guide is { } guide)
+    {
+        var complete = guide.DoneCount == guide.Checklist.Count;
+        @if (!complete)
+        {
+            <section class="home-sec" id="get-started">
+                <div class="home-sec-head">
+                    <h3>@(guide.IsAdmin ? "Get started: set up your server" : "Get started")</h3>
+                    <span>@guide.DoneCount of @guide.Checklist.Count done</span>
+                </div>
+                <div class="wel-check">
+                    <div class="wel-bar"><i style="width:@(Percent(guide))%"></i></div>
+                    @foreach (var item in guide.Checklist)
+                    {
+                        <div class="wel-item @(item.Done ? "done" : "")">
+                            <span class="wel-tick">@if (item.Done) { <SovrantIcon Name="@IconNames.Allow" Size="12" StrokeWidth="3" /> }</span>
+                            <span class="wel-item-text">@item.Title<span>@item.Subtitle</span></span>
+                            @if (item.Done)
+                            {
+                                <span class="wel-ok">Done</span>
+                            }
+                            else if (LinkFor(item.Target) is { } itemHref)
+                            {
+                                <a class="wel-act" href="@itemHref">@item.ActionLabel →</a>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+        else if (!_dismissed)
+        {
+            <section class="home-sec" id="get-started">
+                <div class="home-allset">
+                    <span class="home-allset-tick"><SovrantIcon Name="@IconNames.Allow" Size="12" StrokeWidth="3" /></span>
+                    <span class="home-allset-text"><b>All set</b> — you've finished getting started.</span>
+                    <button class="btn-secondary btn-sm" @onclick="DismissAsync">Dismiss</button>
+                </div>
+            </section>
+        }
+
+        <section class="home-sec">
+            <div class="home-sec-head"><h3>What Sovrant can do</h3></div>
+            <div class="wel-grid home-grid">
+                @foreach (var area in guide.Areas)
+                {
+                    if (LinkFor(area.Target) is { } href)
+                    {
+                        <a class="wel-card" href="@href">
+                            <span class="wel-icon"><SovrantIcon Name="@area.IconName" Size="18" /></span>
+                            <b>@area.Title</b>
+                            <span class="wel-desc">@area.Description</span>
+                            <span class="wel-go">@area.ActionLabel →</span>
+                        </a>
+                    }
+                    else
+                    {
+                        <div class="wel-card managed">
+                            <span class="wel-icon"><SovrantIcon Name="@area.IconName" Size="18" /></span>
+                            <b>@area.Title</b>
+                            <span class="wel-desc">@area.Description</span>
+                            <span class="wel-managed">Managed by your admin</span>
+                        </div>
+                    }
+                }
+            </div>
+        </section>
+    }
 </div>
 
 @code {
+    // Phase 141 — Home's greeting and the guide below the activity.
+    private WelcomeContent? _guide;
+    private bool _firstVisit;
+    private bool _dismissed;
+    private string _greeting = "Home";
+    private int? _localHour;
+
+    private static int Percent(WelcomeContent g) =>
+        g.Checklist.Count == 0 ? 0 : (int)Math.Round(100.0 * g.DoneCount / g.Checklist.Count);
+
+    private void UpdateGreeting() =>
+        _greeting = _firstVisit || _localHour is not null
+            ? OnboardingService.Greeting(OnboardingService.DisplayName(Session.Email ?? Session.UserId), _firstVisit, _localHour ?? 12)
+            : $"Welcome back, {OnboardingService.DisplayName(Session.Email ?? Session.UserId)}";
+
+    private async Task LoadGuideAsync()
+    {
+        var userId = Session.UserId;
+        if (string.IsNullOrEmpty(userId)) return;
+        _guide = await Onboarding.GetWelcomeAsync(userId, Session.IsAdmin, ActiveContext.WorkspaceId);
+        _dismissed = await Onboarding.IsGetStartedDismissedAsync(userId);
+    }
+
+    private async Task DismissAsync()
+    {
+        if (Session.UserId is { Length: > 0 } userId)
+            await Onboarding.DismissGetStartedAsync(userId);
+        _dismissed = true;
+    }
+
+    private async Task ScrollToChecklistAsync()
+    {
+        try { await JS.InvokeVoidAsync("sovrantInterop.scrollToId", "get-started"); }
+        catch (JSDisconnectedException) { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (_firstVisit && Session.UserId is { Length: > 0 } uid)
+            await Onboarding.MarkWelcomeSeenAsync(uid);
+        try { _localHour = await JS.InvokeAsync<int>("sovrantInterop.localHour"); }
+        catch (JSDisconnectedException) { return; }
+        UpdateGreeting();
+        StateHasChanged();
+    }
+
+    /// <summary>Web route for a guide link; null for admin-only pages when the user isn't an admin.</summary>
+    private string? LinkFor(WelcomeTarget? target)
+    {
+        if (target is not { } t || (OnboardingService.IsAdminOnly(t) && !Session.IsAdmin))
+            return null;
+        return t switch
+        {
+            WelcomeTarget.Chat or WelcomeTarget.Privacy => "/",
+            WelcomeTarget.Agents => "/agents",
+            WelcomeTarget.Orchestration => "/orchestration",
+            WelcomeTarget.Workflows => "/workflows",
+            WelcomeTarget.Knowledge => "/skills",
+            WelcomeTarget.Projects => "/projects",
+            WelcomeTarget.Integrations => "/admin/integrations",
+            WelcomeTarget.TrustBoundary => "/trust-boundary",
+            WelcomeTarget.Workspaces => "/admin/workspaces",
+            WelcomeTarget.Users => "/admin",
+            // First run (nothing configured yet) uses the setup page; afterwards, Admin → Providers.
+            WelcomeTarget.ProviderSetup => string.IsNullOrWhiteSpace(Config.ApiKey) && Config.BaseUrl is null ? "/setup" : "/admin/providers",
+            _ => null,
+        };
+    }
+
     private const int PageSize = 10;
     private int _dashPage;
 
@@ -190,6 +343,12 @@
             return;
         }
 
+        // Phase 141: first visit greets with "Welcome to Sovrant"; afterwards a time-of-day greeting.
+        // Decided here (prerender and live render both see "not seen"); recorded after the live render.
+        if (Session.UserId is { Length: > 0 } uid)
+            _firstVisit = !await Onboarding.HasSeenWelcomeAsync(uid);
+        UpdateGreeting();
+
         await LoadAsync();
         _timer = new System.Threading.Timer(_ => InvokeAsync(LoadAsync), null,
             TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
@@ -198,6 +357,8 @@
     private async Task LoadAsync()
     {
         if (string.IsNullOrEmpty(Session.UserId)) return;
+
+        await LoadGuideAsync(); // Phase 141: checklist ticks refresh with the activity
 
         _loading = true;
         try

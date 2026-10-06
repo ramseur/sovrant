@@ -212,7 +212,7 @@ public partial class App : Application
         services.AddSingleton<UserDashboardViewModel>();
         services.AddSingleton<CommandPaletteViewModel>();
         services.AddTransient<LoginViewModel>();
-        services.AddSingleton<WelcomeViewModel>();
+        services.AddSingleton<HomeGuideViewModel>();
         services.AddTransient<AdminViewModel>();
         services.AddTransient<SystemIntegrationsViewModel>();
 
@@ -341,8 +341,8 @@ public partial class App : Application
         window.Closed += (_, _) => Environment.Exit(0);
         MainWindow = window;
         window.Show();
-        // Phase 140: a user's first sign-in (after setup on first run) opens the Welcome page.
-        await mainVm.ShowWelcomeIfFirstTimeAsync().ConfigureAwait(true);
+        // Phase 141: Home (the start page) loads now that someone is signed in, rather than on its 30 s timer.
+        _ = _serviceProvider.GetRequiredService<UserDashboardViewModel>().RefreshCommand.ExecuteAsync(null);
 
         // Background user/workspace seeding (local mode only — server handles this in remote mode).
         if (!isRemote)
@@ -417,7 +417,9 @@ public partial class App : Application
         await Services.GetRequiredService<SettingsViewModel>().HydrateFromStoresAsync().ConfigureAwait(true);
 
         MainWindow?.Show();
-        await Services.GetRequiredService<MainViewModel>().ShowWelcomeIfFirstTimeAsync().ConfigureAwait(true);
+        // Phase 141: the next user gets their own greeting and first-visit state on Home.
+        Services.GetRequiredService<HomeGuideViewModel>().Reset();
+        _ = Services.GetRequiredService<UserDashboardViewModel>().RefreshCommand.ExecuteAsync(null);
     }
 
     /// <summary>

@@ -366,7 +366,5 @@
         <!-- Phase 133 — conversation-folder dialogs (Move picker, name prompt) -->
         <views:SessionFolderDialogOverlay DataContext="{Binding Sidebar.FolderDialog}" />
 
-        <!-- Phase 140 — Welcome to Sovrant (full window, covers the rail) -->
-        <views:WelcomeOverlay DataContext="{Binding Welcome}" />
     </Panel>
 </Window>

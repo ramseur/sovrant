@@ -24,9 +24,9 @@ internal static class AppNavModel
 {
     public static readonly IReadOnlyList<AppNavGroup> Groups =
     [
-        new("dashboard", "Dashboard",
+        new("dashboard", "Home",
             IconNames.Dashboard,
-            "/dashboard", [new("Dashboard", "/dashboard")]),
+            "/dashboard", [new("Home", "/dashboard")]),
         new("chat", "Chat",
             IconNames.Chat,
             "/", [new("Chat", "/")]),

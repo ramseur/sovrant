@@ -94,32 +94,8 @@ public partial class MainViewModel : ViewModelBase
 
         AppNav = new AppNavViewModel(this);
 
-        Welcome = services.GetRequiredService<WelcomeViewModel>();
-        Welcome.NavigateRequested += NavigateFromLink;
-    }
-
-    /// <summary>Phase 140 — the full-window Welcome overlay.</summary>
-    public WelcomeViewModel Welcome { get; }
-
-    /// <summary>Opens the Welcome page with fresh checklist state (Dashboard → Show welcome, chat welcome).</summary>
-    [RelayCommand]
-    private Task ShowWelcomeAsync() => ShowWelcomeCoreAsync(force: true);
-
-    /// <summary>Shows Welcome on this user's first sign-in only.</summary>
-    public Task ShowWelcomeIfFirstTimeAsync() => ShowWelcomeCoreAsync(force: false);
-
-    private async Task ShowWelcomeCoreAsync(bool force)
-    {
-        var userId = _principal.UserId;
-        if (string.IsNullOrEmpty(userId)) return;
-        var email = (_principal as Sovrant.Desktop.Auth.DesktopPrincipalAccessor)?.Email ?? userId;
-        var at = email.IndexOf('@', StringComparison.Ordinal);
-        var name = at > 0 ? email[..at] : email;
-        var workspaceId = _services.GetService<ActiveContextViewModel>()?.ActiveWorkspaceId;
-        if (force)
-            await Welcome.ShowAsync(userId, name, _principal.IsAdmin, workspaceId).ConfigureAwait(true);
-        else
-            await Welcome.ShowIfFirstTimeAsync(userId, name, _principal.IsAdmin, workspaceId).ConfigureAwait(true);
+        // Phase 141 — links in Home's guide open their page (and move the rail highlight).
+        dashboard.Guide.NavigateRequested += NavigateFromLink;
     }
 
     /// <summary>Phase 135 — collapsible nav groups (expanded rail) and flyouts (collapsed rail).</summary>
@@ -282,7 +258,7 @@ public partial class MainViewModel : ViewModelBase
     };
 
     /// <summary>
-    /// Phase 140 — navigation from an in-page link (Welcome, chat welcome cards): moves the rail's
+    /// Phase 140 — navigation from an in-page link (Home's guide, chat welcome cards): moves the rail's
     /// highlight to the page, then opens it. Admin pages are refused for non-admins here too.
     /// </summary>
     private void NavigateFromLink(string page)
@@ -300,7 +276,7 @@ public partial class MainViewModel : ViewModelBase
 
     private void OnNavigationRequested(object? sender, string pageName)
     {
-        // Phase 140: hiding the Admin group isn't enough. Any link (Welcome page, command
+        // Phase 140: hiding the Admin group isn't enough. Any link (Home's guide, command
         // palette, events) that names an admin page must not open it for a non-admin.
         if (IsAdminOnlyPage(pageName) && !_principal.IsAdmin)
             return;
@@ -410,8 +386,7 @@ public partial class MainViewModel : ViewModelBase
         chat.SetAdmin(_principal.IsAdmin);
         chat.AreaRequested += page =>
         {
-            if (page == "Welcome") _ = ShowWelcomeCoreAsync(force: true);
-            else NavigateFromLink(page);
+            NavigateFromLink(page);
         };
         // Phase 133 — keep the sidebar's open-conversation highlight and the chat header in sync.
         chat.PropertyChanged += (_, e) =>

@@ -56,7 +56,7 @@ public sealed class OnboardingService(IServiceProvider services)
     public const string Tagline =
         "Your private AI workspace. Bring any model, keep your data, and stay in control of what your agents can do.";
 
-    /// <summary>True once the user has been shown the Welcome page.</summary>
+    /// <summary>True once the user has had their first Home visit (greeted with "Welcome to Sovrant").</summary>
     public async Task<bool> HasSeenWelcomeAsync(string userId, CancellationToken ct = default)
     {
         var prefs = services.GetService<IUserPreferenceStore>();
@@ -65,13 +65,50 @@ public sealed class OnboardingService(IServiceProvider services)
         return await prefs.GetAsync(userId, UserPreferenceKeys.WelcomeSeen, ct).ConfigureAwait(false) == "true";
     }
 
-    /// <summary>Records that the Welcome page was shown (first display counts; "Show welcome" reopens it).</summary>
+    /// <summary>Records the user's first Home visit (Phase 141; Phase 140 used it for the Welcome page).</summary>
     public Task MarkWelcomeSeenAsync(string userId, CancellationToken ct = default) =>
         SetFlagAsync(userId, UserPreferenceKeys.WelcomeSeen, ct);
 
     /// <summary>Records that the user opened a Knowledge page (ticks the member checklist item).</summary>
     public Task MarkKnowledgeVisitedAsync(string userId, CancellationToken ct = default) =>
         SetFlagAsync(userId, UserPreferenceKeys.KnowledgeVisited, ct);
+
+    /// <summary>Phase 141 — true once the user dismissed Home's "All set" line.</summary>
+    public async Task<bool> IsGetStartedDismissedAsync(string userId, CancellationToken ct = default)
+    {
+        var prefs = services.GetService<IUserPreferenceStore>();
+        if (prefs is null || string.IsNullOrEmpty(userId))
+            return false;
+        return await prefs.GetAsync(userId, UserPreferenceKeys.GetStartedDismissed, ct).ConfigureAwait(false) == "true";
+    }
+
+    public Task DismissGetStartedAsync(string userId, CancellationToken ct = default) =>
+        SetFlagAsync(userId, UserPreferenceKeys.GetStartedDismissed, ct);
+
+    /// <summary>
+    /// Phase 141 — Home's heading: "Welcome to Sovrant, sam" on the user's first visit, then a
+    /// time-of-day greeting from the viewer's local hour (0–23).
+    /// </summary>
+    public static string Greeting(string displayName, bool firstVisit, int localHour)
+    {
+        if (firstVisit)
+            return $"Welcome to Sovrant, {displayName}";
+        var part = localHour switch
+        {
+            >= 5 and < 12 => "morning",
+            >= 12 and < 18 => "afternoon",
+            _ => "evening",
+        };
+        return $"Good {part}, {displayName}";
+    }
+
+    /// <summary>The part of an email before '@' (or the id itself), for greetings.</summary>
+    public static string DisplayName(string? emailOrId)
+    {
+        var s = emailOrId ?? string.Empty;
+        var at = s.IndexOf('@', StringComparison.Ordinal);
+        return at > 0 ? s[..at] : s;
+    }
 
     private async Task SetFlagAsync(string userId, string key, CancellationToken ct)
     {

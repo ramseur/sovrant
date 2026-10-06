@@ -474,12 +474,12 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         SessionId = $"session-{Guid.NewGuid():N}";
     }
 
-    /// <summary>Raised with a page name when a capability card is clicked; "Welcome" opens the Welcome page.</summary>
+    /// <summary>Raised with a page name when a capability card or "See everything on Home" is clicked.</summary>
     public event Action<string>? AreaRequested;
 
     /// <summary>
     /// Phase 140 — the chat welcome's capability strip. Integrations and Trust Boundary are admin-only,
-    /// so members get Projects and the Privacy card (which opens Welcome) instead.
+    /// so members get Projects and the Privacy card (which opens Home) instead.
     /// </summary>
     public IReadOnlyList<CapabilityCard> Capabilities { get; private set; } = BuildCapabilities(isAdmin: false);
 
@@ -506,7 +506,7 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         else
         {
             cards.Add(new(IconNames.Projects, "Projects", "Files and chats together", "Projects"));
-            cards.Add(new(IconNames.Private, "Privacy", "You choose what teammates see", "Welcome"));
+            cards.Add(new(IconNames.Private, "Privacy", "You choose what teammates see", "Dashboard"));
         }
         return cards;
     }

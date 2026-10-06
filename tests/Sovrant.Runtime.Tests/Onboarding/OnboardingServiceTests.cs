@@ -53,6 +53,27 @@ public sealed class OnboardingServiceTests : IAsyncDisposable
         return new OnboardingService(services.BuildServiceProvider());
     }
 
+    [Theory]
+    [InlineData(true, 15, "Welcome to Sovrant, sam")]
+    [InlineData(false, 5, "Good morning, sam")]
+    [InlineData(false, 11, "Good morning, sam")]
+    [InlineData(false, 12, "Good afternoon, sam")]
+    [InlineData(false, 17, "Good afternoon, sam")]
+    [InlineData(false, 18, "Good evening, sam")]
+    [InlineData(false, 2, "Good evening, sam")]
+    public void Home_Greeting_Is_Welcome_On_First_Visit_Then_Time_Of_Day(bool firstVisit, int hour, string expected) =>
+        Assert.Equal(expected, OnboardingService.Greeting(OnboardingService.DisplayName("sam@example.com"), firstVisit, hour));
+
+    [Fact]
+    public async Task Get_Started_Dismissal_Is_Remembered_Per_User()
+    {
+        var svc = Build();
+        Assert.False(await svc.IsGetStartedDismissedAsync("sam"));
+        await svc.DismissGetStartedAsync("sam");
+        Assert.True(await svc.IsGetStartedDismissedAsync("sam"));
+        Assert.False(await svc.IsGetStartedDismissedAsync("alex"));
+    }
+
     [Fact]
     public async Task Welcome_Is_Shown_Once_Per_User()
     {

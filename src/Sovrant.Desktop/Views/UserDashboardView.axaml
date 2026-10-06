@@ -3,11 +3,15 @@
              xmlns:ctrl="using:Sovrant.Desktop.Controls"
              xmlns:ui="using:Sovrant.Api.Ui"
              xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:views="using:Sovrant.Desktop.Views"
+             xmlns:onb="using:Sovrant.Runtime.Onboarding"
              x:Class="Sovrant.Desktop.Views.UserDashboardView"
              x:DataType="vm:UserDashboardViewModel"
              Background="{DynamicResource SurfaceBackground}">
 
-    <DockPanel>
+    <!-- Phase 141 — Home: one scrolling page. Greeting + Get started pill, your activity, then the guide. -->
+    <ScrollViewer x:Name="HomeScroll" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel>
         <!-- Header -->
         <StackPanel DockPanel.Dock="Top" Margin="32,24,32,0" Spacing="8">
             <DockPanel>
@@ -17,18 +21,26 @@
                         <TextBlock Text="Last updated:" FontSize="11" Foreground="{DynamicResource TextMuted}" />
                         <TextBlock Text="{Binding LastRefreshed}" FontSize="11" Foreground="{DynamicResource TextMuted}" />
                     </StackPanel>
-                    <!-- Phase 140 — reopen the Welcome page -->
-                    <Button Content="Show welcome"
-                            Command="{Binding $parent[Window].((vm:MainViewModel)DataContext).ShowWelcomeCommand}"
-                            Padding="12,6" CornerRadius="6"
-                            Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
+                    <!-- Phase 141 — Get started pill (until the checklist is done) -->
+                    <Button x:Name="GetStartedPill" IsVisible="{Binding Guide.ShowPill}" Click="OnGetStartedPill"
+                            Padding="10,6,13,6" CornerRadius="16" Cursor="Hand"
+                            Background="{DynamicResource BrandPrimarySoft}" BorderBrush="{DynamicResource BrandPrimary}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <ProgressBar Value="{Binding Guide.ProgressPercent}" Maximum="100" Width="28" Height="4" MinWidth="0"
+                                         VerticalAlignment="Center" Foreground="{DynamicResource BrandPrimary}" />
+                            <TextBlock Text="{Binding Guide.PillText}" FontSize="12.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                     <Button Content="Refresh" Command="{Binding RefreshCommand}"
                             Padding="12,6" CornerRadius="6"
                             Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
                 </StackPanel>
                 <StackPanel>
-                    <TextBlock Text="Dashboard" FontSize="24" FontWeight="Bold"
+                    <TextBlock Text="{Binding Guide.Greeting}" FontSize="24" FontWeight="Bold"
                                Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="{x:Static onb:OnboardingService.Tagline}" FontSize="12.5" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextSecondary}" Margin="0,0,0,2" />
                     <WrapPanel Orientation="Horizontal">
                         <TextBlock FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                    Text="Your activity across every workspace you belong to — plus your teammates' public activity."
@@ -214,7 +226,7 @@
                         Padding="12,5" CornerRadius="6"
                         Background="Transparent" Foreground="{DynamicResource TextPrimary}" />
             </StackPanel>
-            <ScrollViewer>
+            <Panel>
                 <ItemsControl ItemsSource="{Binding PagedRows}">
                     <ItemsControl.ItemTemplate>
                         <DataTemplate DataType="vm:UserDashboardRowViewModel">
@@ -291,7 +303,11 @@
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </ScrollViewer>
+            </Panel>
         </DockPanel>
-    </DockPanel>
+
+        <!-- Phase 141 — Get started and What Sovrant can do, below the activity -->
+        <views:HomeGuideView x:Name="Guide" DataContext="{Binding Guide}" Margin="32,8,32,32" />
+    </StackPanel>
+    </ScrollViewer>
 </UserControl>

@@ -21,7 +21,7 @@ public partial class AppNavViewModel : ViewModelBase
 
     private static readonly IReadOnlyList<Group> s_groups =
     [
-        new("dashboard", "Dashboard", IconNames.Dashboard, [new("Dashboard", "Dashboard")]),
+        new("dashboard", "Home", IconNames.Dashboard, [new("Home", "Dashboard")]),
         new("chat", "Chat", IconNames.Chat, [new("Chat", "Chat")]),
         new("knowledge", "Knowledge", IconNames.Knowledge,
         [

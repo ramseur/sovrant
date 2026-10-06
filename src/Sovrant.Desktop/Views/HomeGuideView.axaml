@@ -1,0 +1,151 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Sovrant.Desktop.ViewModels"
+             xmlns:ctrl="using:Sovrant.Desktop.Controls"
+             x:Class="Sovrant.Desktop.Views.HomeGuideView"
+             x:DataType="vm:HomeGuideViewModel">
+
+  <!-- Phase 141 — Home's guide, below the activity: Get started (or "All set") and What Sovrant can do
+       (docs/design/desktop.html → Home). -->
+  <UserControl.Styles>
+    <Style Selector="Button.welcard">
+      <Setter Property="Background" Value="{DynamicResource SurfaceCard}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SurfaceBorder}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="16" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="VerticalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.welcard:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource BrandPrimarySoft}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource BrandPrimary}" />
+    </Style>
+    <Style Selector="Button.wellink">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource BrandPrimary}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="Button.wellink:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource BrandPrimary}" />
+    </Style>
+  </UserControl.Styles>
+
+  <StackPanel Spacing="24">
+
+    <!-- Get started -->
+    <StackPanel x:Name="GetStartedSection" Spacing="10" IsVisible="{Binding ShowChecklist}">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Right" Text="{Binding ProgressText}" FontSize="12"
+                   Foreground="{DynamicResource TextSecondary}" VerticalAlignment="Bottom" />
+        <TextBlock Text="{Binding ChecklistTitle}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+      </DockPanel>
+      <Border CornerRadius="12" Padding="20,18" BorderThickness="1"
+              BorderBrush="{DynamicResource SurfaceBorder}" Background="{DynamicResource SurfaceCard}">
+        <StackPanel Spacing="10">
+          <ProgressBar Value="{Binding ProgressPercent}" Maximum="100" Height="6" CornerRadius="3"
+                       Foreground="{DynamicResource BrandPrimary}" />
+          <ItemsControl ItemsSource="{Binding Checklist}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:WelcomeChecklistItem">
+                <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource SurfaceBorder}" Padding="0,10">
+                  <DockPanel>
+                    <Panel DockPanel.Dock="Left" Width="20" Height="20" Margin="0,0,12,0" VerticalAlignment="Center">
+                      <Ellipse Stroke="{DynamicResource TextMuted}" StrokeThickness="1.5" IsVisible="{Binding !Done}" />
+                      <Ellipse Fill="{DynamicResource StatusPass}" IsVisible="{Binding Done}" />
+                      <ctrl:SovrantIcon IconName="allow" Size="12" StrokeWidth="3" Foreground="White"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding Done}" />
+                    </Panel>
+                    <Panel DockPanel.Dock="Right" VerticalAlignment="Center">
+                      <TextBlock Text="Done" FontSize="12" Foreground="{DynamicResource StatusPass}" IsVisible="{Binding Done}" />
+                      <Button Classes="wellink" Content="{Binding LinkText}" IsVisible="{Binding ShowAction}"
+                              Command="{Binding $parent[UserControl].((vm:HomeGuideViewModel)DataContext).OpenCommand}"
+                              CommandParameter="{Binding Page}" />
+                    </Panel>
+                    <StackPanel VerticalAlignment="Center" Spacing="1">
+                      <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium" Foreground="{DynamicResource TextPrimary}" />
+                      <TextBlock Text="{Binding Subtitle}" FontSize="11.5" Foreground="{DynamicResource TextMuted}" />
+                    </StackPanel>
+                  </DockPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <!-- All set (checklist complete), until dismissed -->
+    <Border CornerRadius="12" Padding="16,12" BorderThickness="1" IsVisible="{Binding ShowAllSet}"
+            BorderBrush="{DynamicResource SurfaceBorder}" Background="{DynamicResource SurfaceCard}">
+      <DockPanel>
+        <Panel DockPanel.Dock="Left" Width="20" Height="20" Margin="0,0,12,0" VerticalAlignment="Center">
+          <Ellipse Fill="{DynamicResource StatusPass}" />
+          <ctrl:SovrantIcon IconName="allow" Size="12" StrokeWidth="3" Foreground="White"
+                            HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Panel>
+        <Button DockPanel.Dock="Right" Content="Dismiss" Command="{Binding DismissCommand}"
+                Padding="12,5" CornerRadius="6" FontSize="12" Background="Transparent"
+                Foreground="{DynamicResource TextPrimary}" />
+        <TextBlock VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource TextSecondary}"><Run Text="All set" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}"/><Run Text=" — you've finished getting started."/></TextBlock>
+      </DockPanel>
+    </Border>
+
+    <!-- What Sovrant can do -->
+    <StackPanel Spacing="10" IsVisible="{Binding IsLoaded}">
+      <TextBlock Text="What Sovrant can do" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+      <ItemsControl ItemsSource="{Binding Areas}" Margin="-6,0">
+        <ItemsControl.ItemsPanel>
+          <ItemsPanelTemplate><UniformGrid Columns="4" /></ItemsPanelTemplate>
+        </ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate x:DataType="vm:WelcomeAreaItem">
+            <Panel Margin="6">
+              <Button Classes="welcard" IsVisible="{Binding HasLink}"
+                      Command="{Binding $parent[UserControl].((vm:HomeGuideViewModel)DataContext).OpenCommand}"
+                      CommandParameter="{Binding Page}">
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Bottom" Text="{Binding LinkText}" FontSize="12" FontWeight="SemiBold"
+                             Foreground="{DynamicResource BrandPrimary}" Margin="0,10,0,0" />
+                  <StackPanel Spacing="8">
+                    <Border Width="34" Height="34" CornerRadius="9" HorizontalAlignment="Left" Background="{DynamicResource BrandPrimarySoft}">
+                      <ctrl:SovrantIcon IconName="{Binding IconName}" Size="18" Foreground="{DynamicResource BrandPrimary}"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="{Binding Description}" FontSize="12.5" TextWrapping="Wrap" LineHeight="19"
+                               Foreground="{DynamicResource TextSecondary}" />
+                  </StackPanel>
+                </DockPanel>
+              </Button>
+              <Border IsVisible="{Binding IsManaged}" CornerRadius="12" Padding="16" BorderThickness="1"
+                      BorderBrush="{DynamicResource SurfaceBorder}" Background="{DynamicResource SurfaceCard}">
+                <DockPanel>
+                  <TextBlock DockPanel.Dock="Bottom" Text="Managed by your admin" FontSize="11.5"
+                             Foreground="{DynamicResource TextMuted}" Margin="0,10,0,0" />
+                  <StackPanel Spacing="8">
+                    <Border Width="34" Height="34" CornerRadius="9" HorizontalAlignment="Left" Background="{DynamicResource BrandPrimarySoft}">
+                      <ctrl:SovrantIcon IconName="{Binding IconName}" Size="18" Foreground="{DynamicResource BrandPrimary}"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="{Binding Title}" FontSize="14" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimary}" />
+                    <TextBlock Text="{Binding Description}" FontSize="12.5" TextWrapping="Wrap" LineHeight="19"
+                               Foreground="{DynamicResource TextSecondary}" />
+                  </StackPanel>
+                </DockPanel>
+              </Border>
+            </Panel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+  </StackPanel>
+</UserControl>

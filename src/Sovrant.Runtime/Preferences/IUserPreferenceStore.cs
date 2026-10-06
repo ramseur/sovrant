@@ -40,6 +40,9 @@ public static class UserPreferenceKeys
     /// <summary>Phase 140: "true" once the user has opened a Knowledge page (ticks the member checklist).</summary>
     public const string KnowledgeVisited = "onboarding.knowledge_visited";
 
+    /// <summary>Phase 141 — "true" once the user dismissed Home's "All set" line.</summary>
+    public const string GetStartedDismissed = "onboarding.get_started_dismissed";
+
     /// <summary>Provider kind for the active profile (<c>OpenAI</c>, <c>OpenRouter</c>, …).</summary>
     public const string Provider = "llm.provider";
 

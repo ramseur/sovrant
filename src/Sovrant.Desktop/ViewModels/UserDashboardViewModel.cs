@@ -76,8 +76,10 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         IWorkflowStore workflowStore,
         IAgentRunStore runStore,
         ISessionStore sessionStore,
-        IAuditStore auditStore)
+        IAuditStore auditStore,
+        HomeGuideViewModel guide)
     {
+        Guide = guide;
         _aggregator = aggregator;
         _principal = principal;
         _workflowStore = workflowStore;
@@ -92,6 +94,17 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
     }
 
     public event EventHandler<CommandCenterRowSelectedEventArgs>? RowSelected;
+
+    /// <summary>Phase 141 — Home's greeting, Get started checklist and What Sovrant can do.</summary>
+    public HomeGuideViewModel Guide { get; }
+
+    private async Task LoadGuideAsync(string userId)
+    {
+        var email = (_principal as Sovrant.Desktop.Auth.DesktopPrincipalAccessor)?.Email ?? userId;
+        var workspaceId = (_principal as Sovrant.Desktop.Auth.DesktopPrincipalAccessor)?.WorkspaceId;
+        await Dispatcher.UIThread.InvokeAsync(() => Guide.LoadAsync(userId, Sovrant.Runtime.Onboarding.OnboardingService.DisplayName(email),
+            _principal.IsAdmin, workspaceId, DateTime.Now.Hour));
+    }
 
     [RelayCommand]
     private void SelectRow(UserDashboardRowViewModel? row)
@@ -146,6 +159,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
         {
             IsLoading = true;
             var state = await _aggregator.GetStateAsync(userId).ConfigureAwait(false);
+            await LoadGuideAsync(userId).ConfigureAwait(false);
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 OwnWorkflows = state.OwnWorkflows;
