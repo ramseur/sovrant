@@ -47,7 +47,9 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | Phase 142 | Home tabs — **Overview** (default: greeting, at a glance, Get started beside What Sovrant can do, laid out like the chat welcome; fits a laptop screen) and **Activity** (the stats and activity table); admin checklist reads "Set up Sovrant for your team"; time-neutral greeting; header wrapping fixed ✅ |
 | **2.0 — in progress** | Phase 143 | SDK & API parity — Part A done for 2.0 (workflow plan / edit / cancel routes, MCP status + retry over HTTP, SDK privacy setters, snake_case create fix); Part B planned (the SDK's older gaps, safe retries, SDK checks in CI) |
 | **2.0 — done** | Phase 144 | Environment configuration that works everywhere — every `.env.example` variable honoured from shell, container env or `.env`; provider keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE`); Web port, forwarded headers, `/health` + `/ready` (GitHub #33, #34, #35) ✅ |
-| **2.0.1 — next** | Phase 134 | Postgres / Supabase — every known Postgres and Supabase issue in one phase: privacy flag missing from Postgres conversation lists (admins see private titles in Command Center), migrator copies only conversations + credentials, no Postgres test run, split SQLite/Postgres backend, Supabase RLS (was Phase 127) |
+| **2.0.1 — in progress** | Phase 134 | Postgres / Supabase — every known Postgres and Supabase issue in one phase: privacy flag missing from Postgres conversation lists (admins see private titles in Command Center), migrator copies only conversations + credentials, no Postgres test run, split SQLite/Postgres backend, Supabase RLS (was Phase 127) |
+| **2.0.1 — next** | Stopgaps | Web: no automatic sign-in after a restart; file and shell tools off for members by default (admins can turn them on); README warns that Web is single-user until Phase 145 |
+| **2.1 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each user's own model and keys, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -257,6 +259,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Built |
 | SDK & API parity — every app feature reachable over HTTP and the JS SDK. Part A (2.0, built): workflow plan / edit / cancel, MCP status + retry, privacy setters. Part B (planned): ~14 older server routes the SDK never wrapped, idempotent-only SDK retries, workflow left behind when planning fails, SDK type check + tests in CI | Phase 143 | Part A Built · Part B Planned |
 | Environment configuration that works everywhere — every documented env variable works from the shell, container env or `.env` on every app it applies to; provider API keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply every start); Web hosting parity (`SOVRANT_WEB_PORT`, forwarded headers, `/health` + `/ready`); docs match the code | Phase 144 | Built |
+| Multi-user Web — per-browser sign-in (HttpOnly cookie, 8 h sliding + 30-day "Remember me"), per-tab services instead of process-wide singletons, per-user model / provider / keys, headless mode with per-user Server sign-in, per-conversation Bash and a path to safe file/shell tools for members (with Phase 124), multi-user tests + load test (GitHub #32) | Phase 145 | Planned — next (2.1) |
 
 ### v1.0 release polish ✅
 
@@ -12483,7 +12486,7 @@ The Postgres/Supabase backend replaces a subset of stores (sessions, credentials
 - **Phase 40C** built the backend.
 - **Phase 127** (Supabase RLS) is now Part C of this phase.
 - **Phase 133** left one acceptance criterion open ("same behavior on the SQLite and Postgres folder stores"), which this phase closes.
-- **Multi-user Web (GitHub #32)** and multi-instance hosting depend on Part B.
+- **Phase 145 (Multi-user Web, GitHub #32)** — multi-instance hosting depends on Part B.
 
 ---
 
@@ -13117,7 +13120,7 @@ GitHub issues from a containerised, multi-tenant deployment hit exactly this:
 ### Out of scope
 - **Bootstrap file:** MCP servers, workspace MCP enablement and the initial admin stay with Phase 118, which owns the declarative bootstrap file (also GitHub #35's main proposal).
 - **Sub-path hosting:** `SOVRANT_PATH_BASE` is a separate item; the UI uses absolute `/…` links throughout.
-- **Multi-user Web:** stays deferred (GitHub #32).
+- **Multi-user Web:** Phase 145 (GitHub #32).
 
 ### Acceptance criteria
 - [x] Every `.env.example` variable verified working from `.env` and from the process environment, on each app it's documented for
@@ -13125,3 +13128,88 @@ GitHub issues from a containerised, multi-tenant deployment hit exactly this:
 - [x] `SOVRANT_ENV_KEYS_OVERRIDE=true` re-applies env keys on restart; without it, admin edits survive restarts
 - [x] Web: `SOVRANT_WEB_PORT`, forwarded headers, `/health`, `/ready`; Server: forwarded headers
 - [x] Docs match the code; the guard test is in place
+
+---
+
+## Phase 145 — Multi-user Web (teams of 10–1000)
+
+**Status:** Planned (2026-10-06) — plan agreed; next after the 2.0.1 stopgaps. GitHub #32 stays open until this ships.
+
+### Why
+
+Sovrant.Web is meant to host teams of 10–1000 people, either on its own ("monolithic" embedded mode) or as the front end to Sovrant.Server ("headless" remote mode). Today it holds **one signed-in user for the whole process**, so every browser acts as whoever signed in last and sees their data as if it were theirs. Verified in code (2026-10-06):
+
+| Shared across all users today | Effect |
+|---|---|
+| `WebSessionService` (singleton) + static `Program.SovrantUserId` (26 call sites) | Everyone acts as the last user to sign in |
+| One stored Web sign-in token, restored at startup | After a restart, any visitor is signed in as the last user with no password (**fixed as a 2.0.1 stopgap**) |
+| `ActiveContextService` (singleton) | Shared workspace, project, model, MCP servers, current chat |
+| `BlazorConfirmationHandler` (singleton) | A tool approval can appear, and be approved, in another user's browser |
+| Permission mode (singleton policy) | One user's mode applies to everyone |
+| `SovrantConfig` + `MutableAuthProvider` (singletons) | One model, provider and API key for the whole process |
+| Remote mode: one `SOVRANT_API_TOKEN` | Every Web user is the same Server user |
+| `ShellSessionState` (singleton) | Shared Bash working directory |
+| File and shell tools run as the server's OS account with no path limits (Phase 124 not built) | On a shared server, any user's agent can read other users' files, or the database |
+
+Sovrant.Server already authenticates every request (`HttpContextPrincipalAccessor`), but its `SovrantConfig` is also process-wide; it's audited here too. Desktop is single-user and is unaffected.
+
+### Decisions (confirmed 2026-10-06)
+
+| Question | Decision |
+|---|---|
+| Stopgap before this phase | Fix the automatic sign-in after a restart now (2.0.1), and say plainly in the README, CHANGELOG and PR/tag messages that Web is single-user until Phase 145. We're pre-release, so no other mitigation. |
+| File and shell tools for members | **Short term (2.0.1):** off for non-admins on Web by default; an admin can turn them on. **Long term:** the path in Part D. |
+| Sign-in lifetime | 8-hour sliding session, plus an optional 30-day "Remember me" |
+| SSO | Later, through Supabase Auth (Phase 40C). The cookie design leaves room for it. |
+| Headless mode | Each user signs in to Server with their own account; `SOVRANT_API_TOKEN` becomes optional (service use only) |
+
+### What ships
+
+**Part A — Identity per browser (security core)**
+1. ASP.NET Core cookie authentication: HttpOnly, Secure (when HTTPS), SameSite=Lax; 8 h sliding expiry, 30 days with "Remember me". Blazor can't set cookies over its SignalR circuit, so sign-in and sign-out are small form posts (`/auth/login`, `/auth/logout`). The cookie carries a revocable server-side token (existing `ITokenService`); sign-out and admin "revoke" invalidate it.
+2. The circuit's user comes from `AuthenticationStateProvider` / `HttpContext.User` at circuit start; pages use `[Authorize]` and a cascading auth state instead of checking a global.
+3. Per-circuit (`AddScoped`) instead of singleton: `WebSessionService`, `ActiveContextService`, `BlazorConfirmationHandler`, `IUserInputProvider`, permission mode.
+4. Remove the static `Program.SovrantUserId` and `SetUserId`; every call site asks the circuit's principal.
+5. Admin can see and revoke a user's active sign-ins (Admin → Users).
+
+**Part B — Each user's own model, provider and keys**
+6. `SovrantConfig` holds install-wide defaults only. Each chat session builds its own config from that user's preferences and active provider profile (today's `ApplyUserPreferencesAsync` logic, applied per session instead of to the global).
+7. API keys are resolved per session from the user's provider profile credential, replacing the global `MutableAuthProvider` hot-swap.
+8. Background work (workflows, swarms, teams, scheduler) carries the owner explicitly and builds that owner's config.
+
+**Part C — Headless mode (Web in front of Server)**
+9. Web's login form signs in against Server (`/v1/auth/login`); each circuit gets its own API client with that user's token. No shared token in the Web process.
+10. Audit Server for process-wide per-user state (its `SovrantConfig`) and fix the same way as Part B.
+
+**Part D — Tools on a shared server**
+11. Per-conversation Bash working directory (`ShellSessionState` per session).
+12. **Stopgap (2.0.1):** file and shell tools (Read, Write, Edit, Glob, Grep, Bash, and other tools that touch the server's disk) are off for non-admins on Web by default, with an admin setting to turn them on.
+13. **Path for members:** each workspace (and personal workspace) gets its own working folder on the server; members' file and shell tools are confined to it using Phase 124's enforcement (allowed/blocked directories, applied per workspace). Phase 124 is a prerequisite for turning member tools on by default. Later option: run Bash in a per-workspace container for OS-level isolation.
+
+**Part E — Proof**
+14. Multi-user tests: two or more simulated users at once; identity, active context, approvals, preferences and data never cross.
+15. Load test: several hundred concurrent circuits on one Web server; record memory per circuit and SignalR limits; publish sizing guidance for admins.
+16. Multi-instance (several Web servers behind a load balancer) needs shared Data Protection keys, sticky sessions and everything on Postgres (Phase 134 Part B). Documented as the next step, not built here.
+
+### Non-goals
+- SSO (Supabase Auth, later).
+- Multi-instance hosting (see item 16).
+- Desktop changes (single-user).
+
+### Acceptance criteria
+- [ ] 2.0.1 stopgaps shipped: no automatic sign-in after restart; member file/shell tools off by default on Web; README warning
+- [ ] Two browsers signed in as different users each see only their own identity, context, chats, approvals and model
+- [ ] No process-wide user state left in Web (`Program.SovrantUserId` gone; per-user services are scoped)
+- [ ] Sign-in cookie: HttpOnly, Secure on HTTPS, 8 h sliding, 30-day "Remember me"; sign-out and admin revoke work
+- [ ] Each user's model, provider and API key apply only to their own chats, including background work
+- [ ] Headless mode: each Web user is their own Server user; no shared token needed
+- [ ] Per-conversation Bash working directory
+- [ ] Multi-user tests and a load test of several hundred circuits; sizing guidance published
+- [ ] Design mock for the small UI changes (Remember me, signed-in indicator, admin active sign-ins) on both mocks
+- [ ] GitHub #32 closed with a reply
+
+### Relationship to other phases
+- **Phase 124** (file system access controls) — prerequisite for member file/shell tools by default (Part D).
+- **Phase 134** (Postgres / Supabase) — Part B there is needed for multi-instance hosting.
+- **Phase 40C** (Supabase) — SSO comes from Supabase Auth later.
+- **Phase 143 Part B** (SDK & API) — headless mode leans on Server's auth endpoints.
