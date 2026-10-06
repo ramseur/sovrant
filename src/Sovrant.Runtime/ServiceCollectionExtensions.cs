@@ -417,6 +417,7 @@ public static class ServiceCollectionExtensions
         // MCP
         services.AddSingleton<IMcpClientFactory, SovrantMcpClientFactory>();
         services.AddSingleton<McpClientRegistry>();
+        services.AddSingleton<McpServerStatusRegistry>(); // Phase 139
         services.AddSingleton<McpToolRegistrar>();
         services.AddSingleton<ICredentialStore>(sp =>
             new SqliteCredentialStore(sp.GetRequiredService<ISqliteConnectionFactory>(), bootstrap.LegacyKeystorePath));

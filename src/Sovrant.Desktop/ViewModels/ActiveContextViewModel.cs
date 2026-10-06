@@ -92,8 +92,12 @@ public partial class ActiveContextViewModel : ViewModelBase
         IPrincipalAccessor principal,
         IMcpServerStore? mcpServerStore = null,
         IUserPreferenceStore? prefs = null,
-        IWorkspaceSettingsStore? wsSettings = null)
+        IWorkspaceSettingsStore? wsSettings = null,
+        McpServerStatusRegistry? mcpStatus = null)
     {
+        _mcpStatus = mcpStatus;
+        if (mcpStatus is not null)
+            mcpStatus.Changed += (_, e) => Dispatcher.UIThread.Post(() => ApplyMcpStatus(e.Name));
         _workspaceService = workspaceService;
         _projectService = projectService;
         _principal = principal;
@@ -328,6 +332,36 @@ public partial class ActiveContextViewModel : ViewModelBase
         OnPropertyChanged(nameof(SelectedProjectChoice));
     }
 
+    // Phase 139 — connection status for the top-bar Integrations menu.
+    private readonly McpServerStatusRegistry? _mcpStatus;
+
+    /// <summary>The most serious unavailable server in the list (credentials beat network), or null.</summary>
+    public McpServerToggleItem? McpWarning => AvailableMcpServers
+        .Where(m => m.HasWarning)
+        .OrderBy(m => m.IsCredentialWarning ? 0 : 1)
+        .FirstOrDefault();
+
+    public bool HasMcpWarning => McpWarning is not null;
+    public bool McpWarningIsCredential => McpWarning?.IsCredentialWarning == true;
+    public bool McpWarningIsNetwork => HasMcpWarning && !McpWarningIsCredential;
+    public string McpWarningText => McpWarning?.WarningText ?? string.Empty;
+
+    private void ApplyMcpStatus(string name)
+    {
+        foreach (var item in AvailableMcpServers.Where(m => m.Name == name))
+            item.Status = _mcpStatus?.Get(name);
+        RaiseMcpWarningChanged();
+    }
+
+    private void RaiseMcpWarningChanged()
+    {
+        OnPropertyChanged(nameof(McpWarning));
+        OnPropertyChanged(nameof(HasMcpWarning));
+        OnPropertyChanged(nameof(McpWarningIsCredential));
+        OnPropertyChanged(nameof(McpWarningIsNetwork));
+        OnPropertyChanged(nameof(McpWarningText));
+    }
+
     /// <summary>Re-loads MCP servers from the store. Call after adding/removing servers in the Integrations Gallery.</summary>
     public Task RefreshMcpServersAsync() => LoadMcpServersAsync();
 
@@ -354,7 +388,8 @@ public partial class ActiveContextViewModel : ViewModelBase
             {
                 AvailableMcpServers.Clear();
                 foreach (var name in names)
-                    AvailableMcpServers.Add(new McpServerToggleItem(name, saved.Contains(name), PersistMcpSelectionAsync));
+                    AvailableMcpServers.Add(new McpServerToggleItem(name, saved.Contains(name), PersistMcpSelectionAsync) { Status = _mcpStatus?.Get(name) });
+                RaiseMcpWarningChanged();
             });
         }
         catch { /* non-fatal */ }
@@ -395,6 +430,16 @@ public sealed partial class McpServerToggleItem : ObservableObject
 
     [ObservableProperty]
     private bool _isActive;
+
+    /// <summary>Phase 139 — set when the server couldn't connect.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasWarning), nameof(IsCredentialWarning), nameof(IsNetworkWarning), nameof(WarningText))]
+    private McpServerStatus? _status;
+
+    public bool HasWarning => Status?.Failure is not null;
+    public bool IsCredentialWarning => Status?.Failure?.Kind == McpFailureKind.Credentials;
+    public bool IsNetworkWarning => HasWarning && !IsCredentialWarning;
+    public string WarningText => Status?.Message ?? string.Empty;
 
     public McpServerToggleItem(string name, bool isActive, Func<Task> onToggle)
     {

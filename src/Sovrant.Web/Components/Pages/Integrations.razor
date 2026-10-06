@@ -4,6 +4,7 @@
 @using Sovrant.Runtime.Config
 @using Sovrant.Runtime.Mcp
 @using Sovrant.Runtime.Workspaces
+@implements IDisposable
 @inject IJSRuntime JS
 @inject NavigationManager Nav
 
@@ -81,11 +82,15 @@
                         <button class="master-item @(ReferenceEquals(s, _selected) ? "active" : "")"
                                 @onclick="() => Select(s)">
                             <div class="item-title" style="display:flex;align-items:center;gap:8px;">
-                                <span class="status-dot @(s.IsConnected ? "connected" : "warning")" style="flex-shrink:0;"></span>
+                                <span class="status-dot @DotClass(s)" style="flex-shrink:0;"></span>
                                 <span>@s.Name</span>
+                                @if (s.Status?.Failure is { } rowFailure)
+                                {
+                                    <span class="mcp-badge @BadgeClass(s)" style="margin-left:auto;">Unavailable</span>
+                                }
                             </div>
                             <div class="item-subtitle" style="padding-left:16px;">
-                                @s.Transport@(s.ToolCount > 0 ? $" • {s.ToolCount} tool{(s.ToolCount == 1 ? "" : "s")}" : "")
+                                @s.Transport@(s.ToolCount > 0 ? $" • {s.ToolCount} tool{(s.ToolCount == 1 ? "" : "s")}" : "")@(s.Status?.Failure is { } f ? $" • Unavailable · {f.ShortLabel}" : "")
                             </div>
                         </button>
                     }
@@ -218,15 +223,47 @@
                     <div>
                         <h2 style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
                             @_selected.Name
-                            <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:@(_selected.IsConnected ? "var(--status-pass)" : "var(--status-warn)");">
-                                <span class="status-dot @(_selected.IsConnected ? "connected" : "warning")"></span>
-                                @(_selected.IsConnected ? "Connected" : "Not connected")
-                            </span>
+                            @if (_selected.Status?.Failure is not null)
+                            {
+                                <span class="mcp-badge @BadgeClass(_selected)">Unavailable</span>
+                            }
+                            else
+                            {
+                                <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:@(_selected.IsConnected ? "var(--status-pass)" : "var(--status-warn)");">
+                                    <span class="status-dot @DotClass(_selected)"></span>
+                                    @(_selected.IsConnected ? "Connected" : _selected.Status?.State == McpServerState.Connecting ? "Connecting…" : "Not connected")
+                                </span>
+                            }
                         </h2>
                         <p class="text-secondary" style="margin:0;">@_selected.Transport transport@(_selected.ToolCount > 0 ? $" • {_selected.ToolCount} tools" : "")</p>
                     </div>
                     <button class="btn-sm btn-danger" @onclick="() => RemoveServerAsync(_selected.Name)">Remove</button>
                 </div>
+
+                @* Phase 139 — why it isn't connected, in one sentence, and what happens next. *@
+                @if (_selected.Status is { Failure: { } failure } unavailable)
+                {
+                    var isKey = failure.Kind == McpFailureKind.Credentials;
+                    <div class="mcp-error @(isKey ? "fail" : "warn")" role="status">
+                        <span class="mcp-error-icon"><SovrantIcon Name="@IconNames.Warning" Size="16" /></span>
+                        <div class="mcp-error-text">
+                            <b>@failure.Reason</b>
+                            <span>@unavailable.NextStep</span>
+                            <span class="mcp-error-meta">@unavailable.RetryNote(DateTimeOffset.UtcNow)</span>
+                        </div>
+                    </div>
+                    <div class="mcp-error-actions">
+                        @if (isKey)
+                        {
+                            <button class="btn-primary btn-sm" @onclick="StartEditEnv">Update key</button>
+                            <button class="btn-sm btn-outline" disabled="@_retrying" @onclick="() => RetryServerAsync(_selected.Name)"><SovrantIcon Name="@IconNames.Refresh" Size="13" /> Retry</button>
+                        }
+                        else
+                        {
+                            <button class="btn-primary btn-sm" disabled="@_retrying" @onclick="() => RetryServerAsync(_selected.Name)"><SovrantIcon Name="@IconNames.Refresh" Size="13" /> @(_retrying ? "Retrying…" : "Retry now")</button>
+                        }
+                    </div>
+                }
 
                 <div class="orch-detail-section">
                     <h3>Endpoint</h3>
@@ -331,7 +368,7 @@
                     <h3>Tools (@_selected.ToolCount)</h3>
                     @if (!_selected.IsConnected)
                     {
-                        <p class="text-muted text-sm">Not connected — tools unavailable.</p>
+                        <p class="text-muted text-sm">@(_selected.Status?.Failure is not null ? "None yet — they appear when it reconnects." : "Not connected — tools unavailable.")</p>
                     }
                     else if (_selected.ToolList.Count == 0)
                     {
@@ -519,6 +556,7 @@
     [Inject] private IMcpServerStore ServerStore { get; set; } = default!;
     [Inject] private McpClientRegistry McpRegistry { get; set; } = default!;
     [Inject] private McpToolRegistrar McpRegistrar { get; set; } = default!;
+    [Inject] private McpServerStatusRegistry McpStatus { get; set; } = default!;
     [Inject] private McpOAuthService OAuthService { get; set; } = default!;
     [Inject] private IMcpTrustRuleStore TrustStore { get; set; } = default!;
     [Inject] private IPrincipalAccessor Principal { get; set; } = default!;
@@ -586,6 +624,51 @@
 }
 """;
 
+    // Phase 139 — live connection status: background reconnects update the page, and a 1 s tick
+    // keeps "Next attempt in …" current while a retry is pending.
+    private bool _retrying;
+    private System.Threading.Timer? _tick;
+
+    private void OnMcpStatusChanged(object? sender, McpServerStatusChangedEventArgs e) =>
+        _ = InvokeAsync(async () => { await LoadServersAsync(); StateHasChanged(); });
+
+    private void OnTick(object? state)
+    {
+        if (_selected?.Status?.NextRetryAt is not null)
+            _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        McpStatus.Changed -= OnMcpStatusChanged;
+        _tick?.Dispose();
+    }
+
+    private static string DotClass(ServerView s) =>
+        s.IsConnected ? "connected" : s.Status?.Failure?.Kind == McpFailureKind.Credentials ? "error" : "warning";
+
+    private static string BadgeClass(ServerView s) =>
+        s.Status?.Failure?.Kind == McpFailureKind.Credentials ? "fail" : "warn";
+
+    private async Task RetryServerAsync(string name)
+    {
+        var stored = await ServerStore.GetAllAsync().ConfigureAwait(false);
+        if (!stored.TryGetValue(name, out var config)) return;
+        _retrying = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var result = await McpRegistrar.RetryAsync(name, config).ConfigureAwait(false);
+            _status = result.State == McpServerState.Connected ? $"Connected to '{name}'." : string.Empty;
+        }
+        finally
+        {
+            _retrying = false;
+        }
+        await LoadServersAsync().ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
     protected override async Task OnInitializedAsync()
     {
         if (!Principal.IsAdmin)
@@ -593,6 +676,8 @@
             Nav.NavigateTo("/", forceLoad: false);
             return;
         }
+        McpStatus.Changed += OnMcpStatusChanged;
+        _tick = new System.Threading.Timer(OnTick, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
 
         var uid = Principal.UserId;
         if (uid is not null)
@@ -733,7 +818,7 @@
             await JS.InvokeVoidAsync("open", authUrl, "_blank").ConfigureAwait(false);
 
             _isOAuthWaiting = true;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged); // off the renderer thread after ConfigureAwait(false)
 
             // Poll until the server appears as connected (token written by callback).
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
@@ -773,7 +858,7 @@
         finally
         {
             _isOAuthConnecting = false;
-            StateHasChanged();
+            await InvokeAsync(StateHasChanged);
         }
     }
 
@@ -831,6 +916,7 @@
                 Url = kv.Value.Url,
                 Transport = kv.Value.Url is not null ? "HTTP" : "stdio",
                 IsConnected = isConnected,
+                Status = McpStatus.Get(kv.Key),
                 ToolCount = tools.Count,
                 ToolList = tools,
                 EnvVars = kv.Value.Env.ToDictionary(e => e.Key, e => e.Value),
@@ -915,7 +1001,9 @@
     private async Task ConnectAndRefreshAsync(string name, McpServerConfig config)
     {
         _status = $"Connecting to '{name}'…";
-        StateHasChanged();
+        // Via InvokeAsync: after the first ConfigureAwait(false) we're off the renderer's thread, and a
+        // direct StateHasChanged() threw, so a multi-server JSON import connected only the first server.
+        await InvokeAsync(StateHasChanged);
         try
         {
             await McpRegistrar.ReconnectServerAsync(name, config).ConfigureAwait(false);
@@ -924,7 +1012,8 @@
         }
         catch (Exception ex)
         {
-            _status = $"Failed to connect to '{name}': {ex.Message}";
+            // Phase 139: the friendly sentence, not the raw exception (that goes to the log).
+            _status = McpStatus.Get(name)?.Message is { Length: > 0 } friendly ? friendly : $"Failed to connect to '{name}': {ex.Message}";
         }
         await LoadServersAsync().ConfigureAwait(false);
         _selected = _servers.FirstOrDefault(s => s.Name == name);
@@ -1126,6 +1215,7 @@
         try
         {
             await ServerStore.DeleteAsync(name).ConfigureAwait(false);
+            McpRegistrar.ForgetServer(name);
             _selected = null;
             _status = $"Server '{name}' removed.";
             await LoadServersAsync().ConfigureAwait(false);
@@ -1149,6 +1239,7 @@
         public Uri? Url { get; init; }
         public string Transport { get; init; } = "stdio";
         public bool IsConnected { get; init; }
+        public McpServerStatus? Status { get; init; }
         public int ToolCount { get; init; }
         public List<string> ToolList { get; init; } = [];
         public Dictionary<string, string> EnvVars { get; init; } = [];

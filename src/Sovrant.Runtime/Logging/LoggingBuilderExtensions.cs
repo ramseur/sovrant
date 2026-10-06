@@ -54,6 +54,11 @@ public static class LoggingBuilderExtensions
                 });
             }
 
+            // Phase 139: the MCP SDK logs its own error (with a stack trace) when a server can't be
+            // reached; McpToolRegistrar already prints one friendly line, so keep the SDK's entries
+            // out of the console. The log file still records them.
+            builder.AddFilter<ConsoleLoggerProvider>("ModelContextProtocol", LogLevel.Critical);
+
             // Apply console-specific minimum level filter if provided.
             if (consoleMinOverride is not null)
             {

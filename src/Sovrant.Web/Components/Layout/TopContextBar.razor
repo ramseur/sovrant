@@ -127,6 +127,11 @@
                 @onclick:stopPropagation="true">
             <span class="tcb-icon"><SovrantIcon Name="@IconNames.Integrations" Size="14" /></span>
             <span class="tcb-mcp-summary">@McpSummaryLabel</span>
+            @if (WorstUnavailable is { } worst)
+            {
+                @* Phase 139 — a configured server couldn't connect *@
+                <span class="tcb-mcp-warn @(worst.Failure!.Kind == McpFailureKind.Credentials ? "fail" : "warn")" title="@worst.Message"><SovrantIcon Name="@IconNames.Warning" Size="13" /></span>
+            }
             <span class="tcb-mcp-chevron @(_mcpDropdownOpen ? "open" : "")"><SovrantIcon Name="@IconNames.Dropdown" Size="12" /></span>
         </button>
         @if (_mcpDropdownOpen)
@@ -145,6 +150,11 @@
                                    checked="@isActive"
                                    @onchange="e => ToggleMcpServer(serverName, (bool)(e.Value ?? false))" />
                             <span class="tcb-mcp-item-name">@serverName</span>
+                            @if (McpStatus.Get(serverName) is { Failure: { } itemFailure } itemStatus)
+                            {
+                                <span class="tcb-mcp-warn @(itemFailure.Kind == McpFailureKind.Credentials ? "fail" : "warn")" title="@itemStatus.Message"
+                                      aria-label="@itemStatus.Message"><SovrantIcon Name="@IconNames.Warning" Size="13" /></span>
+                            }
                         </label>
                     }
                 }
@@ -190,6 +200,16 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
     [Inject] private IMcpServerStore McpServerStore { get; set; } = default!;
+    [Inject] private McpServerStatusRegistry McpStatus { get; set; } = default!;
+
+    /// <summary>Phase 139 — the most serious unavailable server in this workspace's list (credentials beat network).</summary>
+    private McpServerStatus? WorstUnavailable => _availableMcpServers
+        .Select(n => McpStatus.Get(n))
+        .Where(s => s?.Failure is not null)
+        .OrderBy(s => s!.Failure!.Kind == McpFailureKind.Credentials ? 0 : 1)
+        .FirstOrDefault();
+
+    private void OnMcpStatusChanged(object? sender, McpServerStatusChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
 
     // MCP switcher state
     private List<string> _availableMcpServers = [];
@@ -276,6 +296,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        McpStatus.Changed += OnMcpStatusChanged;
         await InferProviderAsync();
         await LoadProviderProfilesAsync();
         await ApplyDisplayStateAsync();
@@ -741,6 +762,7 @@
 
     public void Dispose()
     {
+        McpStatus.Changed -= OnMcpStatusChanged;
         ActiveContext.OnChanged -= OnActiveContextChanged;
         ActiveContext.OnDataChanged -= OnDataChanged;
         if (_dismissBindingId != 0)

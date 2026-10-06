@@ -4292,3 +4292,23 @@ a.wel-card:hover { border-color: var(--brand-primary); background: color-mix(in 
 .hero-cap b { font-size: 12.5px; font-weight: 600; }
 .hero-cap span { font-size: 11.5px; color: var(--text-muted); line-height: 1.35; }
 @media (max-width: 1000px) { .hero-suggestions { grid-template-columns: 1fr 1fr; } .hero-caps-row { grid-template-columns: repeat(3, 1fr); } }
+
+/* ===== Friendly MCP connection errors (Phase 139) — see docs/design/web.html, Admin → Platform Integrations ===== */
+.mcp-badge { font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; border: 1px solid transparent; flex-shrink: 0; }
+.mcp-badge.warn { color: var(--status-warn); background: color-mix(in srgb, var(--status-warn) 14%, transparent); border-color: color-mix(in srgb, var(--status-warn) 38%, transparent); }
+.mcp-badge.fail { color: var(--status-fail); background: color-mix(in srgb, var(--status-fail) 14%, transparent); border-color: color-mix(in srgb, var(--status-fail) 38%, transparent); }
+.mcp-error { display: flex; gap: 11px; align-items: flex-start; border: 1px solid; border-radius: 10px; padding: 12px 14px; margin: 4px 0 12px; font-size: 13px; line-height: 1.5; }
+.mcp-error.warn { border-color: color-mix(in srgb, var(--status-warn) 40%, transparent); background: color-mix(in srgb, var(--status-warn) 9%, transparent); }
+.mcp-error.fail { border-color: color-mix(in srgb, var(--status-fail) 40%, transparent); background: color-mix(in srgb, var(--status-fail) 8%, transparent); }
+.mcp-error-icon { display: flex; margin-top: 2px; }
+.mcp-error.warn .mcp-error-icon { color: var(--status-warn); }
+.mcp-error.fail .mcp-error-icon { color: var(--status-fail); }
+.mcp-error-text { display: flex; flex-direction: column; gap: 2px; }
+.mcp-error-text b { font-weight: 600; color: var(--text-primary); }
+.mcp-error-meta { font-size: 12px; color: var(--text-muted); }
+.mcp-error-actions { display: flex; gap: 8px; margin: 0 0 18px; }
+.mcp-error-actions button { display: inline-flex; align-items: center; gap: 6px; }
+.tcb-mcp-warn { display: inline-flex; align-items: center; margin-left: 2px; }
+.tcb-mcp-warn.warn { color: var(--status-warn); }
+.tcb-mcp-warn.fail { color: var(--status-fail); }
+.tcb-mcp-item .tcb-mcp-warn { margin-left: auto; }

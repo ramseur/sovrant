@@ -336,7 +336,7 @@ Roadmap Phase 140. It takes Rahul Singh's first-run login (his issue #27) and hi
 - **Dashboard:** the Show welcome button.
 - **Parity:** the `web.html`/`desktop.html` diff is still 49 chrome-only lines.
 
-## Friendly MCP connection errors (2026-10-06, design-only)
+## Friendly MCP connection errors (2026-10-06, shipped to code same day)
 
 Roadmap Phase 139. A server that fails to connect is shown as Unavailable, with one plain sentence saying why and what to do, instead of stack traces in the console. Toggles on Admin → Platform Integrations: *Connected / Unreachable / Credentials*, plus *Top-bar menu*.
 
@@ -353,6 +353,10 @@ Roadmap Phase 139. A server that fails to connect is shown as Unavailable, with 
 - **Menu:** "Integrations for this chat" lists each server with its checkbox and tool count. An unavailable server is unchecked and shows the `warning` icon, with the short reason as a tooltip on hover (drawn below the row so it never leaves the window). "Manage integrations →" is the footer (admins only in code: the page is admin-only).
 
 **Not shown, by decision:** nothing in chat; the badge and top-bar warning are enough.
+
+**Built differently from the mock:**
+- **Menu checkbox:** an unavailable server keeps its checkbox state in the top-bar menu (the mock unchecked it). The user's choice is a saved preference, and the server's tools come back by themselves when it reconnects.
+- **Countdown:** "retry n of 3" counts automatic retries, so right after the first failure it reads "retry 1 of 3".
 
 **Verified:** rendered in headless Edge on both mocks: all three states (badge, alert title, buttons, list row, chip warning), the menu (rows, tooltip), and the chip warning on Chat. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass (only existing icons: `warning`, `refresh`, `integrations`, `allow`, `dropdown`).
 

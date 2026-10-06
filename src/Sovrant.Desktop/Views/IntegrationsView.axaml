@@ -148,6 +148,16 @@
                                                                        IsVisible="{Binding !IsConnected}" />
                                                         </Panel>
                                                     </Border>
+                                                    <!-- Phase 139 — Unavailable badge -->
+                                                    <Border DockPanel.Dock="Right" Padding="6,2" CornerRadius="4" Margin="0,0,6,0"
+                                                            IsVisible="{Binding IsUnavailable}"
+                                                            Classes.warn="{Binding IsNetworkFailure}" Classes.fail="{Binding IsCredentialFailure}">
+                                                        <Border.Styles>
+                                                            <Style Selector="Border.warn"><Setter Property="Background" Value="{DynamicResource StatusWarn}" /></Style>
+                                                            <Style Selector="Border.fail"><Setter Property="Background" Value="{DynamicResource StatusFail}" /></Style>
+                                                        </Border.Styles>
+                                                        <TextBlock Text="UNAVAILABLE" FontSize="9.5" FontWeight="Bold" Foreground="White" />
+                                                    </Border>
                                                     <TextBlock Text="{Binding Name}"
                                                                FontSize="13" FontWeight="SemiBold"
                                                                FontFamily="Consolas,Menlo,monospace"
@@ -157,6 +167,8 @@
                                                     <TextBlock FontSize="10" Foreground="{DynamicResource TextMuted}">
                                                         <Run Text="{Binding ToolCount}" /><Run Text=" tools" />
                                                     </TextBlock>
+                                                    <TextBlock Text="{Binding RowStatus}" FontSize="10" IsVisible="{Binding IsUnavailable}"
+                                                               Foreground="{DynamicResource TextMuted}" />
                                                     <TextBlock Text="OAuth" FontSize="10"
                                                                Foreground="{DynamicResource BrandPrimary}"
                                                                FontWeight="SemiBold"
@@ -528,6 +540,52 @@
                                                FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                                VerticalAlignment="Center" TextWrapping="Wrap" />
                                 </DockPanel>
+
+                                <!-- Phase 139 — why it isn't connected, in one sentence, and what happens next -->
+                                <StackPanel Spacing="8" IsVisible="{Binding SelectedServer.IsUnavailable, FallbackValue=False}">
+                                    <Border CornerRadius="10" Padding="14,12" BorderThickness="1"
+                                            Classes.warn="{Binding SelectedServer.IsNetworkFailure, FallbackValue=False}"
+                                            Classes.fail="{Binding SelectedServer.IsCredentialFailure, FallbackValue=False}">
+                                        <Border.Styles>
+                                            <Style Selector="Border.warn"><Setter Property="BorderBrush" Value="{DynamicResource StatusWarn}" /><Setter Property="Background" Value="#17FF9800" /></Style>
+                                            <Style Selector="Border.fail"><Setter Property="BorderBrush" Value="{DynamicResource StatusFail}" /><Setter Property="Background" Value="#14F44336" /></Style>
+                                        </Border.Styles>
+                                        <DockPanel>
+                                            <Panel DockPanel.Dock="Left" Margin="0,1,11,0" VerticalAlignment="Top">
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="16" Foreground="{DynamicResource StatusWarn}"
+                                                                  IsVisible="{Binding SelectedServer.IsNetworkFailure, FallbackValue=False}" />
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="16" Foreground="{DynamicResource StatusFail}"
+                                                                  IsVisible="{Binding SelectedServer.IsCredentialFailure, FallbackValue=False}" />
+                                            </Panel>
+                                            <StackPanel Spacing="2">
+                                                <TextBlock Text="{Binding SelectedServer.FailureReason}" FontSize="13" FontWeight="SemiBold"
+                                                           Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding SelectedServer.FailureNextStep}" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}" TextWrapping="Wrap" />
+                                                <TextBlock Text="{Binding SelectedServer.RetryNote}" FontSize="11.5"
+                                                           Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                            </StackPanel>
+                                        </DockPanel>
+                                    </Border>
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button Content="Update key" Command="{Binding StartEditEnvCommand}"
+                                                IsVisible="{Binding SelectedServer.IsCredentialFailure, FallbackValue=False}"
+                                                Padding="14,7" CornerRadius="6" Background="{DynamicResource BrandPrimary}" Foreground="White" />
+                                        <Button Command="{Binding RetryServerCommand}" CommandParameter="{Binding SelectedServer}"
+                                                IsEnabled="{Binding !SelectedServer.IsRetrying, FallbackValue=True}"
+                                                Padding="14,7" CornerRadius="6"
+                                                Classes.primary="{Binding SelectedServer.IsNetworkFailure, FallbackValue=False}">
+                                            <Button.Styles>
+                                                <Style Selector="Button.primary"><Setter Property="Background" Value="{DynamicResource BrandPrimary}" /><Setter Property="Foreground" Value="White" /></Style>
+                                            </Button.Styles>
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Refresh}" Size="13" VerticalAlignment="Center" />
+                                                <TextBlock Text="Retry now" VerticalAlignment="Center" IsVisible="{Binding SelectedServer.IsNetworkFailure, FallbackValue=False}" />
+                                                <TextBlock Text="Retry" VerticalAlignment="Center" IsVisible="{Binding SelectedServer.IsCredentialFailure, FallbackValue=False}" />
+                                            </StackPanel>
+                                        </Button>
+                                    </StackPanel>
+                                </StackPanel>
 
                                 <!-- Server markdown -->
                                 <ctrl:SafeMarkdownPresenter Markdown="{Binding SelectedServer.Markdown}" />

@@ -42,7 +42,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | Phase 140 | Welcome & first-run onboarding — first-run admin sign-up, a role-aware full-window Welcome page (admin-only areas described, never linked, for members), bigger chat welcome; Desktop now refuses admin pages for non-admins ✅ |
 | **v1.5 — done** | Bug fixes | Prompts needing to be sent twice — OpenRouter in-stream errors and empty replies are now detected and retried by the existing backoff ✅ |
 | **v1.5 — done** | PR #31 | Rahul Singh's contributions reviewed piece by piece and closed: fork PR #8 fixes (`c60f722`), Lucide icons (Phase 136), chat bubbles (Phase 137), login onboarding (#27) + bigger welcome (#28) (Phase 140). Skipped: date grouping and "+ New Chat" (superseded by conversation folders), screenshot docs (old UI) ✅ |
-| **v1.5 — next** | Phase 139 | Friendly MCP connection errors — plain-language failure reasons, "Unavailable" badge + Retry, background retry for network failures |
+| **v1.5 — done** | Phase 139 | Friendly MCP connection errors — plain-language failure reasons, "Unavailable" badge + Retry, background retry for network failures (10 s / 1 min / 5 min, never for bad keys), one console line instead of stack traces ✅ |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -245,7 +245,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Lucide icons everywhere — one shared icon vocabulary (`SovrantIcon` name → Lucide icon) on Web (`Blazicons.Lucide`) and Desktop (`Lucide.Avalonia`); replace the remaining emoji and move every hand-copied SVG/geometry icon onto the same map; render test guards the Avalonia 11-built Desktop package | Phase 136 | Built |
 | Chat bubbles + icon Send/Stop — user messages as right-aligned brand bubbles with initials avatar, assistant messages flat beside a neutral avatar tile, thread + composer centred at 760px; one composer box with a 32px brand Send that becomes Stop (same spot) while streaming, Esc stops (Web + Desktop) | Phase 137 | Built |
 | Ollama only when active on your workspace — an admin-added Ollama provider enabled for the active workspace is the only way Sovrant contacts Ollama (`OLLAMA_BASE_URL`, documented in `.env.example`, only sets its default address); no default `localhost:11434`, no pings/cost-pick/fallback otherwise; pin by the profile's provider kind instead of "base URL is localhost" (fixes LM Studio and other local endpoints being sent to Ollama's port) | Phase 138 | Built |
-| Friendly MCP connection errors — classify failures (DNS, refused/timeout, 401/403 credentials, TLS) into one plain sentence with what to do; "Unavailable" badge + Retry in Integrations and a warning in the top-bar Integrations menu; one-line log entries instead of stack traces; automatic background retry (≈10 s, 1 min, 5 min) for network failures, none for credential errors | Phase 139 | Planned |
+| Friendly MCP connection errors — classify failures (DNS, refused/timeout, 401/403 credentials, TLS) into one plain sentence with what to do; "Unavailable" badge + Retry in Integrations and a warning in the top-bar Integrations menu; one-line log entries instead of stack traces; automatic background retry (≈10 s, 1 min, 5 min) for network failures, none for credential errors | Phase 139 | Built |
 | Welcome & first-run onboarding — first-run admin sign-up on the login screen; a full-window, role-aware "Welcome to Sovrant" page on every user's first sign-in (what Sovrant is, info bubbles for each area, a get-started checklist ticked from real state); a bigger chat welcome that uses the whole main area (Web + Desktop) | Phase 140 | Built |
 
 ### v1.0 release polish ✅
@@ -12749,7 +12749,7 @@ Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted th
 
 ## Phase 139 — Friendly MCP Connection Errors
 
-**Status:** Planned (2026-10-05) — plan agreed; design mock done 2026-10-06 (Admin → Platform Integrations: *Connected / Unreachable / Credentials / Top-bar menu*); code next.
+**Status:** Built (2026-10-06) — Web and Desktop. Verified live on Web against a fresh database with a DNS-broken server and a local server answering 401 (page, top bar, console); Desktop verified with headless renders of the real view and view model.
 
 ### Why
 
@@ -12781,10 +12781,24 @@ On 2026-10-05 Desktop started during a brief DNS hiccup. `McpToolRegistrar.Regis
 
 ### Acceptance criteria
 - [x] Mock updated on both surfaces; parity diff still chrome-only
-- [ ] Each failure kind maps to its sentence (unit tests); credential errors never auto-retry
-- [ ] A server unreachable at startup reconnects on its own once reachable, and its tools appear without a restart
-- [ ] Console shows one line per failed connection, no stack traces
-- [ ] Integrations shows Unavailable + reason + Retry; the top-bar menu shows the warning (Web + Desktop)
+- [x] Each failure kind maps to its sentence (unit tests); credential errors never auto-retry
+- [x] A server unreachable at startup reconnects on its own once reachable, and its tools appear without a restart
+- [x] Console shows one line per failed connection, no stack traces
+- [x] Integrations shows Unavailable + reason + Retry; the top-bar menu shows the warning (Web + Desktop)
+
+### Build notes (2026-10-06)
+- **Runtime:**
+  - `McpConnectionError.Classify` walks the exception chain: `HttpRequestError`, `SocketError`, HTTP 401/403, `AuthenticationException`, timeouts, plus message fallbacks such as "No such host is known".
+  - `McpServerStatusRegistry` (singleton) holds each server's status and raises `Changed`. `McpServerStatus.Message` / `NextStep` / `RetryNote` supply the UI wording.
+  - `McpToolRegistrar` records status on every attempt, logs one warning line (the exception goes to the log at debug level), and retries network failures after 10 s, 1 min and 5 min. That applies at startup and for servers added or reconnected from Integrations.
+  - New `RetryAsync` (never throws) and `ForgetServer`.
+  - A cancelled HTTP timeout no longer aborts startup registration: only real cancellation is rethrown.
+  - `McpClientRegistry` is now concurrent, because reconnects happen in the background.
+- **Console:** the MCP SDK's own log category (`ModelContextProtocol*`) is filtered out of the console sink; the log file still records it.
+- **Web:** Integrations shows the badge, the alert (reason, next step, retry note) and Retry now / Update key + Retry, and follows live status with a 1 s countdown. The top bar shows a warning on the chip (credentials beat network) and per server, with the reason as a tooltip. The top bar lists only servers enabled for the workspace, so a disabled server never warns there.
+- **Desktop:** the same badge, alert and buttons (the view starts and stops watching status as it's shown and hidden). The top-bar chip and menu rows have the same warnings and tooltips.
+- **Fixed on the way:** a multi-server JSON import on Web connected only the first server. `ConnectAndRefreshAsync` called `StateHasChanged()` off the renderer thread after `ConfigureAwait(false)`, the throw was swallowed by the import loop, and the remaining servers were never connected. The same pattern in the OAuth connect flow is fixed too.
+- **Tests:** `McpConnectionErrorTests` (10), `McpToolRegistrarRetryTests` (6, against a real in-process MCP server over pipes), `McpUnavailableRenderTests` (2, headless Desktop).
 
 ## Phase 140 — Welcome & First-Run Onboarding
 

@@ -233,6 +233,15 @@
                             <ctrl:SovrantIcon DockPanel.Dock="Right" IconName="{x:Static ui:IconNames.Dropdown}" Size="12"
                                        Foreground="{DynamicResource TextMuted}"
                                        VerticalAlignment="Center" Margin="6,0,0,0" />
+                            <!-- Phase 139 — a configured server couldn't connect -->
+                            <Panel DockPanel.Dock="Right" Margin="6,0,0,0" VerticalAlignment="Center"
+                                   IsVisible="{Binding ActiveContext.HasMcpWarning}"
+                                   ToolTip.Tip="{Binding ActiveContext.McpWarningText}">
+                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="13" Foreground="{DynamicResource StatusWarn}"
+                                                  IsVisible="{Binding ActiveContext.McpWarningIsNetwork}" />
+                                <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="13" Foreground="{DynamicResource StatusFail}"
+                                                  IsVisible="{Binding ActiveContext.McpWarningIsCredential}" />
+                            </Panel>
                             <TextBlock Text="{Binding McpSummaryLabel}"
                                        FontSize="12"
                                        Foreground="{DynamicResource TextPrimary}"
@@ -274,6 +283,15 @@
                                                               IsChecked="{Binding IsActive, Mode=TwoWay}"
                                                               VerticalAlignment="Center"
                                                               Margin="0,0,8,0" />
+                                                    <!-- Phase 139 — unavailable: warning icon, reason on hover -->
+                                                    <Panel DockPanel.Dock="Right" Margin="8,0,2,0" VerticalAlignment="Center"
+                                                           Background="Transparent"
+                                                           IsVisible="{Binding HasWarning}" ToolTip.Tip="{Binding WarningText}">
+                                                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="13" Foreground="{DynamicResource StatusWarn}"
+                                                                          IsVisible="{Binding IsNetworkWarning}" />
+                                                        <ctrl:SovrantIcon IconName="{x:Static ui:IconNames.Warning}" Size="13" Foreground="{DynamicResource StatusFail}"
+                                                                          IsVisible="{Binding IsCredentialWarning}" />
+                                                    </Panel>
                                                     <TextBlock Text="{Binding Name}"
                                                                FontSize="12"
                                                                Foreground="{DynamicResource TextPrimary}"
