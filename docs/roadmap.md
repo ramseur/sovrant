@@ -44,7 +44,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | PR #31 | Rahul Singh's contributions reviewed piece by piece and closed: fork PR #8 fixes (`c60f722`), Lucide icons (Phase 136), chat bubbles (Phase 137), login onboarding (#27) + bigger welcome (#28) (Phase 140). Skipped: date grouping and "+ New Chat" (superseded by conversation folders), screenshot docs (old UI) ✅ |
 | **v1.5 — done** | Phase 139 | Friendly MCP connection errors — plain-language failure reasons, "Unavailable" badge + Retry, background retry for network failures (10 s / 1 min / 5 min, never for bad keys), one console line instead of stack traces ✅ |
 | **v1.5 — done** | Phase 141 | Home — the Welcome page merged into the Dashboard: greeting + Get started pill, your activity, then the Get started checklist ("All set" + Dismiss when done) and "What Sovrant can do"; Dashboard renamed Home; the full-window Welcome retired ✅ |
-| **v1.5 — next** | Phase 142 | Home tabs — **Overview** (default: greeting, Get started, What Sovrant can do, laid out like the chat welcome) and **Activity** (the stats and activity table); fixes Home's header wrapping |
+| **v1.5 — done** | Phase 142 | Home tabs — **Overview** (default: greeting, at a glance, Get started beside What Sovrant can do, laid out like the chat welcome; fits a laptop screen) and **Activity** (the stats and activity table); admin checklist reads "Set up Sovrant for your team"; time-neutral greeting; header wrapping fixed ✅ |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -181,6 +181,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Enterprise auth & external identity (OAuth/OIDC, SAML, SSO) | Phase 40B | Deferred |
 | Supabase backend ✅ — optional Postgres backend shipped (sessions + credentials, admin UI, schema init, SQLite→Postgres migrator, boot-time DI switch, Web + Desktop parity); SSO (Supabase Auth, OAuth/OIDC, SAML) remains deferred | Phase 40C | ✅ Done — SSO deferred |
 | Granular feature permissions — workspace members can be granted or denied access to specific features (Chat, Agents, Teams, Swarms, Workflows, MCP, Knowledge, Artifacts, Settings); current model is all-or-nothing per workspace role; Phase 40D adds a permission matrix admins configure per user or role | Phase 40D | Deferred |
+| Request access — members ask their admin for things only admins can turn on today (a model provider, an integration / MCP server, an agent or knowledge item for the workspace); admins see pending requests and approve or decline, and approved items appear for that member. Today admins set everything up for users (Phase 141/142 keep admin-only setup off members' Get started list); this would give members a self-service "request" path and could later feed an approved list per workspace. Raised 2026-10-06 during the Phase 142 review | Unscheduled | Deferred |
 | DuckDB database provider — `IStorageProvider` implementation backed by DuckDB; columnar analytics for agent runs, session history, token usage, cost aggregations, and audit queries; embedded like SQLite, analytical like a data warehouse; ideal for self-hosted deployments that need fast cross-session reporting without standing up Supabase | Phase 104 | Deferred |
 | MCP server permissions — workspace-level gating ✅ shipped (V040 stable IDs, `GetEnabledEntriesAsync` workspace filter, admin toggle UI on Web + Desktop, memory-gate guards at selection point); project-level restrictions (project owners further restrict per project) remain deferred | Phase 105 | Partial ✅ — project-level deferred |
 | VS Code native extension | Phase 42 | Deferred (MCP server covers MCP-aware IDEs) |
@@ -250,7 +251,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Friendly MCP connection errors — classify failures (DNS, refused/timeout, 401/403 credentials, TLS) into one plain sentence with what to do; "Unavailable" badge + Retry in Integrations and a warning in the top-bar Integrations menu; one-line log entries instead of stack traces; automatic background retry (≈10 s, 1 min, 5 min) for network failures, none for credential errors | Phase 139 | Built |
 | Welcome & first-run onboarding — first-run admin sign-up on the login screen; a full-window, role-aware "Welcome to Sovrant" page on every user's first sign-in (what Sovrant is, info bubbles for each area, a get-started checklist ticked from real state); a bigger chat welcome that uses the whole main area (Web + Desktop) | Phase 140 | Built |
 | Home — one page to see what's going on and how Sovrant can help: greeting + "Get started" pill, the current dashboard stats and activity, then the role-aware Get started checklist (collapses to "All set" and can be dismissed) and the "What Sovrant can do" cards; Dashboard → Home in the nav (URL unchanged); retires Phase 140's full-window Welcome (Web + Desktop) | Phase 141 | Built |
-| Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Planned |
+| Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Built |
 
 ### v1.0 release polish ✅
 
@@ -12937,7 +12938,7 @@ Phase 140 gave every user a full-window Welcome page once, and a "Show welcome" 
 
 ## Phase 142 — Home Tabs: Overview + Activity
 
-**Status:** Planned (2026-10-06) — plan agreed; design mock done and reviewed (at a glance kept); code next.
+**Status:** Built (2026-10-06) — Web and Desktop. Web verified live on a fresh database at laptop size (1366×650 viewport): Overview opens first, the checklist sits beside the cards, and everything fits without scrolling for admin and member. Desktop verified with headless renders and view-model tests.
 
 ### Why
 
@@ -12953,6 +12954,9 @@ Phase 141 put the guide *below* the activity. With more than a handful of activi
 | Activity | Today's report, unchanged: stat tiles, activity table with paging, "What are these?", Refresh |
 | Opening tab | Always **Overview** ("home first, clean and simple"); not remembered for now |
 | Wrapping | Home's header text wraps at any width on both surfaces |
+| Greeting | Time-neutral (decided 2026-10-06): **"Welcome to Sovrant, <name>"** on the first visit, then **"Welcome back, <name>"**. Phase 141's "Good morning / afternoon / evening" said "Good morning" to people working through the night |
+| Overview layout (review) | After seeing it on Desktop: Get started **runs across the whole container as numbered step tiles**, and What Sovrant can do sits **below it, four across** with full descriptions and action links. Trade-off accepted: on a 1366×768 laptop the second row of cards needs a short scroll while the checklist is unfinished |
+| Checklist headings | Admins: **"Set up Sovrant for your team"** (was "Get started: set up your server", first-run wording); members keep **"Get started"**. The admin list (provider, workspace providers, invite, integration, agent) is admin work done for others and is never shown to members, whose list is only things they can do themselves (pick a model, first conversation, try an agent, explore Knowledge). A member "request access" path is deferred (see Still pending) |
 
 ### What ships
 1. **Tabs (Web + Desktop):** Overview | Activity at the top of Home; Overview selected on every visit.
@@ -12967,7 +12971,21 @@ Phase 141 put the guide *below* the activity. With more than a handful of activi
 
 ### Acceptance criteria
 - [x] Mock: both tabs, both roles, all three checklist states, at-a-glance on/off; laptop-size check; parity diff chrome-only
-- [ ] Home opens on Overview; Activity holds the stats and table unchanged
-- [ ] Overview fits a laptop screen without scrolling (typical checklist); cards visible without scrolling
-- [ ] Header text wraps on Web and Desktop at narrow and wide widths
-- [ ] Members never get a link into an admin page; Web + Desktop parity; verified live
+- [x] Home opens on Overview; Activity holds the stats and table unchanged
+- [x] Overview fits a laptop screen without scrolling (typical checklist); cards visible without scrolling
+- [x] Header text wraps on Web and Desktop at narrow and wide widths
+- [x] Members never get a link into an admin page; Web + Desktop parity; verified live
+
+### Build notes (2026-10-06)
+- **Web (`UserDashboard.razor`):** an Overview / Activity tab strip; `_tab` starts as `overview` on every visit.
+  - **Overview:** hero, at-a-glance pills (from the dashboard state; singular for 1, "shared"; each switches to Activity), All set, then a two-column grid: checklist and compact `home-card` links. It's one column with cards four across when done, and stacks below 1100px.
+  - **Activity:** the existing report markup, unchanged, with "Last updated" and Refresh on the tab strip.
+  - **Removed:** the Get started pill and its `scrollToId` / `localHour` JS.
+- **Desktop:**
+  - `UserDashboardView` is a tab strip plus one scroll area holding the Overview panel (hero, `Glance` pills, `HomeGuideView`) and the Activity panel. The Activity subtitle now wraps; it sat in a WrapPanel that couldn't wrap and was cut off mid-word.
+  - `UserDashboardViewModel` gains `IsOverview`, `ShowOverview`/`ShowActivity` and `Glance`. `MainViewModel.OpenHome()` resets to Overview however Home is opened.
+  - `HomeGuideView` is All set plus a `0.9*,18,1.1*` grid. The cards span the row with `CardColumns` = 4 once the checklist is done.
+- **Checklist headings:** admins "Set up Sovrant for your team", members "Get started".
+- **Layout change after review:** Web `home-steps` (a grid of `--n` step tiles) and `home-cards` (four across, full descriptions, `home-card-go` action line). Desktop `HomeGuideView` has a one-row `UniformGrid` of steps (`StepColumns`, numbered via `WelcomeChecklistItem.Number`) and a four-column card grid.
+- **Greeting:** `OnboardingService.Greeting(name, firstVisit)` is time-neutral; the hour parameter is gone.
+- **Tests:** `HomeGuideRenderTests` (+1: headings, card columns; time-of-day cases replaced); `OnboardingServiceTests` greeting cases updated.

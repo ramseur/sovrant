@@ -17,6 +17,12 @@ Versions correspond to tags on the `development` branch.
 
 - **Conversation folders (Phase 133)** — file any conversation into a per-user folder tree (up to 5 levels, across all workspaces) on Web and Desktop: folder rows with counts, ⋯ menus (new subfolder, rename, move, delete), a Move dialog, a chat-header breadcrumb with Move, search across folders, and drag and drop (conversations and folders) that refuses invalid drops while dragging. Deleting a folder moves its contents up a level; no conversation is ever deleted. Sidebar labels (`Agent · x`, `Workflow · Running`, `Swarm · n runs`, `Team · n runs`, `Webhook · source`) are derived from live links, never stored. New `ISessionFolderStore` (SQLite, Postgres, remote), `SessionFolderRules` / `SessionFolderTree` shared by both UIs, 5 endpoints (`/v1/session-folders`, `PUT /v1/sessions/{id}/folder`), SDK methods (`listSessionFolders`, `createSessionFolder`, `updateSessionFolder`, `deleteSessionFolder`, `moveSessionToFolder`). Swarm and team runs launched from a chat now record that conversation (`agent_runs.session_id`, via a new per-turn `TurnContext`); team runs started outside chat (Orchestration page, team-run API) and swarms started via `POST /v1/swarm` get a conversation of their own (id = run id, seeded with the goal, outcome appended when the run ends), so every run appears in the sidebar and can be filed. `POST /v1/swarm` now also records an `agent_runs` row.
 
+- **Home tabs: Overview and Activity (Phase 142)** — Home now opens on **Overview**, a guide laid out like the chat welcome that fits a laptop screen.
+  - **Overview:** the greeting; an at-a-glance row of your six stats (each opens Activity); the Get started checklist beside compact What Sovrant can do cards.
+  - **Activity:** the report, unchanged: stats and the activity table.
+  - **Checklist heading:** admins see "Set up Sovrant for your team"; everyone else sees "Get started", with only things they can do themselves.
+  - **Greeting:** "Welcome back, <name>" instead of a time-of-day greeting.
+  - **Wrapping:** Home's header text wraps properly on Desktop.
 - **Home (Phase 141)** — the Dashboard and the Welcome page are now one page, **Home**, on Web and Desktop.
   - **Greeting:** "Welcome to Sovrant, <name>" on your first visit, "Good morning / afternoon / evening" after that.
   - **Get started pill:** shows your checklist progress and jumps to it.
@@ -63,6 +69,7 @@ Versions correspond to tags on the `development` branch.
 
 ### Fixed
 
+- **Desktop: "+ New" on the Agents page did nothing** — it cleared the selected agent and opened the editor, but the editor lived inside the panel shown only when an agent was selected, so you just saw "Select an agent to view details". The detail panel now also shows while creating an agent. (Found from Home's "Create your first agent" step, Phase 142.)
 - **Apps sometimes opened on an unexpected page** — Desktop landed on Agents after signing out and back in, and its nav started out highlighting Chat while showing the Dashboard; Web sent signed-in users to Chat. Both now start on Home every time. (Phase 141)
 - **Web: importing several MCP servers at once connected only the first** — the Integrations page updated the screen from the wrong thread after the first connection, and the error was silently swallowed, so the remaining servers stayed disconnected until a restart. The same mistake in the OAuth connect flow is fixed too. (Phase 139)
 - **Desktop: admin pages could be opened by name** — the Admin nav group was hidden from non-admins, but any in-app link naming an admin page (Welcome links, chat cards, events) would still open it. Desktop navigation now refuses admin pages (Command Center, Users, Workspaces, Providers, Governance, Trust Boundary, Diagnostics, Platform/System Integrations) for non-admins, matching Web, where each page already redirects. (Phase 140)

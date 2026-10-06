@@ -163,7 +163,7 @@
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
                         BorderThickness="1" Padding="20,16"
-                        IsVisible="{Binding !SelectedTemplate}">
+                        IsVisible="{Binding ShowEmptyState}">
                     <TextBlock Text="Select an agent to view details"
                                FontSize="14" Foreground="{DynamicResource TextMuted}"
                                HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -174,7 +174,7 @@
                         Background="{DynamicResource SurfaceCard}"
                         BorderBrush="{DynamicResource SurfaceBorder}"
                         BorderThickness="1" Padding="20,16"
-                        IsVisible="{Binding SelectedTemplate, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        IsVisible="{Binding ShowDetailPane}">
                     <Panel>
                     <ScrollViewer IsVisible="{Binding !IsEditing}">
                         <StackPanel Spacing="16">

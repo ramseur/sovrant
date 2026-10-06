@@ -86,21 +86,12 @@ public sealed class OnboardingService(IServiceProvider services)
         SetFlagAsync(userId, UserPreferenceKeys.GetStartedDismissed, ct);
 
     /// <summary>
-    /// Phase 141 — Home's heading: "Welcome to Sovrant, sam" on the user's first visit, then a
-    /// time-of-day greeting from the viewer's local hour (0–23).
+    /// Home's heading: "Welcome to Sovrant, sam" on the user's first visit, then "Welcome back, sam".
+    /// Time-neutral on purpose (Phase 142): a time-of-day greeting said "Good morning" to people
+    /// working through the night.
     /// </summary>
-    public static string Greeting(string displayName, bool firstVisit, int localHour)
-    {
-        if (firstVisit)
-            return $"Welcome to Sovrant, {displayName}";
-        var part = localHour switch
-        {
-            >= 5 and < 12 => "morning",
-            >= 12 and < 18 => "afternoon",
-            _ => "evening",
-        };
-        return $"Good {part}, {displayName}";
-    }
+    public static string Greeting(string displayName, bool firstVisit) =>
+        firstVisit ? $"Welcome to Sovrant, {displayName}" : $"Welcome back, {displayName}";
 
     /// <summary>The part of an email before '@' (or the id itself), for greetings.</summary>
     public static string DisplayName(string? emailOrId)

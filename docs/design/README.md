@@ -379,7 +379,7 @@ Roadmap Phase 141. The Dashboard becomes **Home**, and Phase 140's full-window W
 
 **Verified:** rendered in headless Edge, on both mocks, for admin and member in all three states: greeting, pill text, stats, empty state vs rows, checklist rows, All set line, 8 cards, managed cards (members only). The pill scrolls the app area (not the page) to the checklist; the subtitle lines up with the title on Home, Command Center and Skills. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass.
 
-## Home tabs: Overview + Activity (2026-10-06, design-only)
+## Home tabs: Overview + Activity (2026-10-06, shipped to code same day)
 
 Roadmap Phase 142. With real activity, Phase 141's Home pushed the guide below the fold (on a laptop you saw part of the checklist and none of the cards), and the header subtitle didn't wrap beside the pill. Home now has two tabs; it always opens on **Overview**. Toggles on Home: *Admin / Member*, *First visit / Returning / All set / Dismissed*, *Overview / Activity*, *At a glance*.
 
@@ -396,6 +396,15 @@ Roadmap Phase 142. With real activity, Phase 141's Home pushed the guide below t
 **Activity:** the report, unchanged: a one-line description with "What are these?", the six stat tiles, and the activity table (or "Nothing yet").
 
 **Laptop check:** the mock browser frame sized to a maximized 1366×768 browser (1366×700 including the mock's tab and address bars). All 16 Overview states (two roles, four checklist states, at a glance on and off) fit without scrolling on both mocks. The first pass overflowed by 55–100px while the checklist was in progress, which led to the compact cards.
+
+**Changed at review (2026-10-06, after seeing it on Desktop):** there was spare room at the bottom of Overview, so the guide now uses the whole container.
+- **Get started:** runs across the full width as **numbered step tiles**, one per item (5 for admins, 4 for members; 3 per row below 1100px). Each tile has a number or a green check, the title, the subtitle and its action link.
+- **What Sovrant can do:** sits **below** it, **four across**, with each card's full description and its "Open … →" link (no more two-line truncation).
+- **Fit:** in a 1280×800-class window everything fits. On a 1366×768 laptop, the second row of cards needs a short scroll (about 100px) while the checklist is unfinished; once it's done, everything fits.
+
+**Changed at build time:**
+- **Admin heading:** the admin checklist reads "Set up Sovrant for your team" (was first-run wording).
+- **Greeting:** returning users see "Welcome back, Alex" instead of "Good morning", which was wrong for people working through the night.
 
 **Review links:** `web.html#home&glance` (also `&member`, `&first`, `&allset`, `&dismissed`, `&activity`) opens Home in that state.
 

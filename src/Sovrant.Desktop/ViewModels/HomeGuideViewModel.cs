@@ -13,17 +13,17 @@ public sealed record WelcomeAreaItem(string IconName, string Title, string Descr
     public string LinkText => $"{ActionLabel} →";
 }
 
-/// <summary>One "Get started" row, ticked from real state.</summary>
-public sealed record WelcomeChecklistItem(string Title, string Subtitle, bool Done, string ActionLabel, string? Page)
+/// <summary>One "Get started" step (numbered from 1), ticked from real state.</summary>
+public sealed record WelcomeChecklistItem(int Number, string Title, string Subtitle, bool Done, string ActionLabel, string? Page)
 {
     public bool ShowAction => !Done && Page is not null;
+    public bool NotDone => !Done;
     public string LinkText => $"{ActionLabel} →";
 }
 
 /// <summary>
 /// Phase 141 — Home's greeting and guide (replaces Phase 140's full-window Welcome): the
-/// time-of-day greeting ("Welcome to Sovrant, …" on a user's first visit), the Get started pill,
-/// the role-aware checklist (collapsing to "All set" + Dismiss), and the What Sovrant can do cards.
+/// greeting ("Welcome to Sovrant, …" on a user's first visit, then "Welcome back, …"), the role-aware checklist (collapsing to "All set" + Dismiss), and the What Sovrant can do cards.
 /// Content comes from the shared <see cref="OnboardingService"/>, so it matches Web.
 /// </summary>
 public partial class HomeGuideViewModel(OnboardingService onboarding) : ViewModelBase
@@ -34,11 +34,12 @@ public partial class HomeGuideViewModel(OnboardingService onboarding) : ViewMode
     [ObservableProperty] private string _greeting = "Home";
     [ObservableProperty] private string _checklistTitle = "Get started";
     [ObservableProperty] private string _progressText = string.Empty;
-    [ObservableProperty] private string _pillText = string.Empty;
+    /// <summary>The steps run across the container, one column each.</summary>
+    [ObservableProperty] private int _stepColumns = 4;
     [ObservableProperty] private double _progressPercent;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowChecklist), nameof(ShowAllSet), nameof(ShowPill))]
+    [NotifyPropertyChangedFor(nameof(ShowChecklist), nameof(ShowAllSet))]
     private bool _isComplete;
 
     [ObservableProperty]
@@ -46,7 +47,7 @@ public partial class HomeGuideViewModel(OnboardingService onboarding) : ViewMode
     private bool _isDismissed;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowChecklist), nameof(ShowAllSet), nameof(ShowPill))]
+    [NotifyPropertyChangedFor(nameof(ShowChecklist), nameof(ShowAllSet))]
     private bool _isLoaded;
 
     private string? _userId;
@@ -54,7 +55,6 @@ public partial class HomeGuideViewModel(OnboardingService onboarding) : ViewMode
     public ObservableCollection<WelcomeAreaItem> Areas { get; } = [];
     public ObservableCollection<WelcomeChecklistItem> Checklist { get; } = [];
 
-    public bool ShowPill => IsLoaded && !IsComplete;
     public bool ShowChecklist => IsLoaded && !IsComplete;
     public bool ShowAllSet => IsLoaded && IsComplete && !IsDismissed;
 
@@ -65,7 +65,7 @@ public partial class HomeGuideViewModel(OnboardingService onboarding) : ViewMode
     /// Loads the guide for the signed-in user. The first load for a user who has never seen Home
     /// greets them with "Welcome to Sovrant" for the rest of the session and records the visit.
     /// </summary>
-    public async Task LoadAsync(string userId, string displayName, bool isAdmin, string? workspaceId, int localHour)
+    public async Task LoadAsync(string userId, string displayName, bool isAdmin, string? workspaceId)
     {
         if (!string.Equals(_firstVisitUser, userId, StringComparison.Ordinal))
         {
@@ -79,10 +79,11 @@ public partial class HomeGuideViewModel(OnboardingService onboarding) : ViewMode
         var content = await onboarding.GetWelcomeAsync(userId, isAdmin, workspaceId).ConfigureAwait(true);
         var dismissed = await onboarding.IsGetStartedDismissedAsync(userId).ConfigureAwait(true);
 
-        Greeting = OnboardingService.Greeting(displayName, _firstVisit, localHour);
-        ChecklistTitle = content.IsAdmin ? "Get started: set up your server" : "Get started";
+        Greeting = OnboardingService.Greeting(displayName, _firstVisit);
+        // Admins set Sovrant up for everyone; members only ever see things they can do themselves.
+        ChecklistTitle = content.IsAdmin ? "Set up Sovrant for your team" : "Get started";
+        StepColumns = Math.Max(1, content.Checklist.Count);
         ProgressText = $"{content.DoneCount} of {content.Checklist.Count} done";
-        PillText = $"Get started · {content.DoneCount} of {content.Checklist.Count}";
         ProgressPercent = content.Checklist.Count == 0 ? 0 : 100.0 * content.DoneCount / content.Checklist.Count;
         IsComplete = content.DoneCount == content.Checklist.Count;
         IsDismissed = dismissed;
@@ -91,8 +92,11 @@ public partial class HomeGuideViewModel(OnboardingService onboarding) : ViewMode
         foreach (var a in content.Areas)
             Areas.Add(new WelcomeAreaItem(a.IconName, a.Title, a.Description, a.ActionLabel, PageFor(a.Target, isAdmin)));
         Checklist.Clear();
-        foreach (var c in content.Checklist)
-            Checklist.Add(new WelcomeChecklistItem(c.Title, c.Subtitle, c.Done, c.ActionLabel, PageFor(c.Target, isAdmin)));
+        for (var n = 0; n < content.Checklist.Count; n++)
+        {
+            var c = content.Checklist[n];
+            Checklist.Add(new WelcomeChecklistItem(n + 1, c.Title, c.Subtitle, c.Done, c.ActionLabel, PageFor(c.Target, isAdmin)));
+        }
         IsLoaded = true;
     }
 

@@ -98,12 +98,34 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
     /// <summary>Phase 141 — Home's greeting, Get started checklist and What Sovrant can do.</summary>
     public HomeGuideViewModel Guide { get; }
 
+    /// <summary>Phase 142 — Overview (the guide) or Activity (the report). Home always opens on Overview.</summary>
+    [ObservableProperty] private bool _isOverview = true;
+
+    /// <summary>Phase 142 — Overview's at-a-glance pills.</summary>
+    public ObservableCollection<GlanceItem> Glance { get; } = [];
+
+    [RelayCommand] private void ShowOverview() => IsOverview = true;
+    [RelayCommand] private void ShowActivity() => IsOverview = false;
+
+    private void RefreshGlance()
+    {
+        Glance.Clear();
+        Glance.Add(new GlanceItem(OwnWorkflows, Plural("workflow", OwnWorkflows)));
+        Glance.Add(new GlanceItem(OwnTeamRuns, Plural("team run", OwnTeamRuns)));
+        Glance.Add(new GlanceItem(OwnAgentRuns, Plural("agent run", OwnAgentRuns)));
+        Glance.Add(new GlanceItem(OwnSessions, Plural("session", OwnSessions)));
+        Glance.Add(new GlanceItem(OthersPublicRows, "shared"));
+        Glance.Add(new GlanceItem(Claws, Plural("claw", Claws)));
+    }
+
+    private static string Plural(string word, int n) => n == 1 ? word : word + "s";
+
     private async Task LoadGuideAsync(string userId)
     {
         var email = (_principal as Sovrant.Desktop.Auth.DesktopPrincipalAccessor)?.Email ?? userId;
         var workspaceId = (_principal as Sovrant.Desktop.Auth.DesktopPrincipalAccessor)?.WorkspaceId;
         await Dispatcher.UIThread.InvokeAsync(() => Guide.LoadAsync(userId, Sovrant.Runtime.Onboarding.OnboardingService.DisplayName(email),
-            _principal.IsAdmin, workspaceId, DateTime.Now.Hour));
+            _principal.IsAdmin, workspaceId));
     }
 
     [RelayCommand]
@@ -168,6 +190,7 @@ public sealed partial class UserDashboardViewModel : ViewModelBase, IDisposable
                 OwnSessions = state.OwnSessions;
                 OthersPublicRows = state.OthersPublicRows;
                 Claws = state.Claws;
+                RefreshGlance();
                 LastRefreshed = state.GeneratedAt.LocalDateTime.ToString("MMM d, h:mm tt", CultureInfo.InvariantCulture);
                 Rows.Clear();
                 foreach (var r in state.Rows)
@@ -243,3 +266,6 @@ public partial class UserDashboardRowViewModel : ViewModelBase
     [ObservableProperty] private bool _isOwn;
     [ObservableProperty] private bool _isPrivate;
 }
+
+/// <summary>Phase 142 — one at-a-glance pill on Home's Overview ("14 sessions").</summary>
+public sealed record GlanceItem(int Value, string Label);

@@ -185,7 +185,7 @@ public partial class MainViewModel : ViewModelBase
                 OnNavigationRequested(this, "Projects");
                 break;
             case "dashboard":
-                CurrentPage = _services.GetRequiredService<UserDashboardViewModel>();
+                CurrentPage = OpenHome();
                 break;
             case "settings":
                 Sidebar.SelectedNavItem = "Settings";
@@ -280,6 +280,14 @@ public partial class MainViewModel : ViewModelBase
         OnNavigationRequested(this, page);
     }
 
+    /// <summary>Phase 142 — Home always opens on its Overview tab.</summary>
+    private UserDashboardViewModel OpenHome()
+    {
+        var home = _services.GetRequiredService<UserDashboardViewModel>();
+        home.IsOverview = true;
+        return home;
+    }
+
     /// <summary>True for pages only admins may open (also used by tests).</summary>
     public static bool IsAdminOnlyPage(string pageName) => AdminOnlyPages.Contains(pageName);
 
@@ -296,7 +304,7 @@ public partial class MainViewModel : ViewModelBase
         CurrentPage = pageName switch
         {
             "Chat" => CreateChatViewModel(),
-            "Dashboard" => _services.GetRequiredService<UserDashboardViewModel>(),
+            "Dashboard" => OpenHome(),
             "Settings" => _services.GetRequiredService<SettingsViewModel>(),
             var s when s.StartsWith("Settings:", StringComparison.Ordinal) => ResolveSettings(s),
             "Diagnostics" => _services.GetRequiredService<DiagnosticsViewModel>(),

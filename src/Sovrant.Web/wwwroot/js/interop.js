@@ -1,12 +1,4 @@
 window.sovrantInterop = {
-    // Phase 141 — Home's time-of-day greeting uses the viewer's clock, not the server's.
-    localHour: function () { return new Date().getHours(); },
-
-    // Phase 141 — Home's "Get started" pill scrolls to the checklist.
-    scrollToId: function (elementId) {
-        document.getElementById(elementId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    },
-
     // Phase 133 — [top, bottom, left, right, viewportHeight] of an element, for
     // placing the conversation-folder ⋯ menu outside the scrolling sidebar.
     rectOf: function (elementId) {

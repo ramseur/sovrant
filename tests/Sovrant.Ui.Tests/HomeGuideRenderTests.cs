@@ -23,7 +23,7 @@ public sealed class HomeGuideRenderTests
     public async Task Member_Home_Guide_Shows_Managed_Cards_And_No_Admin_Links()
     {
         var vm = new HomeGuideViewModel(Onboarding(new MemoryPrefs()));
-        await vm.LoadAsync("sam@example.com", "sam", isAdmin: false, workspaceId: null, localHour: 9);
+        await vm.LoadAsync("sam@example.com", "sam", isAdmin: false, workspaceId: null);
 
         var window = new Window { Width = 1200, Height = 1000, Content = new HomeGuideView { DataContext = vm } };
         window.Show();
@@ -34,7 +34,7 @@ public sealed class HomeGuideRenderTests
             Assert.Equal(2, texts.Count(t => t == "Managed by your admin"));
             Assert.Contains("What Sovrant can do", texts);
             Assert.Contains("Get started", texts);
-            Assert.True(vm.ShowPill);
+            Assert.True(vm.ShowChecklist);
 
             var targets = window.GetLogicalDescendants().OfType<Button>()
                 .Where(b => b.IsEffectivelyVisible && b.CommandParameter is string)
@@ -52,23 +52,19 @@ public sealed class HomeGuideRenderTests
     }
 
     [AvaloniaFact]
-    public async Task First_Visit_Greets_Once_Per_User_Then_Time_Of_Day()
+    public async Task First_Visit_Greets_Once_Per_User_Then_Welcome_Back()
     {
         var prefs = new MemoryPrefs();
         var vm = new HomeGuideViewModel(Onboarding(prefs));
 
-        await vm.LoadAsync("sam@example.com", "sam", false, null, localHour: 15);
+        await vm.LoadAsync("sam@example.com", "sam", false, null);
         Assert.Equal("Welcome to Sovrant, sam", vm.Greeting);
-        await vm.LoadAsync("sam@example.com", "sam", false, null, localHour: 15); // 30 s refresh, same session
+        await vm.LoadAsync("sam@example.com", "sam", false, null); // 30 s refresh, same session
         Assert.Equal("Welcome to Sovrant, sam", vm.Greeting);
 
         vm.Reset(); // sign out and back in
-        await vm.LoadAsync("sam@example.com", "sam", false, null, localHour: 15);
-        Assert.Equal("Good afternoon, sam", vm.Greeting);
-        await vm.LoadAsync("sam@example.com", "sam", false, null, localHour: 20);
-        Assert.Equal("Good evening, sam", vm.Greeting);
-        await vm.LoadAsync("sam@example.com", "sam", false, null, localHour: 7);
-        Assert.Equal("Good morning, sam", vm.Greeting);
+        await vm.LoadAsync("sam@example.com", "sam", false, null);
+        Assert.Equal("Welcome back, sam", vm.Greeting);
     }
 
     [AvaloniaFact]
@@ -78,11 +74,10 @@ public sealed class HomeGuideRenderTests
         // A member whose checklist is fully done: model picked + conversation + agent + knowledge.
         var services = new ServiceCollection().AddSingleton<IUserPreferenceStore>(prefs).BuildServiceProvider();
         var vm = new HomeGuideViewModel(new OnboardingService(services));
-        await vm.LoadAsync("sam@example.com", "sam", false, null, 9);
+        await vm.LoadAsync("sam@example.com", "sam", false, null);
 
         // Without stores the member items can't all be ticked, so drive the completed state directly.
         vm.IsComplete = true;
-        Assert.False(vm.ShowPill);
         Assert.False(vm.ShowChecklist);
         Assert.True(vm.ShowAllSet);
 
@@ -91,8 +86,24 @@ public sealed class HomeGuideRenderTests
         Assert.Equal("true", await prefs.GetAsync("sam@example.com", UserPreferenceKeys.GetStartedDismissed));
 
         var again = new HomeGuideViewModel(new OnboardingService(services));
-        await again.LoadAsync("sam@example.com", "sam", false, null, 9);
+        await again.LoadAsync("sam@example.com", "sam", false, null);
         Assert.True(again.IsDismissed);
+    }
+
+    [AvaloniaFact]
+    public async Task Admins_Set_Up_For_The_Team_Members_Just_Get_Started()
+    {
+        var admin = new HomeGuideViewModel(Onboarding(new MemoryPrefs()));
+        await admin.LoadAsync("alex@example.com", "alex", isAdmin: true, workspaceId: null);
+        Assert.Equal("Set up Sovrant for your team", admin.ChecklistTitle);
+        Assert.Equal(5, admin.Checklist.Count);
+        Assert.Equal(5, admin.StepColumns); // the steps run across the container
+        Assert.Equal(Enumerable.Range(1, 5), admin.Checklist.Select(c => c.Number));
+
+        var member = new HomeGuideViewModel(Onboarding(new MemoryPrefs()));
+        await member.LoadAsync("sam@example.com", "sam", isAdmin: false, workspaceId: null);
+        Assert.Equal("Get started", member.ChecklistTitle);
+        Assert.Equal(4, member.Checklist.Count);
     }
 
     private static OnboardingService Onboarding(IUserPreferenceStore prefs) =>
