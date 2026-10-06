@@ -259,7 +259,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Built |
 | SDK & API parity — every app feature reachable over HTTP and the JS SDK. Part A (2.0, built): workflow plan / edit / cancel, MCP status + retry, privacy setters. Part B (planned): ~14 older server routes the SDK never wrapped, idempotent-only SDK retries, workflow left behind when planning fails, SDK type check + tests in CI | Phase 143 | Part A Built · Part B Planned |
 | Environment configuration that works everywhere — every documented env variable works from the shell, container env or `.env` on every app it applies to; provider API keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply every start); Web hosting parity (`SOVRANT_WEB_PORT`, forwarded headers, `/health` + `/ready`); docs match the code | Phase 144 | Built |
-| Multi-user Web — per-browser sign-in (HttpOnly cookie, 8 h sliding + 30-day "Remember me"), per-tab services instead of process-wide singletons, per-user model / provider / keys, headless mode with per-user Server sign-in, per-conversation Bash and a path to safe file/shell tools for members (with Phase 124), multi-user tests + load test (GitHub #32) | Phase 145 | Planned — next (2.1.0) |
+| Multi-user Web — per-browser sign-in (HttpOnly cookie, 1 h idle + 12 h absolute + 30-day "Remember me", all env-settable), per-tab services instead of process-wide singletons, per-user model / provider / keys, headless mode with per-user Server sign-in, per-conversation Bash and a path to safe file/shell tools for members (with Phase 124), multi-user tests + load test (GitHub #32) | Phase 145 | Planned — next (2.1.0) |
 
 ### v1.0 release polish ✅
 
@@ -13159,14 +13159,14 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 |---|---|
 | Stopgap before this phase | Fix the automatic sign-in after a restart now (2.1.0), and say plainly in the README, CHANGELOG and PR/tag messages that Web is single-user until Phase 145. We're pre-release, so no other mitigation. |
 | File and shell tools for members | **Short term (2.1.0):** off for non-admins on Web by default; an admin can turn them on. **Long term:** the path in Part D. |
-| Sign-in lifetime | 8-hour sliding session, plus an optional 30-day "Remember me" |
+| Sign-in lifetime | **Revised 2026-10-06:** signed out after **1 hour idle** (renewed by activity) and after **12 hours** regardless; optional **30-day "Keep me signed in"**. All env-settable: `SOVRANT_WEB_IDLE_MINUTES` (60), `SOVRANT_WEB_MAX_SESSION_HOURS` (12), `SOVRANT_WEB_REMEMBER_DAYS` (30; `0` hides the checkbox). The first draft said 8 hours sliding (too long for something that runs tools on a server), then 30 minutes; **1 hour until long-running work is reliable across a sign-out** (see Open questions). |
 | SSO | Later, through Supabase Auth (Phase 40C). The cookie design leaves room for it. |
 | Headless mode | Each user signs in to Server with their own account; `SOVRANT_API_TOKEN` becomes optional (service use only) |
 
 ### What ships
 
 **Part A — Identity per browser (security core)**
-1. ASP.NET Core cookie authentication: HttpOnly, Secure (when HTTPS), SameSite=Lax; 8 h sliding expiry, 30 days with "Remember me". Blazor can't set cookies over its SignalR circuit, so sign-in and sign-out are small form posts (`/auth/login`, `/auth/logout`). The cookie carries a revocable server-side token (existing `ITokenService`); sign-out and admin "revoke" invalidate it.
+1. ASP.NET Core cookie authentication: HttpOnly, Secure (when HTTPS), SameSite=Lax; 1-hour idle expiry renewed by activity, a 12-hour absolute limit, and 30 days with "Keep me signed in" (all three from env, see Decisions). **Renewal over SignalR:** after the first page load Blazor Server talks over a WebSocket, so clicks don't refresh a cookie on their own. A light activity ping (at most once a minute, only after real keyboard/mouse activity) renews the cookie and the server-side token's last-used time, and each circuit checks expiry and sends an expired tab to Sign in ("Timed out"). Document the three env variables in `.env.example` when they're read (the guard test requires it). Blazor can't set cookies over its SignalR circuit, so sign-in and sign-out are small form posts (`/auth/login`, `/auth/logout`). The cookie carries a revocable server-side token (existing `ITokenService`); sign-out and admin "revoke" invalidate it.
 2. The circuit's user comes from `AuthenticationStateProvider` / `HttpContext.User` at circuit start; pages use `[Authorize]` and a cascading auth state instead of checking a global.
 3. Per-circuit (`AddScoped`) instead of singleton: `WebSessionService`, `ActiveContextService`, `BlazorConfirmationHandler`, `IUserInputProvider`, permission mode.
 4. Remove the static `Program.SovrantUserId` and `SetUserId`; every call site asks the circuit's principal.
@@ -13191,6 +13191,13 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 15. Load test: several hundred concurrent circuits on one Web server; record memory per circuit and SignalR limits; publish sizing guidance for admins.
 16. Multi-instance (several Web servers behind a load balancer) needs shared Data Protection keys, sticky sessions and everything on Postgres (Phase 134 Part B). Documented as the next step, not built here.
 
+### Open questions
+- **Long-running work vs. sign-in expiry.** A reply, workflow or swarm can run longer than the idle timeout while the person isn't touching the page. Decide before shortening the 1-hour default:
+  - **Work outlives the sign-in:** work you started keeps running on the server as you (the `AmbientPrincipal` groundwork from the stopgaps already carries the owner into background work), and its result lands in the conversation for your next sign-in. This is Phase 92's "come back and it's done" contract (persistence of result, not presence), and Phase 86 background continuation, applied to Web sign-out.
+  - **A running turn counts as activity:** probably yes, so a session doesn't expire under a reply that's still streaming; but an unattended run shouldn't keep a shared computer signed in for 12 hours.
+  - **Approvals while signed out:** a run that needs a tool approval waits, and the request is still there after the next sign-in (not auto-denied, not auto-approved).
+  - Once these are reliable, revisit a shorter default (e.g. 30 minutes).
+
 ### Non-goals
 - SSO (Supabase Auth, later).
 - Multi-instance hosting (see item 16).
@@ -13200,7 +13207,7 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 - [x] 2.1.0 stopgaps built (2026-10-06, on `development`): no automatic sign-in after restart (`WebSignInGuardTests`); member file/shell tools off by default on Web and Server (`MemberHostToolPolicy`; Server reads `AmbientPrincipal`, set per request and per scheduled workflow; Governance toggle on Web + Desktop; `SOVRANT_GOVERNANCE_MEMBER_FILE_TOOLS`); README + CHANGELOG warning
 - [ ] Two browsers signed in as different users each see only their own identity, context, chats, approvals and model
 - [ ] No process-wide user state left in Web (`Program.SovrantUserId` gone; per-user services are scoped)
-- [ ] Sign-in cookie: HttpOnly, Secure on HTTPS, 8 h sliding, 30-day "Remember me"; sign-out and admin revoke work
+- [ ] Sign-in cookie: HttpOnly, Secure on HTTPS; 1 h idle (renewed by activity, also across the SignalR circuit), 12 h absolute, 30-day "Keep me signed in"; all three env-settable and documented; sign-out and admin revoke work
 - [ ] Each user's model, provider and API key apply only to their own chats, including background work
 - [ ] Headless mode: each Web user is their own Server user; no shared token needed
 - [ ] Per-conversation Bash working directory

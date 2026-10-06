@@ -720,7 +720,7 @@ const ADMIN_GROUPS = {command:'Overview',users:'Access',governance:'Safety',diag
 
 const S = {
   login:{g:null,p:'Entry',t:'Login',url:'/login',
-    note:'No rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary). Phase 140: toggle Sign in / First run (no accounts yet → create the administrator) / Approval / Working. Phase 145: sign-in is per browser — "Keep me signed in on this browser for 30 days" (otherwise 8 hours, renewed while active; hidden on first run), and two reasons you can land back here: Timed out and Revoked (an admin signed you out).'},
+    note:'No rail. Wordmark only — no mark, same rule as everywhere else; controls sit on the shell scale (40px inputs, 9px radius, 44px primary). Phase 140: toggle Sign in / First run (no accounts yet → create the administrator) / Approval / Working. Phase 145: sign-in is per browser — "Keep me signed in on this browser for 30 days" (otherwise signed out after 1 hour idle, renewed by activity, and after 12 hours regardless; all three set by env; hidden on first run, or when Remember me is off), and two reasons you can land back here: Timed out and Revoked (an admin signed you out).'},
   dashboard:{g:'dashboard',p:'Overview',t:'Home',url:'/dashboard',sub:"Your activity across every workspace you belong to.",
     stats:[['My workflows',0],['My team runs',0],['My agent runs',1],['My sessions',14],['Shared (public)',1],['Claws',0]],
     note:'Phase 142 — Home has two tabs: Overview (opens first; the guide, centred like the chat welcome, sized for a laptop screen) and Activity (the stats and activity table). Toggles: Admin / Member, First visit / Returning / All set / Dismissed, Overview / Activity, and At a glance (a compact stats row on Overview, still undecided). Command Center keeps the plain Overview pattern.'},
@@ -926,7 +926,7 @@ function phHTML(s){
 function acctMenuHTML(){
   const life = acctRemember
     ? `<b>Kept signed in for 30 days</b> on this browser (until 5 Nov). You chose "Keep me signed in".`
-    : `<b>Signed in for 8 hours</b>, renewed while you're active. Signed in today at 09:12.`;
+    : `<b>Signed out after 1 hour idle</b>, renewed while you're active (12 hours at most). Signed in today at 09:12.`;
   return `<div class="acct" role="menu">
     <div class="ah"><div class="av">ER</div><div><div class="an">ramseur</div><div class="ae">ramseur@anant.us · Admin</div></div></div>
     <div class="ab">${life}<br>Signed in on 1 browser.</div>
@@ -939,10 +939,10 @@ function acctMenuHTML(){
 function usersDetailHTML(sel){
   if(!sel) return `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick a person to see where they're signed in.</div></div>`;
   const signins = sel.n==='sam@example.com'
-    ? [['Chrome on Windows','10.0.4.21','today 08:47','2 min ago','8 h idle',0],
+    ? [['Chrome on Windows','10.0.4.21','today 08:47','2 min ago','1 h idle',0],
        ['Safari on iPhone','198.51.100.7','2 Oct','Yesterday','5 Nov',1]]
     : sel.n==='ramseur@anant.us'
-    ? [['Edge on Windows','127.0.0.1','today 09:12','Just now','8 h idle',0]]
+    ? [['Edge on Windows','127.0.0.1','today 09:12','Just now','1 h idle',0]]
     : [];
   const rows = signins.map(([d,ip,si,la,ex,rem],i)=>`<tr><td class="dev"><div class="sidev">${d}${sel.n==='ramseur@anant.us'&&i===0?'<span class="sithis">This browser</span>':''}</div><div class="simeta">${ip} · signed in ${si}${rem?' · kept 30 days':''}</div></td><td>${la}</td><td>${ex}</td><td style="text-align:right"><button class="btn">Revoke</button></td></tr>`).join('');
   const table = signins.length
@@ -1223,11 +1223,12 @@ function entryHTML(){
        <div class="linfo"><b>First-time setup</b> — no accounts exist yet. The first account you create becomes the <b>administrator</b>, with full control over registration, approvals, providers and workspaces.</div>`
     : `<div class="lhead"><div class="lw">Sovrant</div><div class="ls">Sign in to continue.</div></div>`;
   const ok=st==='approval'?`<div class="lok">${sv(ICONS.done,2)}<span>Account created. An administrator must approve it before you can sign in.</span></div>`
-    : st==='expired'?`<div class="lwarn">${sv(ICONS.warning,2)}<span>You were signed out after 8 hours without activity. Sign in again to pick up where you left off.</span></div>`
+    : st==='expired'?`<div class="lwarn">${sv(ICONS.warning,2)}<span>You were signed out after an hour without activity. Sign in again to pick up where you left off.</span></div>`
     : st==='revoked'?`<div class="lwarn">${sv(ICONS.warning,2)}<span>An administrator signed you out of this browser. Sign in again, or ask them if you didn't expect this.</span></div>`:'';
-  /* Phase 145 — sign-in lasts 8 h, renewed while you're active; "Keep me signed in" makes it 30 days on this browser. */
+  /* Phase 145 — signed out after 1 h idle (renewed by activity, 12 h at most); "Keep me signed in" makes it 30 days on this browser.
+     All three are env-settable (SOVRANT_WEB_IDLE_MINUTES, SOVRANT_WEB_MAX_SESSION_HOURS, SOVRANT_WEB_REMEMBER_DAYS; 0 hides the box). */
   const remember=first?'':`<label class="lrem"><input type="checkbox"> Keep me signed in on this browser for 30 days</label>
-    <div class="lhint">Otherwise you're signed out after 8 hours without activity. Leave this off on a shared computer.</div>`;
+    <div class="lhint">Otherwise you're signed out after an hour without activity. Leave this off on a shared computer.</div>`;
   const dis=working?' disabled':'';
   const fields=`<div class="fld"><label>Email</label><input class="li" placeholder="you@example.com"${working?' value="alex@example.com"':''}${dis}></div>
     <div class="fld"><label>Password</label><input class="li" type="password" placeholder="${first?'Choose a password':'Password'}"${working?' value="password123"':''}${dis}></div>`;
@@ -1390,7 +1391,7 @@ function render(){
   } else if(cur==='users'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${acctMenu?' on':''}" onclick="toggleAcct()">Account menu</button>`
-      +[[false,'8-hour sign-in'],[true,'Kept 30 days']].map(([v,t])=>`<button class="cbtn${acctMenu&&acctRemember===v?' on':''}" onclick="setAcctRemember(${v})">${t}</button>`).join('');
+      +[[false,'1-hour idle sign-in'],[true,'Kept 30 days']].map(([v,t])=>`<button class="cbtn${acctMenu&&acctRemember===v?' on':''}" onclick="setAcctRemember(${v})">${t}</button>`).join('');
   } else if(cur==='platformint'){
     ct.style.display='flex';
     ct.innerHTML=[['ok','Connected'],['network','Unreachable'],['auth','Credentials']].map(([k,t])=>`<button class="cbtn${mcpState===k?' on':''}" onclick="setMcpState('${k}')">${t}</button>`).join('')

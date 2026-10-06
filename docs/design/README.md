@@ -416,11 +416,11 @@ Roadmap Phase 142. With real activity, Phase 141's Home pushed the guide below t
 Sign-in moves from one per server to one per browser, so the UI needs to show how long you stay signed in, let you sign out here or everywhere, and let admins see and end sign-ins. Three small changes, identical on both mocks.
 
 **Login** (`#login`, toggle *Timed out* / *Revoked*, or `#expired` / `#revoked`):
-- **"Keep me signed in on this browser for 30 days"** below the password. Hint: otherwise 8 hours, renewed while you're active; leave it off on a shared computer. Hidden on first run (the administrator signs up first; they can choose it next time).
-- Two reasons you land back on Sign in, in the warning style: **Timed out** (8 hours without activity) and **Revoked** (an admin signed you out of this browser).
+- **"Keep me signed in on this browser for 30 days"** below the password. Hint: otherwise you're signed out after an hour without activity (renewed while you're active, 12 hours at most); leave it off on a shared computer. Revised 2026-10-06: the first draft said 8 hours, then 30 minutes; settled on **1 hour** until long-running work (replies, workflows) is guaranteed to finish and hand back its result after a sign-out. All three limits are env-settable. Hidden on first run (the administrator signs up first; they can choose it next time).
+- Two reasons you land back on Sign in, in the warning style: **Timed out** (an hour without activity, or the 12-hour limit) and **Revoked** (an admin signed you out of this browser).
 
-**Account menu** (rail footer, every screen; on Users toggle *Account menu* / *8-hour sign-in* / *Kept 30 days*, or `#users&acct` / `#users&kept`):
-- The footer row (avatar, name, role) opens it: name, email and role; how long this browser stays signed in (8 hours renewed while active, or kept 30 days until a date); how many browsers you're signed in on; **Sign out** and **Sign out of all browsers**. Text-only items: the icon vocabulary has no sign-out icon yet.
+**Account menu** (rail footer, every screen; on Users toggle *Account menu* / *1-hour idle sign-in* / *Kept 30 days*, or `#users&acct` / `#users&kept`):
+- The footer row (avatar, name, role) opens it: name, email and role; how long this browser stays signed in (1 hour idle, renewed while active and 12 hours at most, or kept 30 days until a date); how many browsers you're signed in on; **Sign out** and **Sign out of all browsers**. Text-only items: the icon vocabulary has no sign-out icon yet.
 
 **Admin → Users** (`#users`):
 - Each row says where the person is signed in ("Signed in on 2 browsers", "Not signed in", "Awaiting approval").
