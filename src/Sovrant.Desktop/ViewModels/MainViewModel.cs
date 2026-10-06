@@ -208,10 +208,19 @@ public partial class MainViewModel : ViewModelBase
     /// </summary>
     internal void ResetForUser()
     {
-        SelectedGroup = "agents";
-        Sidebar.SelectedNavItem = "Agents";
-        OnNavigationRequested(this, "Agents");
+        GoHome();
         OnPropertyChanged(nameof(IsAdmin));
+    }
+
+    /// <summary>
+    /// Phase 141 — every launch and sign-in starts on Home, with the rail showing Home (it used to
+    /// land on Agents after a sign-in, and the rail started out highlighting Chat).
+    /// </summary>
+    public void GoHome()
+    {
+        SelectedGroup = "dashboard";
+        Sidebar.SelectedNavItem = "Dashboard";
+        OnNavigationRequested(this, "Dashboard");
     }
 
     private void OnCommandExecuted(object? sender, SlashCommandResult result)

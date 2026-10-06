@@ -22,7 +22,8 @@ Versions correspond to tags on the `development` branch.
   - **Get started pill:** shows your checklist progress and jumps to it.
   - **Your activity:** unchanged, at the top.
   - **Below it:** the role-aware Get started checklist, which collapses to "All set" with Dismiss when done, and the What Sovrant can do cards.
-  - **What it replaces:** the separate full-window Welcome page and the "Show welcome" button. `/welcome` now redirects to Home. A first sign-in and first-run provider setup land on Home.
+  - **What it replaces:** the separate full-window Welcome page and the "Show welcome" button. `/welcome` now redirects to Home.
+  - **Always starts on Home:** every launch and sign-in, on Web and Desktop, including first-run provider setup.
   - **Nav:** Dashboard is now called Home (the URL is still `/dashboard`).
 - **Friendly MCP connection errors (Phase 139)** — when an MCP server can't be reached, Sovrant now says why in one sentence instead of printing stack traces.
   - **Failure kinds:** couldn't resolve the host, not responding (timeout or refused), rejected credentials (401/403), or a certificate problem.
@@ -62,6 +63,7 @@ Versions correspond to tags on the `development` branch.
 
 ### Fixed
 
+- **Apps sometimes opened on an unexpected page** — Desktop landed on Agents after signing out and back in, and its nav started out highlighting Chat while showing the Dashboard; Web sent signed-in users to Chat. Both now start on Home every time. (Phase 141)
 - **Web: importing several MCP servers at once connected only the first** — the Integrations page updated the screen from the wrong thread after the first connection, and the error was silently swallowed, so the remaining servers stayed disconnected until a restart. The same mistake in the OAuth connect flow is fixed too. (Phase 139)
 - **Desktop: admin pages could be opened by name** — the Admin nav group was hidden from non-admins, but any in-app link naming an admin page (Welcome links, chat cards, events) would still open it. Desktop navigation now refuses admin pages (Command Center, Users, Workspaces, Providers, Governance, Trust Boundary, Diagnostics, Platform/System Integrations) for non-admins, matching Web, where each page already redirects. (Phase 140)
 - **Prompts sometimes needed sending twice** — OpenRouter (especially for `:free` models) can answer HTTP 200 and then report a rate-limited or busy upstream *inside* the stream (`{"error": …}`), or close the stream with no content. The stream reader skipped the error chunk, so the turn "completed" in about 0.3 s with 0 tokens and no message: the timer started and stopped, and the user had to re-send.

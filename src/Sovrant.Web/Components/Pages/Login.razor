@@ -3,12 +3,10 @@
 @using Sovrant.Runtime
 @using Sovrant.Runtime.Auth
 @using Sovrant.Runtime.Mcp
-@using Sovrant.Runtime.Onboarding
 @using Sovrant.Web.Services
 @inject IIdentityService IdentityService
 @inject ICredentialStore CredentialStore
 @inject WebSessionService Session
-@inject OnboardingService Onboarding
 @inject NavigationManager Nav
 @inject IServiceProvider Services
 
@@ -105,7 +103,7 @@
     {
         if (Session.IsAuthenticated)
         {
-            Nav.NavigateTo("/", forceLoad: true);
+            Nav.NavigateTo("/dashboard", forceLoad: true); // already signed in → Home
             return;
         }
         _firstRun = await IdentityService.IsFirstRunAsync().ConfigureAwait(false);
@@ -195,8 +193,7 @@
                 await Program.SeedUserAndWorkspaceAsync(Services, userId).ConfigureAwait(false);
                 await Services.ApplyUserPreferencesForUserAsync(userId).ConfigureAwait(false);
             });
-        // Phase 141: a user's first sign-in lands on Home, which greets them and shows Get started.
-        var target = await Onboarding.HasSeenWelcomeAsync(userId).ConfigureAwait(false) ? "/" : "/dashboard";
-        Nav.NavigateTo(target, forceLoad: true);
+        // Phase 141: every sign-in lands on Home (greeting, activity, Get started), like Desktop.
+        Nav.NavigateTo("/dashboard", forceLoad: true);
     }
 }

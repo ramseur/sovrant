@@ -12883,7 +12883,7 @@ Phase 140 gave every user a full-window Welcome page once, and a "Show welcome" 
 | Question | Decision |
 |---|---|
 | Shape | One **Home** page. Top to bottom: greeting header → the current Dashboard content (stats, activity) → the **Get started** checklist → **What Sovrant can do** (the eight info cards). Welcome content sits *below* the dashboard content |
-| First sign-in | **Retire the full-window Welcome.** A user's first sign-in lands on Home (Desktop always starts on Home; Web's later sign-ins still open Chat, as before); on that first visit the greeting reads "Welcome to Sovrant, <name>" (afterwards "Good morning / afternoon / evening, <name>"). On first run, provider setup returns to Home |
+| First sign-in | **Retire the full-window Welcome.** Every sign-in lands on Home, on Web and Desktop (confirmed 2026-10-06: "sometimes it opens on random pages"); on a user's first visit the greeting reads "Welcome to Sovrant, <name>" (afterwards "Good morning / afternoon / evening, <name>"). On first run, provider setup returns to Home |
 | Name | The nav item **Dashboard → Home**. The URL stays `/dashboard`, so links and bookmarks keep working |
 | Get started pill | While the checklist is unfinished, a **"Get started · n of m"** pill in the header scrolls down to it, so new users find it even below the fold |
 | Checklist when done | Collapses to one **"All set"** line, with **Dismiss**; dismissal is stored per user (`user_preferences`), like "welcome seen" |
@@ -12926,3 +12926,7 @@ Phase 140 gave every user a full-window Welcome page once, and a "Show welcome" 
   - The new `HomeGuideView` sits below the activity, and the Dashboard view is now one scrolling page. The pill brings the checklist into view.
   - `WelcomeOverlay` and the Show welcome command are removed. Home loads right after sign-in instead of waiting for the timer. The nav says Home.
 - **Tests:** `OnboardingServiceTests` (+8: greetings, dismissal), `HomeGuideRenderTests` (3, headless), `WelcomeAccessTests` now against `HomeGuideViewModel`; `WelcomeOverlayRenderTests` removed with the overlay.
+- **Always start on Home (follow-up, 2026-10-06):**
+  - **Web:** every sign-in goes to `/dashboard`, and an already signed-in user opening `/login` goes there too (both previously went to Chat).
+  - **Desktop:** new `MainViewModel.GoHome()`, used at launch and after every sign-in. Signing out and back in used to land on **Agents** (`ResetForUser`), and the rail started out highlighting Chat while showing the Dashboard. A remote-mode re-authentication by the same user keeps their page.
+  - **Flaky test fixed:** `OllamaOptInTests` occasionally saw another test's temporary `OPENROUTER_API_KEY`. The test classes that change process environment variables now share a non-parallel xUnit collection.

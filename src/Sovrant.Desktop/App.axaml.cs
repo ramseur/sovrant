@@ -319,9 +319,13 @@ public partial class App : Application
                 await Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     var principal = _serviceProvider.GetRequiredService<DesktopPrincipalAccessor>();
+                    var previousUser = principal.UserId;
                     MainWindow?.Hide();
                     var userId = await RunLoginWindowAsync(desktop, _serviceProvider, principal).ConfigureAwait(true);
                     SovrantUserId = userId;
+                    // Phase 141: a different user starts on Home; the same user re-authenticating keeps their place.
+                    if (!string.Equals(previousUser, userId, StringComparison.Ordinal))
+                        _serviceProvider.GetRequiredService<MainViewModel>().GoHome();
                     // Persist and hot-swap the new token.
                     var store = _serviceProvider.GetRequiredService<ICredentialStore>();
                     var remoteOpts = _serviceProvider.GetRequiredService<SovrantRemoteOptions>();
@@ -341,7 +345,8 @@ public partial class App : Application
         window.Closed += (_, _) => Environment.Exit(0);
         MainWindow = window;
         window.Show();
-        // Phase 141: Home (the start page) loads now that someone is signed in, rather than on its 30 s timer.
+        // Phase 141: always start on Home, and load it now that someone is signed in rather than on its 30 s timer.
+        mainVm.GoHome();
         _ = _serviceProvider.GetRequiredService<UserDashboardViewModel>().RefreshCommand.ExecuteAsync(null);
 
         // Background user/workspace seeding (local mode only — server handles this in remote mode).

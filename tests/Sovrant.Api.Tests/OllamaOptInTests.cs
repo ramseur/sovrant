@@ -1,3 +1,4 @@
+using Xunit;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -13,6 +14,7 @@ namespace Sovrant.Api.Tests;
 /// workspace. There is no always-on Ollama provider at a default localhost:11434, and every
 /// profile (cloud or local) is served by the primary provider at the profile's base URL.
 /// </summary>
+[Collection(Sovrant.Api.Tests.ProcessEnvironmentCollection.Name)]
 public sealed class OllamaOptInTests
 {
     private static ServiceProvider BuildApiServices()
