@@ -360,6 +360,25 @@ Roadmap Phase 139. A server that fails to connect is shown as Unavailable, with 
 
 **Verified:** rendered in headless Edge on both mocks: all three states (badge, alert title, buttons, list row, chip warning), the menu (rows, tooltip), and the chip warning on Chat. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass (only existing icons: `warning`, `refresh`, `integrations`, `allow`, `dropdown`).
 
+## Home: Dashboard + Welcome in one place (2026-10-06, design-only)
+
+Roadmap Phase 141. The Dashboard becomes **Home**, and Phase 140's full-window Welcome retires: its content now sits below the activity, where people come back every day. Toggles on Home: *Admin / Member* and *First visit / Returning / All set*.
+
+**Layout, top to bottom:**
+- **Header:** "Welcome to Sovrant, Alex" on a user's first visit, then "Good morning, Alex"; the tagline as the subtitle. On the right, a **Get started · n of m** pill (brand tint, a small progress ring) that scrolls the page to the checklist, then Refresh. The pill disappears once everything is done.
+- **Activity (unchanged):** the six stat tiles and the activity table; on a first visit, the "Nothing yet" empty state.
+- **Get started:** the Phase 140 checklist, role-aware (admin 5 rows, member 4), ticked from real state. When complete it collapses to one line: a green check, "**All set** — you've finished getting started.", and **Dismiss**.
+- **What Sovrant can do:** the eight info cards in an auto-fill grid. The admin-only rule is unchanged: members see *Integrations* and *Privacy & governance* as "Managed by your admin", with no link.
+
+**Elsewhere:**
+- **Nav:** "Dashboard" is now **Home** (same icon; the URL stays `/dashboard`).
+- **Removed:** the Welcome screen (Entry is just Login again), the Dashboard's "Show welcome" button.
+- **Chat welcome:** the strip's link now reads "See everything on Home →".
+
+**Fixed on the way:** page-header subtitles on every screen were indented 21px, because the nav's global `.sub` rule (padding, 38px height) also matched `.ph .sub`. The header rule now resets it.
+
+**Verified:** rendered in headless Edge, on both mocks, for admin and member in all three states: greeting, pill text, stats, empty state vs rows, checklist rows, All set line, 8 cards, managed cards (members only). The pill scrolls the app area (not the page) to the checklist; the subtitle lines up with the title on Home, Command Center and Skills. Parity diff still 49 chrome-only lines; `MockVocabularyTests` pass.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.

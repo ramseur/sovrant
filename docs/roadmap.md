@@ -43,6 +43,7 @@ What we are actively working on and shipping next, in priority order.
 | **v1.5 — done** | Bug fixes | Prompts needing to be sent twice — OpenRouter in-stream errors and empty replies are now detected and retried by the existing backoff ✅ |
 | **v1.5 — done** | PR #31 | Rahul Singh's contributions reviewed piece by piece and closed: fork PR #8 fixes (`c60f722`), Lucide icons (Phase 136), chat bubbles (Phase 137), login onboarding (#27) + bigger welcome (#28) (Phase 140). Skipped: date grouping and "+ New Chat" (superseded by conversation folders), screenshot docs (old UI) ✅ |
 | **v1.5 — done** | Phase 139 | Friendly MCP connection errors — plain-language failure reasons, "Unavailable" badge + Retry, background retry for network failures (10 s / 1 min / 5 min, never for bad keys), one console line instead of stack traces ✅ |
+| **v1.5 — next** | Phase 141 | Home — merge the Welcome page into the Dashboard: greeting, today's activity, then the Get started checklist and "What Sovrant can do" below; Dashboard renamed Home; the full-window Welcome retires |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -247,6 +248,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Ollama only when active on your workspace — an admin-added Ollama provider enabled for the active workspace is the only way Sovrant contacts Ollama (`OLLAMA_BASE_URL`, documented in `.env.example`, only sets its default address); no default `localhost:11434`, no pings/cost-pick/fallback otherwise; pin by the profile's provider kind instead of "base URL is localhost" (fixes LM Studio and other local endpoints being sent to Ollama's port) | Phase 138 | Built |
 | Friendly MCP connection errors — classify failures (DNS, refused/timeout, 401/403 credentials, TLS) into one plain sentence with what to do; "Unavailable" badge + Retry in Integrations and a warning in the top-bar Integrations menu; one-line log entries instead of stack traces; automatic background retry (≈10 s, 1 min, 5 min) for network failures, none for credential errors | Phase 139 | Built |
 | Welcome & first-run onboarding — first-run admin sign-up on the login screen; a full-window, role-aware "Welcome to Sovrant" page on every user's first sign-in (what Sovrant is, info bubbles for each area, a get-started checklist ticked from real state); a bigger chat welcome that uses the whole main area (Web + Desktop) | Phase 140 | Built |
+| Home — one page to see what's going on and how Sovrant can help: greeting + "Get started" pill, the current dashboard stats and activity, then the role-aware Get started checklist (collapses to "All set" and can be dismissed) and the "What Sovrant can do" cards; Dashboard → Home in the nav (URL unchanged); retires Phase 140's full-window Welcome (Web + Desktop) | Phase 141 | Planned |
 
 ### v1.0 release polish ✅
 
@@ -12865,3 +12867,50 @@ Rahul Singh's fork (PR #31) attempted parts of this. **Issue #27 (login onboardi
 - **Web:** `/welcome` (own layout, signed-in only), first-run `Login.razor`, Setup → `/welcome`, Dashboard "Show welcome", bigger chat welcome with the strip, Knowledge visits marked from `MainLayout`.
 - **Desktop:** `LoginWindow` first-run states and Enter-to-submit (it had none), a full-window `WelcomeOverlay`, Dashboard "Show welcome", the bigger chat welcome. Links from Welcome and the chat strip also move the rail highlight.
 - **Tests:** `OnboardingServiceTests` (9), `WelcomeAccessTests` (13), `WelcomeOverlayRenderTests` (headless member render), `LoginWindowInputTests` (headless typing).
+
+---
+
+## Phase 141 — Home: Dashboard + Welcome in One Place
+
+**Status:** Planned (2026-10-06) — plan agreed; design mock done (Home: *Admin / Member*, *First visit / Returning / All set*); code next.
+
+### Why
+
+Phase 140 gave every user a full-window Welcome page once, and a "Show welcome" button to reopen it. The Dashboard is where people actually come back to, every day. Two places to answer "what's going on, and what can Sovrant do for me" is one too many: the Welcome is seen once and forgotten, and the Dashboard never explains anything. Merging them gives the guidance a permanent home that people already visit.
+
+### Decisions (confirmed 2026-10-06)
+
+| Question | Decision |
+|---|---|
+| Shape | One **Home** page. Top to bottom: greeting header → the current Dashboard content (stats, activity) → the **Get started** checklist → **What Sovrant can do** (the eight info cards). Welcome content sits *below* the dashboard content |
+| First sign-in | **Retire the full-window Welcome.** Every sign-in lands on Home; on a user's first visit only, the greeting reads "Welcome to Sovrant, <name>" (afterwards "Good morning / afternoon / evening, <name>"). On first run, provider setup returns to Home |
+| Name | The nav item **Dashboard → Home**. The URL stays `/dashboard`, so links and bookmarks keep working |
+| Get started pill | While the checklist is unfinished, a **"Get started · n of m"** pill in the header scrolls down to it, so new users find it even below the fold |
+| Checklist when done | Collapses to one **"All set"** line, with **Dismiss**; dismissal is stored per user (`user_preferences`), like "welcome seen" |
+| Role rules | Unchanged from Phase 140: role-aware checklist; members see Integrations and Privacy & governance as "Managed by your admin", with no link |
+
+### What ships
+1. **Home page (Web + Desktop):**
+   - **Header:** greeting + tagline, the Get started pill (until done), Refresh.
+   - **Activity:** today's Dashboard stats and table, unchanged.
+   - **Get started:** the Phase 140 checklist (same items, ticked from real state); "All set" + Dismiss when complete.
+   - **What Sovrant can do:** the eight role-aware info cards.
+2. **Retire the Welcome page:** Web `/welcome` redirects to `/dashboard`; Desktop's Welcome overlay is removed. "Show welcome" buttons go away; the chat welcome's strip links to Home ("See everything on Home →").
+3. **Nav rename:** Dashboard → Home on both surfaces (rail, collapsed rail, command palette).
+4. **Design mock first:** the Home screen with *Admin / Member* and *First visit / Returning / All set* toggles; Welcome removed from the mock; parity diff still chrome-only.
+
+### Non-goals
+- Changing the Dashboard's stats or activity data.
+- Personalised tips or recommendations beyond the existing checklist and cards.
+
+### Relationship to other phases
+- **Phase 140:** reuses `OnboardingService` (areas, checklist, "seen" flag); replaces its Welcome page and overlay.
+- **Phase 98:** the User Dashboard content is kept as is, at the top of Home.
+
+### Acceptance criteria
+- [x] Mock: Home (admin + member; first visit, returning, all set) on both surfaces; Welcome screen removed; parity diff chrome-only
+- [ ] Nav says Home on Web and Desktop; `/dashboard` still works; `/welcome` redirects to Home
+- [ ] First visit greets with "Welcome to Sovrant, <name>"; later visits use the time-of-day greeting
+- [ ] The Get started pill shows while unfinished and scrolls to the checklist; "All set" + Dismiss once done, remembered per user
+- [ ] Members never get a link into an admin page from Home
+- [ ] Web + Desktop parity; verified live (fresh database, admin and member)
