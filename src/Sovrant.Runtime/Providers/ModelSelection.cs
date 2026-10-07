@@ -41,7 +41,12 @@ public static class ModelSelection
         // workspace default, then the first allowed profile.
         string? workspaceDefault = null;
         if (wsSettings is not null && !string.IsNullOrEmpty(workspaceId))
-            workspaceDefault = await wsSettings.GetAsync(workspaceId, WorkspaceSettingsKeys.ActiveProviderProfileId, ct).ConfigureAwait(false);
+        {
+            // Personal workspaces: the admin's default-set default; team workspaces: their own default.
+            if (WorkspaceIdentity.IsPersonal(workspaceId))
+                workspaceDefault = await wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileId, ct).ConfigureAwait(false);
+            workspaceDefault ??= await wsSettings.GetAsync(workspaceId, WorkspaceSettingsKeys.ActiveProviderProfileId, ct).ConfigureAwait(false);
+        }
         var fallback = allowed.FirstOrDefault(p => p.ProfileId == workspaceDefault) ?? allowed[0];
         return Pick(fallback, model: null);
     }

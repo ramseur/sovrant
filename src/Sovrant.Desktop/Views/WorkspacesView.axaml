@@ -125,6 +125,7 @@
                         <!-- Members section -->
                         <ScrollViewer>
                             <StackPanel Spacing="8">
+                                <StackPanel Spacing="8" IsVisible="{Binding !IsDefaultSetSelected}">
                                 <TextBlock Text="Members" FontSize="14" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}" />
 
@@ -182,13 +183,19 @@
                                     </StackPanel>
                                 </Border>
 
+                                </StackPanel>
+
                                 <!-- Providers section (admin only) -->
                                 <StackPanel Spacing="6" Margin="0,16,0,0"
                                             IsVisible="{Binding IsAdmin}">
                                     <TextBlock Text="Providers" FontSize="14" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextPrimary}" />
                                     <TextBlock Text="Select which configured providers are available in this workspace."
-                                               FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                               FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                                               IsVisible="{Binding !IsDefaultSetSelected}" />
+                                    <TextBlock Text="Allowed providers and their models, for every personal workspace."
+                                               FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                                               IsVisible="{Binding IsDefaultSetSelected}" />
 
                                     <TextBlock Text="Loading providers…" FontSize="12"
                                                Foreground="{DynamicResource TextMuted}"
@@ -216,6 +223,19 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
+
+                                    <!-- Phase 145 Part B: the default set's default model -->
+                                    <DockPanel IsVisible="{Binding IsDefaultSetSelected}" Margin="0,6,0,0">
+                                        <ComboBox DockPanel.Dock="Right" MinWidth="220"
+                                                  ItemsSource="{Binding DefaultModelOptions}"
+                                                  SelectedItem="{Binding SelectedDefaultModel}" />
+                                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="Default model" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Used until a member picks another, and when their pick isn't allowed here."
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DockPanel>
 
                                     <Button Content="Save Providers"
                                             Command="{Binding SaveProviderSettingsCommand}"

@@ -775,7 +775,7 @@ GET  /v1/evals/{name}/history
 
 **CLI:** use `sovrant auth set llm` (prompts without echo) to store the key in the same encrypted keystore, then set the base URL with `sovrant auth set base-url` or `LLM_BASE_URL`. Keys stored this way are managed, rotatable, and never land in shell history or config files.
 
-> **CI / scripted deployments and containers:** set `LLM_API_KEY` (plus optional `LLM_BASE_URL`, `SOVRANT_MODEL`) in the environment or a `.env` file. On first boot the key is imported into the encrypted keystore and every signed-up user without a provider gets one for it, so there's nothing to click through. After that the stored value wins; set `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply env values on every start.
+> **CI / scripted deployments and containers:** set `LLM_API_KEY` (plus optional `LLM_BASE_URL`, `SOVRANT_MODEL`) in the environment or a `.env` file. On first boot the key is imported into the encrypted keystore and becomes one shared provider (owned by the first admin) in the default model set for everyone's personal workspace, so there's nothing to click through. After that the stored value wins; set `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply env values on every start.
 
 > Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
 
@@ -1048,7 +1048,7 @@ Every variable works from the shell, a container's environment, or a `.env` file
 
 | Variable | Required | Description |
 |---|---|---|
-| `LLM_API_KEY` | Yes (or the setup screen / `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Signed-up users without a provider get one for it. Alias: `OPENAI_API_KEY` |
+| `LLM_API_KEY` | Yes (or the setup screen / `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Becomes one shared provider in the default model set for personal workspaces. Alias: `OPENAI_API_KEY` |
 | `LLM_BASE_URL` | No | Provider base URL. Default: inferred from the key (`sk-or-` → OpenRouter, `sk-ant-` → Anthropic), else `https://api.openai.com/v1` |
 | `SOVRANT_MODEL` | No | Default model when a user hasn't picked one |
 | `SOVRANT_ENV_KEYS_OVERRIDE` | No | `true` = env keys replace stored keys on every start (default: imported on first boot only) |

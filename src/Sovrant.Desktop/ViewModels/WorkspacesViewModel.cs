@@ -66,9 +66,22 @@ public partial class WorkspacesViewModel : ViewModelBase
     private async Task SelectWorkspaceAsync(WorkspaceItemViewModel workspace)
     {
         SelectedWorkspace = workspace;
-        await LoadMembersAsync(workspace);
+        if (workspace.IsDefaultSet) Members.Clear();
+        else await LoadMembersAsync(workspace);
         if (IsAdmin) await LoadProvidersAsync(workspace);
     }
+
+    // ── Phase 145 Part B: the default model set for personal workspaces ───────────────
+    private const string DefaultSetItemId = "__personal_default_set__";
+
+    /// <summary>True when "All personal workspaces" is selected.</summary>
+    public bool IsDefaultSetSelected => SelectedWorkspace?.IsDefaultSet == true;
+
+    /// <summary>Choices for the default set's default model ("" = first allowed provider).</summary>
+    public ObservableCollection<DefaultModelOption> DefaultModelOptions { get; } = [];
+
+    [ObservableProperty]
+    private DefaultModelOption? _selectedDefaultModel;
 
     [RelayCommand]
     private async Task CreateWorkspaceAsync()
@@ -156,7 +169,19 @@ public partial class WorkspacesViewModel : ViewModelBase
     private async Task SaveProviderSettingsAsync()
     {
         if (SelectedWorkspace is null) return;
-        var enabled = ProviderToggles.Where(t => t.IsEnabled).Select(t => t.ProfileId);
+        var enabled = ProviderToggles.Where(t => t.IsEnabled).Select(t => t.ProfileId).ToList();
+        if (SelectedWorkspace.IsDefaultSet)
+        {
+            var global = WorkspaceSettingsKeys.GlobalWorkspaceId;
+            await _wsSettings.SetAsync(global, WorkspaceSettingsKeys.PersonalDefaultProfileIds, string.Join(',', enabled));
+            var chosen = SelectedDefaultModel?.ProfileId;
+            if (string.IsNullOrEmpty(chosen) || !enabled.Contains(chosen))
+                await _wsSettings.DeleteAsync(global, WorkspaceSettingsKeys.PersonalDefaultProfileId);
+            else
+                await _wsSettings.SetAsync(global, WorkspaceSettingsKeys.PersonalDefaultProfileId, chosen);
+            StatusMessage = $"Default set saved: {enabled.Count} {(enabled.Count == 1 ? "provider" : "providers")} for every personal workspace.";
+            return;
+        }
         await _wsSettings.SetAsync(SelectedWorkspace.Id, WorkspaceSettingsKeys.EnabledProviderProfileIds,
             string.Join(',', enabled));
         StatusMessage = "Provider availability saved.";
@@ -168,7 +193,12 @@ public partial class WorkspacesViewModel : ViewModelBase
         try
         {
             var allProfiles = await _profileStore.ListAsync(DesktopUserId);
-            var enabledRaw = await _wsSettings.GetAsync(workspace.Id, WorkspaceSettingsKeys.EnabledProviderProfileIds);
+            var enabledRaw = workspace.IsDefaultSet
+                ? await _wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds)
+                : await _wsSettings.GetAsync(workspace.Id, WorkspaceSettingsKeys.EnabledProviderProfileIds);
+            var defaultId = workspace.IsDefaultSet
+                ? await _wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileId)
+                : null;
             var enabledIds = string.IsNullOrEmpty(enabledRaw)
                 ? []
                 : new HashSet<string>(enabledRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
@@ -181,9 +211,15 @@ public partial class WorkspacesViewModel : ViewModelBase
                     {
                         ProfileId = p.ProfileId,
                         Name = p.Name,
-                        ProviderKind = p.ProviderKind,
+                        ProviderKind = string.IsNullOrEmpty(p.DefaultModel) ? p.ProviderKind : $"{p.ProviderKind} · {p.DefaultModel}",
                         IsEnabled = enabledIds.Contains(p.ProfileId),
                     });
+                DefaultModelOptions.Clear();
+                DefaultModelOptions.Add(new DefaultModelOption(string.Empty, "First allowed provider"));
+                foreach (var p in allProfiles)
+                    DefaultModelOptions.Add(new DefaultModelOption(p.ProfileId,
+                        string.IsNullOrEmpty(p.DefaultModel) ? p.Name : $"{p.Name} · {p.DefaultModel}"));
+                SelectedDefaultModel = DefaultModelOptions.FirstOrDefault(o => o.ProfileId == (defaultId ?? string.Empty)) ?? DefaultModelOptions[0];
             });
         }
         catch (Exception ex) { StatusMessage = $"Could not load providers: {ex.Message}"; }
@@ -192,6 +228,7 @@ public partial class WorkspacesViewModel : ViewModelBase
 
     partial void OnSelectedWorkspaceChanged(WorkspaceItemViewModel? value)
     {
+        OnPropertyChanged(nameof(IsDefaultSetSelected));
         if (value is null) { Members.Clear(); ProviderToggles.Clear(); return; }
         DetailMarkdown = BuildWorkspaceMarkdown(value);
     }
@@ -216,6 +253,23 @@ public partial class WorkspacesViewModel : ViewModelBase
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 Workspaces.Clear();
+                if (IsAdmin)
+                {
+                    // Phase 145 Part B: the admin's default model set, one setting for every personal workspace.
+                    var defaultSet = new WorkspaceItemViewModel
+                    {
+                        Id = DefaultSetItemId,
+                        Name = "All personal workspaces",
+                        Slug = "Default set",
+                        IsPersonal = true, // no Delete
+                        IsDefaultSet = true,
+                    };
+                    defaultSet.Markdown =
+                        "## All personal workspaces\n\n**Everyone gets these in their personal workspace**, including people who join later. " +
+                        "Change it any time: added models appear in everyone's model picker; anyone using a removed model moves to the " +
+                        "default model on their next message (their conversations are kept).";
+                    Workspaces.Add(defaultSet);
+                }
                 foreach (var w in workspaces)
                 {
                     var myRole = roleMap.TryGetValue(w.WorkspaceId, out var r) ? r : null;
@@ -299,6 +353,8 @@ public partial class WorkspaceItemViewModel : ViewModelBase
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private string _slug = string.Empty;
     [ObservableProperty] private bool _isPersonal;
+    /// <summary>Phase 145 Part B: the "All personal workspaces" entry (the admin's default model set).</summary>
+    [ObservableProperty] private bool _isDefaultSet;
     [ObservableProperty] private DateTimeOffset _createdAt;
     [ObservableProperty] private WorkspaceRole? _myRole;
     public string Markdown { get; set; } = string.Empty;
@@ -333,4 +389,10 @@ public partial class WorkspaceToggleItem : ViewModelBase
     [ObservableProperty] private string _workspaceId = string.Empty;
     [ObservableProperty] private string _name = string.Empty;
     [ObservableProperty] private bool _isSelected;
+}
+
+/// <summary>Phase 145 Part B — a choice for the default set's default model.</summary>
+public sealed record DefaultModelOption(string ProfileId, string Label)
+{
+    public override string ToString() => Label;
 }

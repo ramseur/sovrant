@@ -136,6 +136,16 @@ public static class WorkspaceSettingsKeys
     public const string EnabledProviderProfileIds = "provider.enabled_profile_ids";
 
     /// <summary>
+    /// Phase 145 Part B (global row): the admin's default model set — comma-separated provider
+    /// profile IDs every personal workspace allows. Absent (never configured) = each personal
+    /// workspace keeps its own <see cref="EnabledProviderProfileIds"/> list, as before.
+    /// </summary>
+    public const string PersonalDefaultProfileIds = "provider.personal_default_profile_ids";
+
+    /// <summary>Phase 145 Part B (global row): the default profile for personal workspaces (its default model is used).</summary>
+    public const string PersonalDefaultProfileId = "provider.personal_default_profile_id";
+
+    /// <summary>
     /// Comma-separated list of MCP server IDs (McpServerEntry.Id) enabled for this workspace.
     /// When empty or absent, no MCP servers are available to workspace members — admin must explicitly opt in.
     /// </summary>

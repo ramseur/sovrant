@@ -15,10 +15,10 @@ namespace Sovrant.Runtime.Config;
 ///   <item><b>Boot:</b> each key's env value is imported into the encrypted credential store when
 ///   the store has no value yet. After that the store wins, so admin edits in the UI stick.
 ///   <c>SOVRANT_ENV_KEYS_OVERRIDE=true</c> re-imports env values on every start (CI, ephemeral containers).</item>
-///   <item><b>Per user:</b> when <c>LLM_API_KEY</c> is set and a signed-in user has no provider of their
-///   own yet, they get a provider profile for it (base URL from <c>LLM_BASE_URL</c> or inferred
-///   from the key, model from <c>SOVRANT_MODEL</c>), enabled for their personal workspace and made
-///   active, so it appears in the model menu with nothing to set up.</item>
+///   <item><b>Shared profile (Phase 145 Part B):</b> when <c>LLM_API_KEY</c> is set, one admin-owned
+///   provider profile for it (base URL from <c>LLM_BASE_URL</c> or inferred from the key, model from
+///   <c>SOVRANT_MODEL</c>), which becomes the default model set for personal workspaces if the admin
+///   hasn't chosen one, so a fresh container can chat with nothing to set up.</item>
 /// </list>
 /// Values are never logged; only variable names.
 /// </summary>
@@ -42,7 +42,7 @@ public static partial class EnvCredentialSeeder
     [LoggerMessage(Level = LogLevel.Information, Message = "Imported {Variable} from the environment into the encrypted credential store")]
     private static partial void LogImported(ILogger logger, string variable);
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Created provider profile '{ProfileId}' for {UserId} from LLM_API_KEY")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Created shared provider profile '{ProfileId}' (owned by admin {UserId}) from LLM_API_KEY")]
     private static partial void LogProfileCreated(ILogger logger, string profileId, string userId);
 
     /// <summary>The LLM key from the environment, if any (LLM_API_KEY, then its aliases).</summary>
@@ -111,72 +111,66 @@ public static partial class EnvCredentialSeeder
             config.Model = model.Trim();
     }
 
+    /// <summary>The one shared profile for <c>LLM_API_KEY</c>.</summary>
+    public const string SharedProfileId = "env-llm";
+
     /// <summary>
-    /// Gives a user without any provider a profile for the env LLM key (see class summary).
-    /// Does nothing when LLM_API_KEY isn't set, or the user already has a provider or an active choice.
+    /// Phase 145 Part B: members have no providers of their own, so <c>LLM_API_KEY</c> becomes one
+    /// shared, admin-owned provider profile (owned by the first active admin, so it shows under
+    /// Admin → Providers) instead of a profile per user. If the admin hasn't chosen a default model set
+    /// yet, it becomes the default set (and its default) for every personal workspace; a set the admin
+    /// already chose is never changed. Idempotent: runs at start-up and when the first admin signs up.
+    /// Does nothing without <c>LLM_API_KEY</c> or before any admin exists.
     /// </summary>
-    public static async Task EnsureUserProviderAsync(
-        IServiceProvider services, string userId, Func<string, string?> env, CancellationToken ct = default)
+    public static async Task EnsureSharedProfileAsync(IServiceProvider services, Func<string, string?> env, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(env);
-        if (string.IsNullOrEmpty(userId) || LlmKey(env) is not { } key)
+        if (LlmKey(env) is not { } key)
             return;
 
         var profiles = services.GetService<IProviderProfileStore>();
-        var prefs = services.GetService<IUserPreferenceStore>();
-        var workspaces = services.GetService<IWorkspaceService>();
+        var users = services.GetService<Sovrant.Runtime.Users.IUserService>();
         var wsSettings = services.GetService<IWorkspaceSettingsStore>();
-        if (profiles is null || prefs is null || workspaces is null || wsSettings is null)
+        if (profiles is null || users is null || wsSettings is null)
             return;
 
-        // Only for real, signed-up users: registration creates the personal workspace. Runtime start-up
-        // also applies preferences for the OS account name, which may have no user row; skip it.
-        var personal = await workspaces.GetPersonalAsync(userId, ct).ConfigureAwait(false);
-        if (personal is null)
-            return;
-        if (!string.IsNullOrEmpty(await prefs.GetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId, ct).ConfigureAwait(false)))
-            return;
-        if ((await profiles.ListAsync(userId, ct).ConfigureAwait(false)).Count > 0)
-            return;
-
-        var baseUrl = BaseUrlFor(key, env);
-        var kind = KindFor(baseUrl);
-        var model = env("SOVRANT_MODEL")?.Trim();
-        if (string.IsNullOrEmpty(model) || !PreferenceValidation.IsValidModelName(model))
-            model = null;
-
-        var now = DateTimeOffset.UtcNow;
-        var profileId = ProfileIdFor(userId);
-        await profiles.CreateAsync(new ProviderProfile(
-            ProfileId: profileId,
-            UserId: userId,
-            Name: $"{kind} (from environment)",
-            ProviderKind: kind,
-            BaseUrl: baseUrl.ToString(),
-            DefaultModel: model,
-            MaxTokens: 32000,
-            CredentialId: EnvProfileCredentialId,
-            CreatedAt: now,
-            UpdatedAt: now), ct).ConfigureAwait(false);
-
-        // Enable it for the user's personal workspace (workspace enablement is strict opt-in).
-        var raw = await wsSettings.GetAsync(personal.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds, ct).ConfigureAwait(false);
-        var ids = (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
-        if (!ids.Contains(profileId, StringComparer.Ordinal))
+        if (await profiles.GetAsync(SharedProfileId, ct).ConfigureAwait(false) is null)
         {
-            ids.Add(profileId);
-            await wsSettings.SetAsync(personal.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds, string.Join(',', ids), ct).ConfigureAwait(false);
+            var admin = (await users.ListAsync(ct: ct).ConfigureAwait(false))
+                .FirstOrDefault(u => string.Equals(u.Role, "admin", StringComparison.OrdinalIgnoreCase)
+                                  && string.Equals(u.Status, "active", StringComparison.OrdinalIgnoreCase));
+            if (admin is null)
+                return; // first boot: created when the first admin signs up
+
+            var baseUrl = BaseUrlFor(key, env);
+            var kind = KindFor(baseUrl);
+            var model = env("SOVRANT_MODEL")?.Trim();
+            if (string.IsNullOrEmpty(model) || !PreferenceValidation.IsValidModelName(model))
+                model = null;
+            var now = DateTimeOffset.UtcNow;
+            await profiles.CreateAsync(new ProviderProfile(
+                ProfileId: SharedProfileId,
+                UserId: admin.UserId,
+                Name: $"{kind} (from environment)",
+                ProviderKind: kind,
+                BaseUrl: baseUrl.ToString(),
+                DefaultModel: model,
+                MaxTokens: 32000,
+                CredentialId: EnvProfileCredentialId,
+                CreatedAt: now,
+                UpdatedAt: now), ct).ConfigureAwait(false);
+            if (services.GetService<ILoggerFactory>()?.CreateLogger(typeof(EnvCredentialSeeder)) is { } log)
+                LogProfileCreated(log, SharedProfileId, admin.UserId);
         }
 
-        await prefs.SetAsync(userId, UserPreferenceKeys.ActiveProviderProfileId, profileId, ct).ConfigureAwait(false);
-        await prefs.SetAsync(userId, UserPreferenceKeys.Provider, kind, ct).ConfigureAwait(false);
-        await prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, baseUrl.ToString(), ct).ConfigureAwait(false);
-        if (model is not null)
-            await prefs.SetAsync(userId, UserPreferenceKeys.Model, model, ct).ConfigureAwait(false);
-
-        if (services.GetService<ILoggerFactory>()?.CreateLogger(typeof(EnvCredentialSeeder)) is { } log)
-            LogProfileCreated(log, profileId, userId);
+        // Make it the default model set only if the admin hasn't chosen one.
+        var global = WorkspaceSettingsKeys.GlobalWorkspaceId;
+        if (await wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds, ct).ConfigureAwait(false) is null)
+        {
+            await wsSettings.SetAsync(global, WorkspaceSettingsKeys.PersonalDefaultProfileIds, SharedProfileId, ct).ConfigureAwait(false);
+            await wsSettings.SetAsync(global, WorkspaceSettingsKeys.PersonalDefaultProfileId, SharedProfileId, ct).ConfigureAwait(false);
+        }
     }
 
     /// <summary>LLM_BASE_URL when set; otherwise inferred from the key's prefix (OpenRouter, Anthropic), else OpenAI.</summary>
@@ -205,9 +199,6 @@ public static partial class EnvCredentialSeeder
         if (baseUrl.Port == 1234) return "LM Studio";
         return "OpenAI-compatible";
     }
-
-    private static string ProfileIdFor(string userId) =>
-        "env-" + new string(userId.Select(c => char.IsLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-').ToArray()).Trim('-');
 
     private static string? FirstValue(Func<string, string?> env, IEnumerable<string> variables) =>
         variables.Select(v => env(v)?.Trim()).FirstOrDefault(v => !string.IsNullOrEmpty(v));

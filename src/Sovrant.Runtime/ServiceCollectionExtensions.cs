@@ -620,12 +620,12 @@ public static class ServiceCollectionExtensions
 #pragma warning disable CA1031, CA1848 // best-effort, like the preference load around it
         try
         {
-            await Config.EnvCredentialSeeder.EnsureUserProviderAsync(services, userId, Environment.GetEnvironmentVariable, ct).ConfigureAwait(false);
+            await Config.EnvCredentialSeeder.EnsureSharedProfileAsync(services, Environment.GetEnvironmentVariable, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Runtime.EnvCredentialSeeder")
-                .LogWarning(ex, "Could not create a provider from LLM_API_KEY for {UserId}", userId);
+                .LogWarning(ex, "Could not create the shared provider from LLM_API_KEY");
         }
 #pragma warning restore CA1031, CA1848
 

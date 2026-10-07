@@ -43,6 +43,72 @@
             </div>
         </div>
 
+        @* Phase 145 Part B — the default model set: one setting for every personal workspace. *@
+        <div class="memory-list" style="margin-bottom:8px">
+            <div class="memory-card">
+                <div class="memory-content">
+                    <div class="memory-text">
+                        <strong>All personal workspaces</strong>
+                        <span class="outcome-badge info">Default set</span>
+                    </div>
+                    <div class="memory-meta">
+                        <span class="text-muted text-sm">Applies to every member's personal workspace, including people who join later</span>
+                    </div>
+                </div>
+                <div class="memory-actions">
+                    <button class="btn btn-sm btn-primary" @onclick="ToggleDefaultSetAsync">@(_defaultSetOpen ? "Close" : "Configure")</button>
+                </div>
+            </div>
+        </div>
+
+        @if (_defaultSetOpen)
+        {
+            <div class="admin-config-panel">
+                <h4>All personal workspaces</h4>
+                <div class="login-info" style="margin:8px 0 12px">
+                    <strong>Everyone gets these in their personal workspace</strong>, including people who join later.
+                    Change it any time: added models appear in everyone's model picker; anyone using a removed model
+                    moves to the default model on their next message (their conversations are kept).
+                </div>
+                <h5>Allowed providers and their models</h5>
+                @if (_allProfiles.Count == 0)
+                {
+                    <p class="text-secondary">No providers configured yet. <a href="/admin/providers">Add one →</a></p>
+                }
+                else
+                {
+                    @foreach (var p in _allProfiles)
+                    {
+                        <div class="form-group toggle-row">
+                            <div>
+                                <div class="toggle-title">@p.Name</div>
+                                <div class="text-sm text-muted">@p.ProviderKind@(string.IsNullOrEmpty(p.DefaultModel) ? "" : " · " + p.DefaultModel)</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked="@_defaultSetIds.Contains(p.ProfileId)"
+                                       @onchange="e => ToggleDefaultSet(p.ProfileId, (bool)(e.Value ?? false))" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    }
+                    <div class="form-group toggle-row">
+                        <div>
+                            <div class="toggle-title">Default model</div>
+                            <div class="text-sm text-muted">Used until a member picks another, and when their pick isn't allowed here.</div>
+                        </div>
+                        <select class="login-input" style="width:auto" @bind="_defaultSetDefault">
+                            <option value="">First allowed provider</option>
+                            @foreach (var p in _allProfiles.Where(p => _defaultSetIds.Contains(p.ProfileId)))
+                            {
+                                <option value="@p.ProfileId">@p.Name@(string.IsNullOrEmpty(p.DefaultModel) ? "" : " · " + p.DefaultModel)</option>
+                            }
+                        </select>
+                    </div>
+                    <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveDefaultSetAsync">Save default set</button>
+                }
+            </div>
+        }
+
         @if (_wsLoading)
         {
             <p class="loading-row">Loading workspaces…</p>
@@ -147,6 +213,10 @@
                 </div>
 
                 <h5>Providers</h5>
+                @if (_configWorkspace.Type == WorkspaceType.Personal)
+                {
+                    <p class="text-sm text-muted" style="margin-bottom:8px">Once a default set is saved (All personal workspaces), every personal workspace uses it and these toggles no longer apply.</p>
+                }
                 <p class="text-sm text-muted" style="margin-bottom:8px">Select which configured providers are available in this workspace. <a href="/admin/providers">Manage providers →</a></p>
                 @if (_allProfiles.Count == 0)
                 {
@@ -275,6 +345,7 @@
 
     private async Task ToggleConfigureWorkspace(Workspace ws)
     {
+        _defaultSetOpen = false;
         if (_configWorkspace?.WorkspaceId == ws.WorkspaceId) { _configWorkspace = null; return; }
         _configWorkspace = ws;
         var maxRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralMaxTokens);
@@ -349,6 +420,43 @@
                 Role: m.Role));
         }
         return rows;
+    }
+
+    // ── Phase 145 Part B: the default model set for personal workspaces ───────────────
+    private bool _defaultSetOpen;
+    private HashSet<string> _defaultSetIds = new(StringComparer.Ordinal);
+    private string _defaultSetDefault = string.Empty;
+
+    private async Task ToggleDefaultSetAsync()
+    {
+        _defaultSetOpen = !_defaultSetOpen;
+        if (!_defaultSetOpen) return;
+        _configWorkspace = null;
+        _allProfiles = (await ProfileStore.ListAsync(Session.UserId!)).ToList();
+        var raw = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds);
+        _defaultSetIds = new HashSet<string>((raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
+        _defaultSetDefault = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileId) ?? string.Empty;
+    }
+
+    private void ToggleDefaultSet(string profileId, bool enabled)
+    {
+        if (enabled) _defaultSetIds.Add(profileId);
+        else
+        {
+            _defaultSetIds.Remove(profileId);
+            if (_defaultSetDefault == profileId) _defaultSetDefault = string.Empty;
+        }
+    }
+
+    private async Task SaveDefaultSetAsync()
+    {
+        var ws = WorkspaceSettingsKeys.GlobalWorkspaceId;
+        await WsSettings.SetAsync(ws, WorkspaceSettingsKeys.PersonalDefaultProfileIds, string.Join(',', _defaultSetIds));
+        if (string.IsNullOrEmpty(_defaultSetDefault) || !_defaultSetIds.Contains(_defaultSetDefault))
+            await WsSettings.DeleteAsync(ws, WorkspaceSettingsKeys.PersonalDefaultProfileId);
+        else
+            await WsSettings.SetAsync(ws, WorkspaceSettingsKeys.PersonalDefaultProfileId, _defaultSetDefault);
+        _status = $"Default set saved: {_defaultSetIds.Count} {(_defaultSetIds.Count == 1 ? "provider" : "providers")} for every personal workspace.";
     }
 
     private void ToggleProvider(string profileId, bool enabled)

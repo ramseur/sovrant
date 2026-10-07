@@ -29,40 +29,46 @@ public static class ProviderProfileStoreExtensions
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(store);
-        var personal = await store.ListAsync(userId, ct).ConfigureAwait(false);
+        var own = await store.ListAsync(userId, ct).ConfigureAwait(false);
+        var result = new List<ProviderProfile>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        // Apply workspace-level provider filter when settings are available.
-        // Null key (never configured) is treated the same as empty — strict opt-in.
-        // Admin must explicitly enable providers per workspace for them to appear.
         if (wsSettings is not null && !string.IsNullOrEmpty(workspaceId))
         {
-            var raw = await wsSettings.GetAsync(workspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds, ct)
-                .ConfigureAwait(false);
-            var enabledIds = new HashSet<string>(
-                (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-                StringComparer.Ordinal);
-            personal = personal.Where(p => enabledIds.Contains(p.ProfileId)).ToList();
+            // Which configured profiles this workspace allows. Strict opt-in: a null or empty list
+            // allows none. Phase 145 Part B: personal workspaces use the admin's default model set
+            // when one is configured (else their own list, as before).
+            string? raw = null;
+            if (WorkspaceIdentity.IsPersonal(workspaceId))
+                raw = await wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds, ct).ConfigureAwait(false);
+            raw ??= await wsSettings.GetAsync(workspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds, ct).ConfigureAwait(false);
+            var enabledIds = (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            foreach (var p in own.Where(p => enabledIds.Contains(p.ProfileId, StringComparer.Ordinal)))
+                if (seen.Add(p.ProfileId)) result.Add(p);
+
+            // Phase 145 Part B: the admin-configured profiles allowed here. They're owned by the admin
+            // who created them, so the member's own list never contained them; members use them (the
+            // key never leaves the server) but have no providers or keys of their own.
+            foreach (var id in enabledIds)
+            {
+                if (seen.Contains(id)) continue;
+                if (await store.GetAsync(id, ct).ConfigureAwait(false) is { } shared && seen.Add(shared.ProfileId))
+                    result.Add(shared);
+            }
+        }
+        else
+        {
+            foreach (var p in own)
+                if (seen.Add(p.ProfileId)) result.Add(p);
         }
 
         if (string.IsNullOrEmpty(workspaceId))
-            return personal;
+            return result;
 
-        var workspace = await store.ListByWorkspaceAsync(workspaceId, ct).ConfigureAwait(false);
-        if (workspace.Count == 0)
-            return personal;
-
-        var seen = new HashSet<string>(personal.Count + workspace.Count, StringComparer.Ordinal);
-        var combined = new List<ProviderProfile>(personal.Count + workspace.Count);
-        foreach (var p in personal)
-        {
-            if (seen.Add(p.ProfileId))
-                combined.Add(p);
-        }
-        foreach (var w in workspace)
-        {
-            if (seen.Add(w.ProfileId))
-                combined.Add(w);
-        }
-        return combined;
+        // Profiles created for this workspace are always allowed in it.
+        foreach (var w in await store.ListByWorkspaceAsync(workspaceId, ct).ConfigureAwait(false))
+            if (seen.Add(w.ProfileId)) result.Add(w);
+        return result;
     }
 }

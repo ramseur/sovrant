@@ -135,6 +135,8 @@ public static class WebAuth
             try
             {
                 await Program.SeedUserAndWorkspaceAsync(services, userId).ConfigureAwait(false);
+                // LLM_API_KEY's shared profile appears once the first admin exists (Phase 145 Part B).
+                await Sovrant.Runtime.Config.EnvCredentialSeeder.EnsureSharedProfileAsync(services, Environment.GetEnvironmentVariable).ConfigureAwait(false);
             }
 #pragma warning disable CA1031 // best-effort; sign-in already succeeded
             catch (Exception ex)
