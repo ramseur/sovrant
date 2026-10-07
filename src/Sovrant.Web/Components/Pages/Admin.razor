@@ -18,7 +18,7 @@
 
     <div class="tab-bar">
         <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Users</button>
-        <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Registration</button>
+        <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Registration &amp; sign-in</button>
         <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">Password Reset</button>
     </div>
 
@@ -168,6 +168,59 @@
                 </label>
             </div>
         </div>
+
+        <!-- Phase 145 A7: how long people stay signed in -->
+        <div class="settings-section" style="margin-top:24px">
+            <h2>Sign-in</h2>
+            <p class="text-muted text-sm">How long people stay signed in on Web. Changes reach browsers that are already signed in at their next check (within about a minute); a longer limit never extends a sign-in that already exists.</p>
+
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Allow "Keep me signed in"</div>
+                    <div class="toggle-desc">Shows the checkbox on Sign in. Turn off where people shouldn't stay signed in for days — remembered browsers then follow the limits below.</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked="@_signIn.RememberAllowed" @onchange="ToggleRememberAsync" />
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Keep signed in for</div>
+                    <div class="toggle-desc">How long "Keep me signed in" lasts on a browser.</div>
+                </div>
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_rememberDays" @bind:after="SaveSignInSettingsAsync">
+                    @foreach (var v in Choices(WebSignInSettings.RememberDayChoices, _rememberDays))
+                    {
+                        <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromDays(v))</option>
+                    }
+                </select>
+            </div>
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Sign out after inactivity</div>
+                    <div class="toggle-desc">Renewed while the person is active.</div>
+                </div>
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_idleMinutes" @bind:after="SaveSignInSettingsAsync">
+                    @foreach (var v in Choices(WebSignInSettings.IdleMinuteChoices, _idleMinutes))
+                    {
+                        <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromMinutes(v))</option>
+                    }
+                </select>
+            </div>
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Sign out after at most</div>
+                    <div class="toggle-desc">However active they are, unless they chose "Keep me signed in".</div>
+                </div>
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_maxHours" @bind:after="SaveSignInSettingsAsync">
+                    @foreach (var v in Choices(WebSignInSettings.MaxHourChoices, _maxHours))
+                    {
+                        <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromHours(v))</option>
+                    }
+                </select>
+            </div>
+        </div>
     }
 
     @if (_tab == 2)
@@ -244,6 +297,7 @@
             FilterUsers();
             _registrationOpen = await IdentityService.IsRegistrationOpenAsync().ConfigureAwait(false);
             _approvalRequired = await IdentityService.IsApprovalRequiredAsync().ConfigureAwait(false);
+            LoadSignInSettings();
         }
         catch (Exception ex) { _error = $"Load failed: {ex.Message}"; }
         finally { _isLoading = false; }
@@ -260,7 +314,7 @@
     private async Task LoadSignInsAsync()
     {
         _signInService ??= Services.GetService<Sovrant.Runtime.Auth.IWebSignInService>();
-        _policy ??= Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicy>();
+        _policy = Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicySource>()?.Current;
         if (!SignInsEnabled) return;
         var all = await _signInService!.ListAllActiveAsync(_policy!).ConfigureAwait(false);
         _signIns = all.GroupBy(s => s.UserId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
@@ -273,11 +327,11 @@
 
     private string SignInMeta(Sovrant.Runtime.Auth.WebSignIn si) =>
         $"{si.IpAddress ?? "unknown IP"} · signed in {si.CreatedAt.LocalDateTime:g}"
-        + (si.Remember ? $" · kept {(int)Math.Round(_policy!.RememberLifetime.TotalDays)} days" : string.Empty);
+        + (_policy!.KeepsSignedIn(si) ? $" · kept {Sovrant.Runtime.Auth.WebSignInSettings.Describe(_policy.RememberLifetime)}" : string.Empty);
 
     private string ExpiresText(Sovrant.Runtime.Auth.WebSignIn si) =>
-        si.Remember ? si.ExpiresAt.LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture)
-        : _policy!.IdleTimeout == TimeSpan.FromHours(1) ? "1 h idle" : $"{(int)_policy.IdleTimeout.TotalMinutes} min idle";
+        _policy!.KeepsSignedIn(si) ? _policy.ExpiryOf(si).LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture)
+        : $"{Sovrant.Runtime.Auth.WebSignInSettings.Describe(_policy.IdleTimeout)} idle";
 
     private void ToggleSignIns(string userId)
     {
@@ -363,6 +417,38 @@
         _registrationOpen = (bool)(e.Value ?? false);
         await IdentityService.SetRegistrationOpenAsync(_registrationOpen).ConfigureAwait(false);
         _status = _registrationOpen ? "Registration opened." : "Registration closed.";
+    }
+
+    // ── Phase 145 A7: sign-in rules ─────────────────────────────────────────
+    private WebSignInSettings _signIn = WebSignInSettings.Load(null);
+    private int _rememberDays, _idleMinutes, _maxHours;
+
+    private Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore? SettingsStore =>
+        Services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>();
+
+    private void LoadSignInSettings()
+    {
+        _signIn = WebSignInSettings.Load(SettingsStore);
+        (_rememberDays, _idleMinutes, _maxHours) = (_signIn.RememberDays, _signIn.IdleMinutes, _signIn.MaxHours);
+    }
+
+    /// <summary>The standard choices, plus the current value if it came from an env variable and isn't one of them.</summary>
+    private static IEnumerable<int> Choices(IReadOnlyList<int> standard, int current) =>
+        standard.Contains(current) ? standard : standard.Append(current).Order();
+
+    private async Task ToggleRememberAsync(ChangeEventArgs e)
+    {
+        _signIn = _signIn with { RememberAllowed = (bool)(e.Value ?? false) };
+        await SaveSignInSettingsAsync();
+    }
+
+    private async Task SaveSignInSettingsAsync()
+    {
+        if (SettingsStore is not { } store) return;
+        _signIn = _signIn with { RememberDays = _rememberDays, IdleMinutes = _idleMinutes, MaxHours = _maxHours };
+        await _signIn.SaveAsync(store);
+        Services.GetService<WebSignInPolicySource>()?.Invalidate();
+        _status = "Sign-in settings saved.";
     }
 
     private async Task ToggleApprovalAsync(ChangeEventArgs e)

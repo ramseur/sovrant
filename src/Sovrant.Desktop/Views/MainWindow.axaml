@@ -194,9 +194,8 @@
                                     <StackPanel VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Sidebar.CurrentUserName}" FontSize="13"
                                                    Foreground="{DynamicResource TextPrimary}" />
-                                        <TextBlock Text="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole}" FontSize="11"
-                                                   Foreground="{DynamicResource TextSecondary}"
-                                                   IsVisible="{Binding Sidebar.ActiveContext.ActiveWorkspaceRole, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                                        <TextBlock Text="{Binding AccountRoleLabel}" FontSize="11"
+                                                   Foreground="{DynamicResource TextSecondary}" />
                                     </StackPanel>
                                 </StackPanel>
                             </Button>

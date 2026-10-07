@@ -57,9 +57,11 @@
                 <div class="rail-footer-avatar">@_userInitial</div>
                 <div class="rail-footer-info">
                     <div class="rail-footer-name">@_userName</div>
-                    @if (!string.IsNullOrEmpty(ActiveContext.WorkspaceRole))
+                    @* The account's role, not the workspace role: everyone owns their personal workspace, so
+                       that showed "owner" for every person. *@
+                    @if (Session.IsAuthenticated)
                     {
-                        <div class="rail-footer-sub">@ActiveContext.WorkspaceRole</div>
+                        <div class="rail-footer-sub">@(Session.IsAdmin ? "Admin" : "Member")</div>
                     }
                 </div>
             </button>
@@ -148,7 +150,7 @@
     private async Task WatchSignInAsync(CancellationToken ct)
     {
         var signIns = Services.GetService<Sovrant.Runtime.Auth.IWebSignInService>();
-        var policy = Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicy>();
+        var policy = Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicySource>()?.Current;
         if (signIns is null || policy is null || Session.SignInId is null) return;
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         try
@@ -213,7 +215,7 @@
     private async Task LoadAccountAsync()
     {
         var signIns = Services.GetService<Sovrant.Runtime.Auth.IWebSignInService>();
-        var policy = Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicy>();
+        var policy = Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicySource>()?.Current;
         if (signIns is null || policy is null || Session.UserId is null) return;
         var mine = await signIns.ListActiveAsync(Session.UserId, policy);
         _acctBrowsers = Math.Max(1, mine.Count);
@@ -223,11 +225,11 @@
 
     internal static string AccountLifetime(Sovrant.Runtime.Auth.WebSignIn? s, Sovrant.Runtime.Auth.WebSignInPolicy policy)
     {
-        if (s is { Remember: true })
-            return $"<b>Kept signed in for {(int)Math.Round(policy.RememberLifetime.TotalDays)} days</b> on this browser (until {s.ExpiresAt:d MMM}). You chose \"Keep me signed in\".";
-        var idle = policy.IdleTimeout == TimeSpan.FromHours(1) ? "1 hour" : $"{(int)policy.IdleTimeout.TotalMinutes} minutes";
+        if (s is not null && policy.KeepsSignedIn(s))
+            return $"<b>Kept signed in for {Sovrant.Runtime.Auth.WebSignInSettings.Describe(policy.RememberLifetime)}</b> on this browser (until {policy.ExpiryOf(s).LocalDateTime:d MMM}). You chose \"Keep me signed in\".";
+        var idle = Sovrant.Runtime.Auth.WebSignInSettings.Describe(policy.IdleTimeout);
         var since = s is null ? string.Empty : $" Signed in {Ago(DateTimeOffset.UtcNow - s.CreatedAt)}.";
-        return $"<b>Signed out after {idle} idle</b>, renewed while you're active ({policy.AbsoluteLifetime.TotalHours:0.#} hours at most).{since}";
+        return $"<b>Signed out after {idle} idle</b>, renewed while you're active ({Sovrant.Runtime.Auth.WebSignInSettings.Describe(policy.AbsoluteLifetime)} at most).{since}";
     }
 
     private static string Ago(TimeSpan t) =>

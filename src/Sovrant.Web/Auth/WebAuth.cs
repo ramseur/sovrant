@@ -60,7 +60,8 @@ public static class WebAuth
     /// <summary>Adds the cookie scheme, the sign-in policy and authorization.</summary>
     public static IServiceCollection AddSovrantWebAuth(this IServiceCollection services)
     {
-        services.AddSingleton(WebSignInPolicy.FromEnvironment(Environment.GetEnvironmentVariable));
+        // Phase 145 A7: admins set the rules under Users → Registration & sign-in; re-read every few seconds.
+        services.AddSingleton(sp => new WebSignInPolicySource(sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
         services.AddAuthentication(Scheme).AddScheme<AuthenticationSchemeOptions, WebAuthHandler>(Scheme, _ => { });
         services.AddAuthorization();
         services.AddCascadingAuthenticationState();
@@ -74,23 +75,23 @@ public static class WebAuth
     public static void MapSovrantWebAuth(this IEndpointRouteBuilder app)
     {
         app.MapPost("/auth/login", async ([FromForm] SignInForm? form, HttpContext ctx, IIdentityService identity,
-            IWebSignInService signIns, WebSignInPolicy policy, IServiceProvider services) =>
+            IWebSignInService signIns, WebSignInPolicySource policy, IServiceProvider services) =>
         {
             var result = await identity.LoginAsync(form?.Email ?? string.Empty, form?.Password ?? string.Empty, issueToken: false, ct: ctx.RequestAborted).ConfigureAwait(false);
             if (!result.Success || result.UserId is null)
                 return Results.Redirect(LoginUrl(error: result.Error ?? "Sign-in failed.", email: form?.Email));
-            return await SignInAsync(ctx, result.UserId, form?.IsRemember == true, signIns, policy, services).ConfigureAwait(false);
+            return await SignInAsync(ctx, result.UserId, form?.IsRemember == true, signIns, policy.Current, services).ConfigureAwait(false);
         });
 
         app.MapPost("/auth/register", async ([FromForm] SignInForm? form, HttpContext ctx, IIdentityService identity,
-            IWebSignInService signIns, WebSignInPolicy policy, IServiceProvider services) =>
+            IWebSignInService signIns, WebSignInPolicySource policy, IServiceProvider services) =>
         {
             var result = await identity.RegisterAsync(form?.Email ?? string.Empty, form?.Password ?? string.Empty, issueToken: false, ct: ctx.RequestAborted).ConfigureAwait(false);
             if (!result.Success || result.UserId is null)
                 return Results.Redirect(LoginUrl(error: result.Error ?? "Couldn't create the account.", email: form?.Email));
             if (result.IsPendingApproval)
                 return Results.Redirect(LoginUrl(info: "approval", email: form?.Email));
-            return await SignInAsync(ctx, result.UserId, form?.IsRemember == true, signIns, policy, services).ConfigureAwait(false);
+            return await SignInAsync(ctx, result.UserId, form?.IsRemember == true, signIns, policy.Current, services).ConfigureAwait(false);
         });
 
         app.MapPost("/auth/logout", async ([FromForm] SignOutForm? form, HttpContext ctx, IWebSignInService signIns) =>
@@ -181,7 +182,7 @@ internal sealed class WebAuthHandler(
     ILoggerFactory logger,
     UrlEncoder encoder,
     IWebSignInService signIns,
-    WebSignInPolicy policy) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
+    WebSignInPolicySource policy) : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -189,7 +190,7 @@ internal sealed class WebAuthHandler(
         if (string.IsNullOrEmpty(token))
             return AuthenticateResult.NoResult();
 
-        var check = await signIns.CheckAsync(token, policy, touch: !WebAuth.IsPassiveCheck(Request), Context.RequestAborted).ConfigureAwait(false);
+        var check = await signIns.CheckAsync(token, policy.Current, touch: !WebAuth.IsPassiveCheck(Request), Context.RequestAborted).ConfigureAwait(false);
         if (check.IsValid && check.SignIn is not null && check.Role is not null)
             return AuthenticateResult.Success(new AuthenticationTicket(WebAuth.ToPrincipal(check.SignIn, check.Role), WebAuth.Scheme));
 

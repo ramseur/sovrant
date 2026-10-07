@@ -1,5 +1,5 @@
 <meta charset="utf-8">
-<title>Sovrant Web — Design</title>
+<title>Sovrant Desktop — Design</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
 <style>
   :root {
@@ -9,7 +9,6 @@
     --t1:#1A1A1A; --t2:#666666; --t3:#999999;
     --page:#e4e2df; --ring:color-mix(in srgb,#6D52C6 45%,transparent);
     --ok:#3E9B54; --warn:#E0A33E; --fail:#D2453C;
-    --chrome:#DEE1E6; --chrometab:#FFFFFF; --omni:#F1F3F4;
   }
   @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
     --brand-soft:color-mix(in srgb,#6D52C6 22%,transparent);
@@ -18,7 +17,6 @@
     --t1:#FFFFFF; --t2:#999999; --t3:#666666;
     --page:#0f0f10; --ring:color-mix(in srgb,#6D52C6 55%,transparent);
     --ok:#4CAF50; --warn:#E0A33E; --fail:#F44336;
-    --chrome:#202124; --chrometab:#35363A; --omni:#292A2D;
   }}
   :root[data-theme="dark"]{
     --brand-soft:color-mix(in srgb,#6D52C6 22%,transparent);
@@ -27,7 +25,6 @@
     --t1:#FFFFFF; --t2:#999999; --t3:#666666;
     --page:#0f0f10; --ring:color-mix(in srgb,#6D52C6 55%,transparent);
     --ok:#4CAF50; --warn:#E0A33E; --fail:#F44336;
-    --chrome:#202124; --chrometab:#35363A; --omni:#292A2D;
   }
 
   *{box-sizing:border-box}
@@ -64,15 +61,15 @@
 
   /* ── browser chrome ── */
   .browser{display:flex;flex-direction:column;height:700px;border-radius:10px 10px 8px 8px;overflow:hidden;border:1px solid var(--border);box-shadow:0 18px 44px -24px rgba(0,0,0,.4);background:var(--chrome)}
-  .tabstrip{height:36px;background:var(--chrome);display:flex;align-items:flex-end;padding:0 8px;gap:6px;flex-shrink:0}
-  .tab{height:29px;min-width:180px;background:var(--chrometab);border-radius:8px 8px 0 0;display:flex;align-items:center;gap:8px;padding:0 11px;font-size:12px}
-  .fav{width:14px;height:14px;border-radius:4px;background:var(--brand);flex-shrink:0;display:flex;align-items:center;justify-content:center}
-  .fav svg{width:9px;height:9px}
-  .tab .x{margin-left:auto;color:var(--t3);font-size:13px;line-height:1}
-  .omnibar{height:40px;background:var(--chrometab);display:flex;align-items:center;gap:10px;padding:0 12px;flex-shrink:0}
-  .onav{display:flex;gap:4px;color:var(--t2)} .onav svg{width:15px;height:15px}
-  .ourl{flex:1;height:27px;border-radius:999px;background:var(--omni);display:flex;align-items:center;gap:8px;padding:0 12px;font-size:11.5px;color:var(--t2);font-family:'JetBrains Mono',monospace}
-  .ourl svg{width:11px;height:11px;opacity:.7;flex-shrink:0}
+  .titlebar{height:32px;background:var(--rail);border-bottom:1px solid var(--border);display:flex;align-items:center;padding-left:10px;gap:9px;flex-shrink:0}
+  .tico{width:15px;height:15px;border-radius:4px;background:var(--brand);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+  .tico svg{width:10px;height:10px}
+  .ttl2{font-size:12px;color:var(--t2)}
+  .wctl{margin-left:auto;display:flex;height:100%}
+  .wctl button{width:40px;height:100%;border:none;background:transparent;color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background .1s,color .1s}
+  .wctl button:hover{background:var(--hover);color:var(--t1)}
+  .wctl button.cl:hover{background:#E81123;color:#fff}
+  .wctl svg{width:10px;height:10px}
 
   .view{flex:1;display:flex;min-height:0;background:var(--bg);border-top:1px solid var(--border)}
 
@@ -519,9 +516,9 @@
 <div class="wrap">
   <div class="top">
     <div>
-      <span class="pill">Web &middot; Design</span>
-      <h1>Sovrant Web</h1>
-      <p>Every screen in one page. The 23 destinations behind the nav are not 23 designs — they're <b>five patterns</b> plus data. Pick a screen on the left; the badge on each entry says which pattern renders it. Designing the pattern once is what stops these screens drifting apart the way they have.</p>
+      <span class="pill">Desktop &middot; Design</span>
+      <h1>Sovrant Desktop</h1>
+      <p>Every screen in one page, matching <a href="web.html">web.html</a> pattern for pattern. Same five patterns, same metrics, same data — the only difference is the one the platform forces: a native titlebar instead of browser chrome and an address bar. Anything that diverges beyond that is drift, not design.</p>
     </div>
     <div style="display:flex;gap:8px">
       <div id="screenToggle" style="display:none;gap:8px"></div>
@@ -538,19 +535,19 @@
     <div class="stagearea">
       <div class="sheet" id="sheet"></div>
       <div class="browser">
-        <div class="tabstrip"><div class="tab"><span class="fav"><svg viewBox="0 0 24 24" fill="#FF9800"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></span><span>Sovrant</span><span class="x">&times;</span></div></div>
-        <div class="omnibar">
-          <div class="onav">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        <div class="titlebar">
+          <div class="tico"><svg viewBox="0 0 24 24" fill="#FF9800"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div><span class="ttl2" id="wintitle">Sovrant</span>
+          <div class="wctl">
+            <button title="Minimize"><svg viewBox="0 0 10 10" stroke="currentColor" stroke-width="1"><line x1="0" y1="5" x2="10" y2="5"/></svg></button>
+            <button title="Maximize"><svg viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1"><rect x="0.5" y="0.5" width="9" height="9"/></svg></button>
+            <button class="cl" title="Close"><svg viewBox="0 0 10 10" stroke="currentColor" stroke-width="1"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></svg></button>
           </div>
-          <div class="ourl"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><span id="url">localhost:5100/</span></div>
         </div>
         <div class="view" id="view"></div>
       </div>
 
       <div class="patterns">
-        <h2>The five patterns</h2>
+        <h2>The five patterns — identical to Web</h2>
         <table>
           <tr><th style="width:1%">Pattern</th><th style="width:1%">Screens</th><th>Covers</th></tr>
           <tr><td class="n">Browse</td><td class="num">15</td><td>Artifacts, Code Templates, Documents, Memory, Skills, Tools, Agents Library, Orchestration, Workflows, Projects, Users, Workspaces, Providers, Platform Integrations, System Integrations — a searchable list beside a detail pane. Same header, same toolbar, same empty state; only the item card and the detail fields differ. Orchestration's and Workflows' detail panes are the richest of the 15 (multiple sections instead of one key/value block) but the shell is identical.</td></tr>
@@ -794,7 +791,7 @@ const S = {
            {n:'ramseur@anant.us',mono:1,b:['Admin','Signed in on 1 browser'],tag:['Owner','b-brand']},
            {n:'priya@example.com',mono:1,b:['Member','Not signed in'],tag:null},
            {n:'jordan@example.com',mono:1,b:['Member','Awaiting approval'],tag:['Pending','b-warn']}],
-    note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side. A7: the Registration & sign-in tab holds how people get in and how long they stay in — admins can turn "Keep me signed in" off and set its length (default 14 days), the inactivity limit and the maximum; changes reach existing sign-ins at their next check, and longer limits never extend an existing one.'},
+    note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side.'},
   workspaces:{g:'admin',p:'Browse',t:'Workspaces',url:'/admin/workspaces',sub:'2 team workspaces · personal workspaces for 14 people',
     acts:[['New workspace',1]],
     items:[{n:'All personal workspaces',b:['Applies to every member\'s personal workspace','14 people'],tag:['Default set','b-brand']},
@@ -872,7 +869,8 @@ const USERS_REG_SECS=[
   ['Sign-in',[['Allow "Keep me signed in"','Shows the checkbox on Sign in. Turn off where people shouldn\'t stay signed in for days — remembered browsers then follow the limits below.','sw:1'],
               ['Keep signed in for','How long "Keep me signed in" lasts on a browser.','sel:14 days'],
               ['Sign out after inactivity','Renewed while the person is active.','sel:1 hour'],
-              ['Sign out after at most','However active they are, unless they chose "Keep me signed in".','sel:12 hours']]]];
+              ['Sign out after at most','However active they are, unless they chose "Keep me signed in".','sel:12 hours']]],
+  ['Password reset',[['Reset a password','Issue a one-time reset link for a user (valid 24 hours).','sel:Choose a user']]]];
 function setWelcomeRole(v){ welcomeRole=v; render(); }
 function setOrchView(v){ orchView=v; render(); }
 
@@ -911,7 +909,7 @@ function railHTML(s){
     ${convo}</div>
     ${fly}
     ${railOpen&&acctMenu?acctMenuHTML():''}
-    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">Admin</div></div></div></div>`:''}
+    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
   </div>`;
 }
 
@@ -1416,7 +1414,7 @@ function mcpChipHTML(){
 
 function render(){
   const s=S[cur];
-  document.getElementById('url').textContent='localhost:5100'+s.url;
+  document.getElementById('wintitle').textContent = s.p==='Entry' ? 'Sovrant — Sign in' : 'Sovrant';
   document.getElementById('sheet').innerHTML=`<span class="patt">${s.p}</span><b>${s.t}</b> — ${s.note}`;
   const ct=document.getElementById('screenToggle');
   if(cur==='chat'){
@@ -1484,8 +1482,8 @@ function placeSfGhost(){
   g.style.left=(rr.left-ra.left+120)+'px';
 }
 
-function setTheme(m){document.documentElement.setAttribute('data-theme',m);try{localStorage.setItem('sovrant-design-web-theme',m)}catch(e){}}
-try{const t=localStorage.getItem('sovrant-design-web-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}
+function setTheme(m){document.documentElement.setAttribute('data-theme',m);try{localStorage.setItem('sovrant-design-desktop-theme',m)}catch(e){}}
+try{const t=localStorage.getItem('sovrant-design-desktop-theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}
 /* Phase 136 — Icon vocabulary reference + brand treatment (Lucide ships no brand logos). */
 const BRANDS = {
   'Model providers':[['OpenAI','provider-cloud'],['Anthropic','provider-cloud'],['OpenRouter','provider-cloud'],['DeepSeek','provider-cloud'],['Groq','provider-cloud'],['Mistral','provider-cloud'],['Google','provider-cloud'],['Together AI','provider-cloud'],['Azure OpenAI','provider-cloud'],['Ollama','provider-local'],['LM Studio','provider-local']],

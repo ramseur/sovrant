@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Sovrant.Runtime.Storage;
+using Sovrant.Runtime.Workspaces;
 
 namespace Sovrant.Runtime.Auth;
 
@@ -17,10 +18,25 @@ public sealed record WebSignInPolicy(TimeSpan IdleTimeout, TimeSpan AbsoluteLife
     public const string MaxSessionHoursVariable = "SOVRANT_WEB_MAX_SESSION_HOURS";
     public const string RememberDaysVariable = "SOVRANT_WEB_REMEMBER_DAYS";
 
-    /// <summary>1 hour idle, 12 hours at most, 30 days with "Keep me signed in".</summary>
-    public static WebSignInPolicy Default { get; } = new(TimeSpan.FromHours(1), TimeSpan.FromHours(12), TimeSpan.FromDays(30));
+    /// <summary>1 hour idle, 12 hours at most, 14 days with "Keep me signed in" (was 30 before Phase 145 A7).</summary>
+    public static WebSignInPolicy Default { get; } = new(TimeSpan.FromHours(1), TimeSpan.FromHours(12), TimeSpan.FromDays(14));
 
     public bool RememberAllowed => RememberLifetime > TimeSpan.Zero;
+
+    /// <summary>
+    /// When <paramref name="s"/> ends under these rules if the person stays active: its own expiry, or
+    /// sooner if the rules have been tightened since it began (Phase 145 A7).
+    /// </summary>
+    public DateTimeOffset ExpiryOf(WebSignIn s)
+    {
+        ArgumentNullException.ThrowIfNull(s);
+        var limit = s.Remember && RememberAllowed ? RememberLifetime : AbsoluteLifetime;
+        var byPolicy = s.CreatedAt + limit;
+        return byPolicy < s.ExpiresAt ? byPolicy : s.ExpiresAt;
+    }
+
+    /// <summary>Whether <paramref name="s"/> is kept by "Keep me signed in" under these rules.</summary>
+    public bool KeepsSignedIn(WebSignIn s) => s is { Remember: true } && RememberAllowed;
 
     /// <summary>Reads the three limits from the environment; invalid or missing values keep the defaults.</summary>
     public static WebSignInPolicy FromEnvironment(Func<string, string?> env)
@@ -37,6 +53,100 @@ public sealed record WebSignInPolicy(TimeSpan IdleTimeout, TimeSpan AbsoluteLife
 
     private static double? Read(Func<string, string?> env, string name, double min) =>
         double.TryParse(env(name), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) && v >= min ? v : null;
+}
+
+/// <summary>
+/// Phase 145 A7 — the sign-in rules as admins set them (Users → Registration &amp; sign-in). Read from
+/// the global settings first, then the <c>SOVRANT_WEB_*</c> variables (starting values only), then the
+/// defaults — so an admin's choice always wins.
+/// </summary>
+public sealed record WebSignInSettings(bool RememberAllowed, int RememberDays, int IdleMinutes, int MaxHours)
+{
+    public static IReadOnlyList<int> RememberDayChoices { get; } = [7, 14, 30, 90];
+    public static IReadOnlyList<int> IdleMinuteChoices { get; } = [15, 30, 60, 120, 480];
+    public static IReadOnlyList<int> MaxHourChoices { get; } = [8, 12, 24];
+
+    public WebSignInPolicy ToPolicy() => new(
+        TimeSpan.FromMinutes(IdleMinutes), TimeSpan.FromHours(MaxHours),
+        RememberAllowed ? TimeSpan.FromDays(RememberDays) : TimeSpan.Zero);
+
+    public static WebSignInSettings Load(IWorkspaceSettingsStore? settings, Func<string, string?>? env = null)
+    {
+        var start = WebSignInPolicy.FromEnvironment(env ?? Environment.GetEnvironmentVariable);
+        var allowed = ReadBool(settings, WorkspaceSettingsKeys.WebSignInRememberAllowed) ?? start.RememberAllowed;
+        var days = ReadInt(settings, WorkspaceSettingsKeys.WebSignInRememberDays)
+            ?? (start.RememberAllowed ? (int)Math.Round(start.RememberLifetime.TotalDays) : (int)WebSignInPolicy.Default.RememberLifetime.TotalDays);
+        var idle = ReadInt(settings, WorkspaceSettingsKeys.WebSignInIdleMinutes) ?? (int)Math.Round(start.IdleTimeout.TotalMinutes);
+        var max = ReadInt(settings, WorkspaceSettingsKeys.WebSignInMaxHours) ?? (int)Math.Round(start.AbsoluteLifetime.TotalHours);
+        return new WebSignInSettings(allowed, Math.Max(1, days), Math.Max(1, idle), Math.Max(1, max));
+    }
+
+    public async Task SaveAsync(IWorkspaceSettingsStore store, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        var ws = WorkspaceSettingsKeys.GlobalWorkspaceId;
+        var inv = CultureInfo.InvariantCulture;
+        await store.SetAsync(ws, WorkspaceSettingsKeys.WebSignInRememberAllowed, RememberAllowed ? "true" : "false", ct).ConfigureAwait(false);
+        await store.SetAsync(ws, WorkspaceSettingsKeys.WebSignInRememberDays, RememberDays.ToString(inv), ct).ConfigureAwait(false);
+        await store.SetAsync(ws, WorkspaceSettingsKeys.WebSignInIdleMinutes, IdleMinutes.ToString(inv), ct).ConfigureAwait(false);
+        await store.SetAsync(ws, WorkspaceSettingsKeys.WebSignInMaxHours, MaxHours.ToString(inv), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>"1 hour", "30 minutes", "14 days" — for the Sign in checkbox and admin pickers.</summary>
+    public static string Describe(TimeSpan span) => span switch
+    {
+        { TotalDays: >= 1 } when span.TotalDays % 1 == 0 => Plural((int)span.TotalDays, "day"),
+        { TotalHours: >= 1 } when span.TotalHours % 1 == 0 => Plural((int)span.TotalHours, "hour"),
+        _ => Plural((int)Math.Round(span.TotalMinutes), "minute"),
+    };
+
+    private static string Plural(int n, string unit) => string.Create(CultureInfo.InvariantCulture, $"{n} {unit}{(n == 1 ? "" : "s")}");
+
+    private static string? Read(IWorkspaceSettingsStore? settings, string key)
+    {
+        if (settings is null) return null;
+        try { return settings.GetGlobalAsync(key).GetAwaiter().GetResult(); }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Data.Common.DbException) { return null; }
+    }
+
+    private static int? ReadInt(IWorkspaceSettingsStore? settings, string key) =>
+        int.TryParse(Read(settings, key), NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) && v > 0 ? v : null;
+
+    private static bool? ReadBool(IWorkspaceSettingsStore? settings, string key) =>
+        bool.TryParse(Read(settings, key), out var v) ? v : null;
+}
+
+/// <summary>
+/// The sign-in policy in force now: re-read from the settings at most every few seconds, so an admin's
+/// change reaches every check without a restart. <see cref="Invalidate"/> after saving applies it at once.
+/// </summary>
+public sealed class WebSignInPolicySource(IWorkspaceSettingsStore? settings, Func<string, string?>? env = null)
+{
+    private static readonly TimeSpan Ttl = TimeSpan.FromSeconds(5);
+    private readonly Lock _gate = new();
+    private WebSignInPolicy? _policy;
+    private DateTimeOffset _readAt;
+
+    public WebSignInPolicy Current
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_policy is null || DateTimeOffset.UtcNow - _readAt >= Ttl)
+                {
+                    _policy = WebSignInSettings.Load(settings, env).ToPolicy();
+                    _readAt = DateTimeOffset.UtcNow;
+                }
+                return _policy;
+            }
+        }
+    }
+
+    public void Invalidate()
+    {
+        lock (_gate) _policy = null;
+    }
 }
 
 /// <summary>One browser a person is signed in on.</summary>
@@ -293,9 +403,20 @@ internal sealed class SqliteWebSignInService(ISqliteConnectionFactory connection
         return await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
     }
 
-    /// <summary>Expired at the absolute or remember-me limit, or (without "Keep me signed in") after the idle timeout.</summary>
-    internal static bool IsExpired(WebSignIn s, WebSignInPolicy policy, DateTimeOffset now) =>
-        now >= s.ExpiresAt || (!s.Remember && now - s.LastActiveAt >= policy.IdleTimeout);
+    /// <summary>
+    /// Expired at the expiry it was given, or under the rules in force now (Phase 145 A7) — so a shorter
+    /// limit shortens existing sign-ins, and with "Keep me signed in" turned off a remembered sign-in
+    /// follows the idle and maximum limits. A longer limit never extends an existing sign-in.
+    /// </summary>
+    internal static bool IsExpired(WebSignIn s, WebSignInPolicy policy, DateTimeOffset now)
+    {
+        if (now >= s.ExpiresAt) return true;
+        var remembered = s.Remember && policy.RememberAllowed;
+        if (remembered)
+            return now >= s.CreatedAt + policy.RememberLifetime;
+        return now >= s.CreatedAt + policy.AbsoluteLifetime || now - s.LastActiveAt >= policy.IdleTimeout;
+    }
+
 
     private static WebSignIn Read(System.Data.Common.DbDataReader r) => new(
         SignInId: r.GetString(0),

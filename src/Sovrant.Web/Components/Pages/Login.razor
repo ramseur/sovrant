@@ -61,13 +61,13 @@
                        autocomplete="@(_firstRun ? "new-password" : "current-password")" required />
             </div>
 
-            @if (!_firstRun && _rememberDays > 0)
+            @if (!_firstRun && _rememberText is not null)
             {
                 <label class="login-remember">
                     <input type="checkbox" name="remember" />
-                    Keep me signed in on this browser for @_rememberDays days
+                    Keep me signed in on this browser for @_rememberText
                 </label>
-                <div class="login-hint">Otherwise you're signed out after @_idleText without activity. Leave this off on a shared computer.</div>
+                <div class="login-hint">Otherwise you're signed out after @_idleText without activity, or @_maxText at most. Leave this off on a shared computer.</div>
             }
 
             @if (_firstRun)
@@ -147,8 +147,9 @@
     private bool _registrationOpen;
     private bool _firstRun;
     private bool _approvalRequired;
-    private int _rememberDays;
-    private string _idleText = "an hour";
+    private string? _rememberText;
+    private string _idleText = "1 hour";
+    private string _maxText = "12 hours";
 
     protected override async Task OnInitializedAsync()
     {
@@ -167,10 +168,12 @@
             _ => null,
         };
 
-        if (Services.GetService<WebSignInPolicy>() is { } policy)
+        if (Services.GetService<WebSignInPolicySource>()?.Current is { } policy)
         {
-            _rememberDays = (int)Math.Round(policy.RememberLifetime.TotalDays);
-            _idleText = Describe(policy.IdleTimeout);
+            // Phase 145 A7: the admin's settings; no checkbox when "Keep me signed in" is turned off.
+            _rememberText = policy.RememberAllowed ? WebSignInSettings.Describe(policy.RememberLifetime) : null;
+            _idleText = WebSignInSettings.Describe(policy.IdleTimeout);
+            _maxText = WebSignInSettings.Describe(policy.AbsoluteLifetime);
             _warning = (Reason ?? Session.SignedOutReason) switch
             {
                 WebAuth.ReasonTimedOut => $"You were signed out after {_idleText} without activity. Sign in again to pick up where you left off.",
@@ -184,11 +187,6 @@
         _approvalRequired = !_firstRun && _registrationOpen
             && await IdentityService.IsApprovalRequiredAsync().ConfigureAwait(false);
     }
-
-    private static string Describe(TimeSpan t) =>
-        t == TimeSpan.FromHours(1) ? "an hour"
-        : t.TotalMinutes < 120 ? $"{(int)t.TotalMinutes} minutes"
-        : $"{t.TotalHours:0.#} hours";
 
     // ── Remote mode (until Phase 145 Part C): one process-wide sign-in, in-page ─────────────
 

@@ -79,6 +79,39 @@ public sealed class MultiUserWebTests(WebFixture web) : IClassFixture<WebFixture
     }
 
     [Fact]
+    public async Task Sign_In_Follows_The_Admins_Settings_And_Hides_Keep_Me_Signed_In_When_Off()
+    {
+        // Phase 145 A7. Tests in this class share one server, so put the settings back afterwards.
+        var store = web.Services.GetRequiredService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>();
+        var source = web.Services.GetRequiredService<WebSignInPolicySource>();
+        var before = WebSignInSettings.Load(store);
+        await web.EnsureUserAsync("kim@example.com"); // not first run, so Sign in shows the checkbox
+        try
+        {
+            await new WebSignInSettings(RememberAllowed: true, RememberDays: 7, IdleMinutes: 30, MaxHours: 8).SaveAsync(store);
+            source.Invalidate();
+            using var a = web.NewBrowser();
+            var page = await a.GetStringAsync(new Uri("/login", UriKind.Relative));
+            Assert.Contains("Keep me signed in on this browser for 7 days", page, StringComparison.Ordinal);
+            Assert.Contains("signed out after 30 minutes without activity, or 8 hours at most", page, StringComparison.Ordinal);
+
+            await (WebSignInSettings.Load(store) with { RememberAllowed = false }).SaveAsync(store);
+            source.Invalidate();
+            Assert.DoesNotContain("Keep me signed in", await a.GetStringAsync(new Uri("/login", UriKind.Relative)), StringComparison.Ordinal);
+
+            // Ticking it anyway (an old form) doesn't keep the browser signed in.
+            var cookie = (await web.PostFormAsync(a, "/auth/login", [new("email", "kim@example.com"), new("password", WebFixture.Password), new("remember", "on")]))
+                .Headers.GetValues("Set-Cookie").Single(c => c.StartsWith("sovrant_session=", StringComparison.Ordinal));
+            Assert.DoesNotContain("expires=", cookie, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await before.SaveAsync(store);
+            source.Invalidate();
+        }
+    }
+
+    [Fact]
     public async Task Status_Checks_Do_Not_Renew_The_Sign_In_But_Activity_Pings_Do()
     {
         var max = await web.SignedInAsync("max@example.com");

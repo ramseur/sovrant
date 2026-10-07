@@ -7,7 +7,8 @@ namespace Sovrant.Runtime.Tests.Auth;
 
 /// <summary>
 /// Phase 145 — per-browser Web sign-ins: 1 hour idle (renewed by activity), 12 hours at most,
-/// 30 days with "Keep me signed in"; revoke one or all; env-settable limits. Real SQLite, fake clock.
+/// 14 days with "Keep me signed in" (A7; was 30); revoke one or all; limits set by admins (A7) or env.
+/// Real SQLite, fake clock.
 /// </summary>
 public sealed class WebSignInServiceTests : IAsyncDisposable
 {
@@ -78,12 +79,12 @@ public sealed class WebSignInServiceTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task Keep_Me_Signed_In_Lasts_30_Days_Without_An_Idle_Limit()
+    public async Task Keep_Me_Signed_In_Lasts_14_Days_Without_An_Idle_Limit()
     {
         var (signIn, token) = await _signIns.CreateAsync("sam@example.com", remember: true, null, null, Policy);
         Assert.True(signIn.Remember);
 
-        _clock.Advance(TimeSpan.FromDays(29));
+        _clock.Advance(TimeSpan.FromDays(13));
         Assert.True((await _signIns.CheckAsync(token, Policy, touch: false)).IsValid);
         _clock.Advance(TimeSpan.FromDays(1));
         Assert.Equal(WebSignInStatus.TimedOut, (await _signIns.CheckAsync(token, Policy, touch: false)).Status);
@@ -160,6 +161,112 @@ public sealed class WebSignInServiceTests : IAsyncDisposable
 
         var defaults = WebSignInPolicy.FromEnvironment(k => k == WebSignInPolicy.IdleMinutesVariable ? "nonsense" : null);
         Assert.Equal(WebSignInPolicy.Default, defaults);
+    }
+
+    // ── Phase 145 A7: admins set the rules; tightening them reaches existing sign-ins ──────────
+
+    [Fact]
+    public async Task A_Shorter_Keep_Signed_In_Length_Shortens_Existing_Remembered_Sign_Ins()
+    {
+        var (_, token) = await _signIns.CreateAsync("sam@example.com", remember: true, null, null, Policy); // 14 days
+        var sevenDays = Policy with { RememberLifetime = TimeSpan.FromDays(7) };
+
+        _clock.Advance(TimeSpan.FromDays(6));
+        Assert.True((await _signIns.CheckAsync(token, sevenDays, touch: false)).IsValid);
+        _clock.Advance(TimeSpan.FromDays(1));
+        Assert.Equal(WebSignInStatus.TimedOut, (await _signIns.CheckAsync(token, sevenDays, touch: false)).Status);
+    }
+
+    [Fact]
+    public async Task Turning_Keep_Me_Signed_In_Off_Makes_Remembered_Sign_Ins_Follow_The_Idle_Limit()
+    {
+        var (signIn, token) = await _signIns.CreateAsync("sam@example.com", remember: true, null, null, Policy);
+        var off = Policy with { RememberLifetime = TimeSpan.Zero };
+        Assert.False(off.KeepsSignedIn(signIn));
+
+        _clock.Advance(TimeSpan.FromMinutes(59));
+        Assert.True((await _signIns.CheckAsync(token, off, touch: false)).IsValid);
+        _clock.Advance(TimeSpan.FromMinutes(2)); // 61 min idle
+        Assert.Equal(WebSignInStatus.TimedOut, (await _signIns.CheckAsync(token, off, touch: false)).Status);
+    }
+
+    [Fact]
+    public async Task A_Longer_Limit_Never_Extends_An_Existing_Sign_In()
+    {
+        var (signIn, token) = await _signIns.CreateAsync("sam@example.com", remember: true, null, null, Policy); // 14 days
+        var ninety = Policy with { RememberLifetime = TimeSpan.FromDays(90) };
+        Assert.Equal(signIn.ExpiresAt, ninety.ExpiryOf(signIn));
+
+        _clock.Advance(TimeSpan.FromDays(14));
+        Assert.Equal(WebSignInStatus.TimedOut, (await _signIns.CheckAsync(token, ninety, touch: false)).Status);
+    }
+
+    [Fact]
+    public async Task A_Shorter_Maximum_Shortens_Existing_Sign_Ins()
+    {
+        var (signIn, token) = await _signIns.CreateAsync("sam@example.com", remember: false, null, null, Policy); // 12 h
+        var eight = Policy with { AbsoluteLifetime = TimeSpan.FromHours(8) };
+        Assert.Equal(signIn.CreatedAt + TimeSpan.FromHours(8), eight.ExpiryOf(signIn));
+
+        for (var i = 0; i < 16; i++) // active every 30 minutes for 8 hours
+        {
+            _clock.Advance(TimeSpan.FromMinutes(30));
+            if (i < 15) Assert.True((await _signIns.CheckAsync(token, eight, touch: true)).IsValid);
+        }
+        Assert.Equal(WebSignInStatus.TimedOut, (await _signIns.CheckAsync(token, eight, touch: true)).Status);
+    }
+
+    [Fact]
+    public async Task Admin_Settings_Win_Over_Env_Variables_Which_Win_Over_Defaults()
+    {
+        var store = new MemorySettings();
+        var env = new Dictionary<string, string?> { [WebSignInPolicy.IdleMinutesVariable] = "30", [WebSignInPolicy.RememberDaysVariable] = "0" };
+        string? Env(string k) => env.GetValueOrDefault(k);
+
+        var fromEnv = WebSignInSettings.Load(store, Env);
+        Assert.Equal(30, fromEnv.IdleMinutes);   // env starting value
+        Assert.False(fromEnv.RememberAllowed);   // 0 days = off
+        Assert.Equal(14, fromEnv.RememberDays);  // default length kept for when it's turned on
+        Assert.Equal(12, fromEnv.MaxHours);      // default
+
+        await new WebSignInSettings(RememberAllowed: true, RememberDays: 7, IdleMinutes: 120, MaxHours: 8).SaveAsync(store);
+        var saved = WebSignInSettings.Load(store, Env);
+        Assert.Equal(new WebSignInSettings(true, 7, 120, 8), saved); // the admin's choice wins
+        Assert.Equal(new WebSignInPolicy(TimeSpan.FromHours(2), TimeSpan.FromHours(8), TimeSpan.FromDays(7)), saved.ToPolicy());
+
+        Assert.Equal(new WebSignInSettings(true, 14, 60, 12), WebSignInSettings.Load(null, _ => null)); // defaults
+    }
+
+    [Fact]
+    public async Task The_Policy_Source_Picks_Up_A_Saved_Change_After_Invalidate()
+    {
+        var store = new MemorySettings();
+        var source = new WebSignInPolicySource(store, _ => null);
+        Assert.True(source.Current.RememberAllowed);
+
+        await (WebSignInSettings.Load(store, _ => null) with { RememberAllowed = false }).SaveAsync(store);
+        source.Invalidate();
+        Assert.False(source.Current.RememberAllowed);
+    }
+
+    [Theory]
+    [InlineData(60, "1 hour")]
+    [InlineData(15, "15 minutes")]
+    [InlineData(480, "8 hours")]
+    [InlineData(20160, "14 days")]
+    [InlineData(1440, "1 day")]
+    public void Durations_Read_Naturally(int minutes, string expected) =>
+        Assert.Equal(expected, WebSignInSettings.Describe(TimeSpan.FromMinutes(minutes)));
+
+    private sealed class MemorySettings : Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore
+    {
+        private readonly Dictionary<string, string> _data = new(StringComparer.Ordinal);
+        public Task<string?> GetGlobalAsync(string key, CancellationToken ct = default) => Task.FromResult(_data.TryGetValue(key, out var v) ? v : null);
+        public Task<string?> GetAsync(string workspaceId, string key, CancellationToken ct = default) => GetGlobalAsync(key, ct);
+        public Task SetAsync(string workspaceId, string key, string value, CancellationToken ct = default) { _data[key] = value; return Task.CompletedTask; }
+        public Task DeleteAsync(string workspaceId, string key, CancellationToken ct = default) { _data.Remove(key); return Task.CompletedTask; }
+        public Task<IReadOnlyDictionary<string, string>> GetAllAsync(string workspaceId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>(_data, StringComparer.Ordinal));
     }
 
     private sealed class Clock(DateTimeOffset start) : TimeProvider

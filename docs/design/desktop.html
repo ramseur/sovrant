@@ -791,7 +791,7 @@ const S = {
            {n:'ramseur@anant.us',mono:1,b:['Admin','Signed in on 1 browser'],tag:['Owner','b-brand']},
            {n:'priya@example.com',mono:1,b:['Member','Not signed in'],tag:null},
            {n:'jordan@example.com',mono:1,b:['Member','Awaiting approval'],tag:['Pending','b-warn']}],
-    note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side.'},
+    note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side. A7: the Registration & sign-in tab holds how people get in and how long they stay in — admins can turn "Keep me signed in" off and set its length (default 14 days), the inactivity limit and the maximum; changes reach existing sign-ins at their next check, and longer limits never extend an existing one.'},
   workspaces:{g:'admin',p:'Browse',t:'Workspaces',url:'/admin/workspaces',sub:'2 team workspaces · personal workspaces for 14 people',
     acts:[['New workspace',1]],
     items:[{n:'All personal workspaces',b:['Applies to every member\'s personal workspace','14 people'],tag:['Default set','b-brand']},
@@ -855,12 +855,21 @@ function setMcpState(v){ mcpState=v; render(); }
 function toggleMcpMenu(){ mcpMenu=!mcpMenu; render(); }
 function setLoginState(v){ loginState=v; render(); }
 /* Phase 145 — account menu (rail footer) and Admin → Users sign-ins. */
-let acctMenu=false, acctRemember=false;
+let acctMenu=false, acctRemember=false, usersTab='people';
 /* Phase 145 Part B — which Workspaces row is open: the personal default set, or a team workspace. */
 let wsSel='personal';
 function setWsSel(v){ wsSel=v; render(); }
 function toggleAcct(){ acctMenu=!acctMenu; render(); }
 function setAcctRemember(v){ acctRemember=v; acctMenu=true; render(); }
+function setUsersTab(k){ usersTab=k; render(); }
+/* Phase 145 A7 — Users → "Registration & sign-in": how people get in, and how long they stay in. */
+const USERS_REG_SECS=[
+  ['Registration',[['Open registration','Anyone can create an account from the Sign in page.','sw:1'],
+                   ['Require admin approval','New accounts wait for an admin before they can sign in.','sw:0']]],
+  ['Sign-in',[['Allow "Keep me signed in"','Shows the checkbox on Sign in. Turn off where people shouldn\'t stay signed in for days — remembered browsers then follow the limits below.','sw:1'],
+              ['Keep signed in for','How long "Keep me signed in" lasts on a browser.','sel:14 days'],
+              ['Sign out after inactivity','Renewed while the person is active.','sel:1 hour'],
+              ['Sign out after at most','However active they are, unless they chose "Keep me signed in".','sel:12 hours']]]];
 function setWelcomeRole(v){ welcomeRole=v; render(); }
 function setOrchView(v){ orchView=v; render(); }
 
@@ -899,7 +908,7 @@ function railHTML(s){
     ${convo}</div>
     ${fly}
     ${railOpen&&acctMenu?acctMenuHTML():''}
-    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
+    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">Admin</div></div></div></div>`:''}
   </div>`;
 }
 
@@ -949,7 +958,7 @@ function workspaceModelsHTML(sel){
    or everywhere. Opens from the rail footer on every screen. */
 function acctMenuHTML(){
   const life = acctRemember
-    ? `<b>Kept signed in for 30 days</b> on this browser (until 5 Nov). You chose "Keep me signed in".`
+    ? `<b>Kept signed in for 14 days</b> on this browser (until 21 Oct). You chose "Keep me signed in".`
     : `<b>Signed out after 1 hour idle</b>, renewed while you're active (12 hours at most). Signed in today at 09:12.`;
   return `<div class="acct" role="menu">
     <div class="ah"><div class="av">ER</div><div><div class="an">ramseur</div><div class="ae">ramseur@anant.us · Admin</div></div></div>
@@ -1252,10 +1261,11 @@ function entryHTML(){
   const ok=st==='approval'?`<div class="lok">${sv(ICONS.done,2)}<span>Account created. An administrator must approve it before you can sign in.</span></div>`
     : st==='expired'?`<div class="lwarn">${sv(ICONS.warning,2)}<span>You were signed out after an hour without activity. Sign in again to pick up where you left off.</span></div>`
     : st==='revoked'?`<div class="lwarn">${sv(ICONS.warning,2)}<span>An administrator signed you out of this browser. Sign in again, or ask them if you didn't expect this.</span></div>`:'';
-  /* Phase 145 — signed out after 1 h idle (renewed by activity, 12 h at most); "Keep me signed in" makes it 30 days on this browser.
-     All three are env-settable (SOVRANT_WEB_IDLE_MINUTES, SOVRANT_WEB_MAX_SESSION_HOURS, SOVRANT_WEB_REMEMBER_DAYS; 0 hides the box). */
-  const remember=first?'':`<label class="lrem"><input type="checkbox"> Keep me signed in on this browser for 30 days</label>
-    <div class="lhint">Otherwise you're signed out after an hour without activity. Leave this off on a shared computer.</div>`;
+  /* Phase 145 — signed out after 1 h idle (renewed by activity, 12 h at most); "Keep me signed in" makes it 14 days on this browser.
+     A7: admins set all of this under Users → Registration & sign-in (the SOVRANT_WEB_* variables are only the starting values);
+     with "Keep me signed in" turned off there, the checkbox isn't shown. The text always uses the current settings. */
+  const remember=first?'':`<label class="lrem"><input type="checkbox"> Keep me signed in on this browser for 14 days</label>
+    <div class="lhint">Otherwise you're signed out after 1 hour without activity, or 12 hours at most. Leave this off on a shared computer.</div>`;
   const dis=working?' disabled':'';
   const fields=`<div class="fld"><label>Email</label><input class="li" placeholder="you@example.com"${working?' value="alex@example.com"':''}${dis}></div>
     <div class="fld"><label>Password</label><input class="li" type="password" placeholder="${first?'Choose a password':'Password'}"${working?' value="password123"':''}${dis}></div>`;
@@ -1421,7 +1431,9 @@ function render(){
   } else if(cur==='users'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${acctMenu?' on':''}" onclick="toggleAcct()">Account menu</button>`
-      +[[false,'1-hour idle sign-in'],[true,'Kept 30 days']].map(([v,t])=>`<button class="cbtn${acctMenu&&acctRemember===v?' on':''}" onclick="setAcctRemember(${v})">${t}</button>`).join('');
+      +[[false,'1-hour idle sign-in'],[true,'Kept 14 days']].map(([v,t])=>`<button class="cbtn${acctMenu&&acctRemember===v?' on':''}" onclick="setAcctRemember(${v})">${t}</button>`).join('')
+      +`<span class="tsep"></span>`
+      +[['people','Users tab'],['reg','Registration & sign-in tab']].map(([k,t])=>`<button class="cbtn${usersTab===k?' on':''}" onclick="setUsersTab('${k}')">${t}</button>`).join('');
   } else if(cur==='platformint'){
     ct.style.display='flex';
     ct.innerHTML=[['ok','Connected'],['network','Unreachable'],['auth','Credentials']].map(([k,t])=>`<button class="cbtn${mcpState===k?' on':''}" onclick="setMcpState('${k}')">${t}</button>`).join('')
@@ -1437,6 +1449,8 @@ function render(){
   } else { ct.style.display='none'; }
   let inner='';
   if(s.p==='Entry') inner=entryHTML();
+  else if(cur==='users'&&usersTab==='reg') inner=settingsHTML({...s,acts:[],sub:'Registration & sign-in',secs:USERS_REG_SECS,
+      note:'Phase 145 A7 — sign-in rules for everyone. Changes apply at each browser\'s next check (within about a minute): shorter limits shorten existing sign-ins, turning "Keep me signed in" off makes remembered browsers follow the inactivity and maximum limits, and longer limits never extend a sign-in that already exists.'});
   else if(s.p==='Browse') inner=browseHTML(s);
   else if(s.p==='Overview') inner=overviewHTML(s);
   else if(s.p==='Settings') inner=settingsHTML(s);
@@ -1497,6 +1511,7 @@ function buildIconRef(){
   if(h.has('activity')) homeTab='activity';
   for(const st of ['first','returning','allset','dismissed']) if(h.has(st)) homeState=st;
   if(h.has('users')) cur='users';
+  if(h.has('usersreg')) { cur='users'; usersTab='reg'; }
   if(h.has('workspaces')) cur='workspaces';
   if(h.has('governance')) cur='governance';
   if(h.has('teamws')) { cur='workspaces'; wsSel='team'; }

@@ -58,6 +58,9 @@ public partial class MainViewModel : ViewModelBase
 
     public bool IsAdmin => _principal.IsAdmin;
 
+    /// <summary>Under the name in the sidebar footer: the account's role (not the workspace role, which is "owner" for everyone's personal workspace).</summary>
+    public string AccountRoleLabel => _principal.IsAdmin ? "Admin" : "Member";
+
     [ObservableProperty]
     private bool _isNavCollapsed;
 

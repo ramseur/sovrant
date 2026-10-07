@@ -147,7 +147,7 @@ public partial class AdminViewModel : ViewModelBase
 
     // ── Phase 145: who is signed in on Web (same database), with Revoke ───────────
     private readonly IWebSignInService? _webSignIns;
-    private readonly WebSignInPolicy _webPolicy = WebSignInPolicy.FromEnvironment(Environment.GetEnvironmentVariable);
+    private WebSignInPolicy _webPolicy = WebSignInPolicy.Default;
 
     /// <summary>Every browser signed in to Sovrant Web, one row each.</summary>
     public ObservableCollection<WebSignInRow> WebSignIns { get; } = [];
@@ -158,6 +158,7 @@ public partial class AdminViewModel : ViewModelBase
     private async Task LoadWebSignInsAsync()
     {
         WebSignIns.Clear();
+        LoadSignInSettings();
         if (_webSignIns is not null)
         {
             foreach (var s in await _webSignIns.ListAllActiveAsync(_webPolicy).ConfigureAwait(true))
@@ -234,6 +235,57 @@ public partial class AdminViewModel : ViewModelBase
         await _users.ReactivateAsync(user.UserId).ConfigureAwait(true);
         Status = $"{user.Email ?? user.UserId} reactivated.";
         await LoadAsync().ConfigureAwait(true);
+    }
+
+    // ── Phase 145 A7: Web sign-in rules (Users → Registration & sign-in) ────────────
+    public IReadOnlyList<SignInChoice> RememberDayChoices { get; } =
+        [.. WebSignInSettings.RememberDayChoices.Select(d => new SignInChoice(d, WebSignInSettings.Describe(TimeSpan.FromDays(d))))];
+    public IReadOnlyList<SignInChoice> IdleMinuteChoices { get; } =
+        [.. WebSignInSettings.IdleMinuteChoices.Select(m => new SignInChoice(m, WebSignInSettings.Describe(TimeSpan.FromMinutes(m))))];
+    public IReadOnlyList<SignInChoice> MaxHourChoices { get; } =
+        [.. WebSignInSettings.MaxHourChoices.Select(h => new SignInChoice(h, WebSignInSettings.Describe(TimeSpan.FromHours(h))))];
+
+    [ObservableProperty] private bool _rememberAllowed;
+    [ObservableProperty] private SignInChoice? _selectedRememberDays;
+    [ObservableProperty] private SignInChoice? _selectedIdleMinutes;
+    [ObservableProperty] private SignInChoice? _selectedMaxHours;
+    private bool _loadingSignInSettings;
+
+    private void LoadSignInSettings()
+    {
+        var s = WebSignInSettings.Load(_wsSettings);
+        _webPolicy = s.ToPolicy();
+        _loadingSignInSettings = true;
+        RememberAllowed = s.RememberAllowed;
+        SelectedRememberDays = Pick(RememberDayChoices, s.RememberDays);
+        SelectedIdleMinutes = Pick(IdleMinuteChoices, s.IdleMinutes);
+        SelectedMaxHours = Pick(MaxHourChoices, s.MaxHours);
+        _loadingSignInSettings = false;
+    }
+
+    // A value set by an env variable that isn't a standard choice shows as the nearest one until changed.
+    private static SignInChoice Pick(IReadOnlyList<SignInChoice> choices, int value) =>
+        choices.FirstOrDefault(c => c.Value == value) ?? choices.MinBy(c => Math.Abs(c.Value - value))!;
+
+    partial void OnRememberAllowedChanged(bool value) => SaveSignInSettings();
+    partial void OnSelectedRememberDaysChanged(SignInChoice? value) => SaveSignInSettings();
+    partial void OnSelectedIdleMinutesChanged(SignInChoice? value) => SaveSignInSettings();
+    partial void OnSelectedMaxHoursChanged(SignInChoice? value) => SaveSignInSettings();
+
+    private async void SaveSignInSettings()
+    {
+        if (_loadingSignInSettings || SelectedRememberDays is null || SelectedIdleMinutes is null || SelectedMaxHours is null) return;
+        try
+        {
+            var s = new WebSignInSettings(RememberAllowed, SelectedRememberDays.Value, SelectedIdleMinutes.Value, SelectedMaxHours.Value);
+            await s.SaveAsync(_wsSettings).ConfigureAwait(true);
+            _webPolicy = s.ToPolicy();
+            Status = "Sign-in settings saved. Web applies them within about a minute.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Data.Common.DbException)
+        {
+            Error = $"Couldn't save sign-in settings: {ex.Message}";
+        }
     }
 
     [RelayCommand]
@@ -451,6 +503,12 @@ public sealed record WorkspaceProviderProfile(string ProfileId, string Name, str
 
 public sealed record ConfigWorkspaceMemberRow(string UserId, string DisplayName, string Email, WorkspaceRole Role);
 
+/// <summary>Phase 145 A7 — one choice in a sign-in limit picker.</summary>
+public sealed record SignInChoice(int Value, string Label)
+{
+    public override string ToString() => Label;
+}
+
 /// <summary>Phase 145 — one browser signed in to Sovrant Web, for Desktop's Admin → Users.</summary>
 public sealed record WebSignInRow(string SignInId, string UserId, string Browser, string Meta, string LastActive, string Expires)
 {
@@ -459,10 +517,10 @@ public sealed record WebSignInRow(string SignInId, string UserId, string Browser
         var ago = DateTimeOffset.UtcNow - s.LastActiveAt;
         var lastActive = ago.TotalMinutes < 1 ? "Just now" : ago.TotalMinutes < 60 ? $"{(int)ago.TotalMinutes} min ago"
             : ago.TotalHours < 24 ? $"{(int)ago.TotalHours} h ago" : s.LastActiveAt.LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture);
-        var expires = s.Remember ? s.ExpiresAt.LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture)
-            : policy.IdleTimeout == TimeSpan.FromHours(1) ? "1 h idle" : $"{(int)policy.IdleTimeout.TotalMinutes} min idle";
+        var expires = policy.KeepsSignedIn(s) ? policy.ExpiryOf(s).LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture)
+            : $"{WebSignInSettings.Describe(policy.IdleTimeout)} idle";
         var meta = $"{s.IpAddress ?? "unknown IP"} · signed in {s.CreatedAt.LocalDateTime.ToString("g", System.Globalization.CultureInfo.CurrentCulture)}"
-            + (s.Remember ? $" · kept {(int)Math.Round(policy.RememberLifetime.TotalDays)} days" : string.Empty);
+            + (policy.KeepsSignedIn(s) ? $" · kept {WebSignInSettings.Describe(policy.RememberLifetime)}" : string.Empty);
         return new WebSignInRow(s.SignInId, s.UserId, WebSignInText.DescribeBrowser(s.UserAgent), meta, lastActive, expires);
     }
 }

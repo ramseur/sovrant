@@ -72,12 +72,12 @@
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsUsersTab}" />
 
-                <Button Content="Registration"
+                <Button Content="Registration &amp; sign-in"
                         Command="{Binding SelectTabCommand}" CommandParameter="1"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource BrandPrimary}" Foreground="White"
                         IsVisible="{Binding IsRegistrationTab}" />
-                <Button Content="Registration"
+                <Button Content="Registration &amp; sign-in"
                         Command="{Binding SelectTabCommand}" CommandParameter="1"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
@@ -277,6 +277,84 @@
                             <TextBlock Text="Require admin approval" FontWeight="SemiBold"
                                        FontSize="14" Foreground="{DynamicResource TextPrimary}" />
                             <TextBlock Text="New accounts start as pending and cannot log in until an admin approves them."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <!-- Phase 145 A7: how long people stay signed in on Web -->
+                <TextBlock Text="Sign-in" FontWeight="SemiBold" FontSize="15" Margin="0,12,0,0"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="How long people stay signed in on Web. Changes reach browsers already signed in within about a minute; a longer limit never extends a sign-in that already exists."
+                           FontSize="13" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right"
+                                  IsChecked="{Binding RememberAllowed}"
+                                  VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Allow &quot;Keep me signed in&quot;" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Shows the checkbox on Sign in. Turn off where people shouldn't stay signed in for days — remembered browsers then follow the limits below."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding RememberDayChoices}"
+                                  SelectedItem="{Binding SelectedRememberDays}"
+                                  MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Keep signed in for" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="How long &quot;Keep me signed in&quot; lasts on a browser."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding IdleMinuteChoices}"
+                                  SelectedItem="{Binding SelectedIdleMinutes}"
+                                  MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Sign out after inactivity" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Renewed while the person is active."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding MaxHourChoices}"
+                                  SelectedItem="{Binding SelectedMaxHours}"
+                                  MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Sign out after at most" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="However active they are, unless they chose &quot;Keep me signed in&quot;."
                                        FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                        TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>

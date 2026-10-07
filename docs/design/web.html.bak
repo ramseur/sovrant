@@ -794,7 +794,7 @@ const S = {
            {n:'ramseur@anant.us',mono:1,b:['Admin','Signed in on 1 browser'],tag:['Owner','b-brand']},
            {n:'priya@example.com',mono:1,b:['Member','Not signed in'],tag:null},
            {n:'jordan@example.com',mono:1,b:['Member','Awaiting approval'],tag:['Pending','b-warn']}],
-    note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side. A7: the Registration & sign-in tab holds how people get in and how long they stay in — admins can turn "Keep me signed in" off and set its length (default 14 days), the inactivity limit and the maximum; changes reach existing sign-ins at their next check, and longer limits never extend an existing one.'},
+    note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side.'},
   workspaces:{g:'admin',p:'Browse',t:'Workspaces',url:'/admin/workspaces',sub:'2 team workspaces · personal workspaces for 14 people',
     acts:[['New workspace',1]],
     items:[{n:'All personal workspaces',b:['Applies to every member\'s personal workspace','14 people'],tag:['Default set','b-brand']},
@@ -872,7 +872,8 @@ const USERS_REG_SECS=[
   ['Sign-in',[['Allow "Keep me signed in"','Shows the checkbox on Sign in. Turn off where people shouldn\'t stay signed in for days — remembered browsers then follow the limits below.','sw:1'],
               ['Keep signed in for','How long "Keep me signed in" lasts on a browser.','sel:14 days'],
               ['Sign out after inactivity','Renewed while the person is active.','sel:1 hour'],
-              ['Sign out after at most','However active they are, unless they chose "Keep me signed in".','sel:12 hours']]]];
+              ['Sign out after at most','However active they are, unless they chose "Keep me signed in".','sel:12 hours']]],
+  ['Password reset',[['Reset a password','Issue a one-time reset link for a user (valid 24 hours).','sel:Choose a user']]]];
 function setWelcomeRole(v){ welcomeRole=v; render(); }
 function setOrchView(v){ orchView=v; render(); }
 
@@ -911,7 +912,7 @@ function railHTML(s){
     ${convo}</div>
     ${fly}
     ${railOpen&&acctMenu?acctMenuHTML():''}
-    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">Admin</div></div></div></div>`:''}
+    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">owner</div></div></div></div>`:''}
   </div>`;
 }
 
