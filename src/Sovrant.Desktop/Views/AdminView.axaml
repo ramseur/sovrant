@@ -295,7 +295,7 @@
                         BorderThickness="1">
                     <DockPanel>
                         <CheckBox DockPanel.Dock="Right"
-                                  IsChecked="{Binding RememberAllowed}"
+                                  IsChecked="{Binding RememberAllowed}" IsEnabled="{Binding RememberAllowedLock.IsEditable}"
                                   VerticalAlignment="Center" />
                         <StackPanel Spacing="2">
                             <TextBlock Text="Allow &quot;Keep me signed in&quot;" FontWeight="SemiBold"
@@ -303,6 +303,8 @@
                             <TextBlock Text="Shows the checkbox on Sign in. Turn off where people shouldn't stay signed in for days — remembered browsers then follow the limits below."
                                        FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                        TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding RememberAllowedLock.Note}" IsVisible="{Binding RememberAllowedLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -313,7 +315,7 @@
                         BorderThickness="1">
                     <DockPanel>
                         <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding RememberDayChoices}"
-                                  SelectedItem="{Binding SelectedRememberDays}"
+                                  SelectedItem="{Binding SelectedRememberDays}" IsEnabled="{Binding RememberDaysLock.IsEditable}"
                                   MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
                         <StackPanel Spacing="2">
                             <TextBlock Text="Keep signed in for" FontWeight="SemiBold"
@@ -321,6 +323,8 @@
                             <TextBlock Text="How long &quot;Keep me signed in&quot; lasts on a browser."
                                        FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                        TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding RememberDaysLock.Note}" IsVisible="{Binding RememberDaysLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -331,7 +335,7 @@
                         BorderThickness="1">
                     <DockPanel>
                         <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding IdleMinuteChoices}"
-                                  SelectedItem="{Binding SelectedIdleMinutes}"
+                                  SelectedItem="{Binding SelectedIdleMinutes}" IsEnabled="{Binding IdleMinutesLock.IsEditable}"
                                   MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
                         <StackPanel Spacing="2">
                             <TextBlock Text="Sign out after inactivity" FontWeight="SemiBold"
@@ -339,6 +343,8 @@
                             <TextBlock Text="Renewed while the person is active."
                                        FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                        TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding IdleMinutesLock.Note}" IsVisible="{Binding IdleMinutesLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -349,7 +355,7 @@
                         BorderThickness="1">
                     <DockPanel>
                         <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding MaxHourChoices}"
-                                  SelectedItem="{Binding SelectedMaxHours}"
+                                  SelectedItem="{Binding SelectedMaxHours}" IsEnabled="{Binding MaxHoursLock.IsEditable}"
                                   MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
                         <StackPanel Spacing="2">
                             <TextBlock Text="Sign out after at most" FontWeight="SemiBold"
@@ -357,6 +363,8 @@
                             <TextBlock Text="However active they are, unless they chose &quot;Keep me signed in&quot;."
                                        FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                        TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding MaxHoursLock.Note}" IsVisible="{Binding MaxHoursLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>
                     </DockPanel>
                 </Border>
@@ -367,7 +375,7 @@
                         BorderThickness="1">
                     <DockPanel>
                         <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding RunMinuteChoices}"
-                                  SelectedItem="{Binding SelectedRunMinutes}"
+                                  SelectedItem="{Binding SelectedRunMinutes}" IsEnabled="{Binding RunMinutesLock.IsEditable}"
                                   MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
                         <StackPanel Spacing="2">
                             <TextBlock Text="Stop runs after" FontWeight="SemiBold"
@@ -375,6 +383,8 @@
                             <TextBlock Text="A reply, workflow or swarm still running after this long is stopped, keeping what it finished. Signing out doesn't stop your work; Sign out everywhere and Revoke do."
                                        FontSize="12" Foreground="{DynamicResource TextSecondary}"
                                        TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding RunMinutesLock.Note}" IsVisible="{Binding RunMinutesLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>
                     </DockPanel>
                 </Border>

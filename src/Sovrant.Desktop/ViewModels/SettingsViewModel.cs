@@ -25,6 +25,10 @@ namespace Sovrant.Desktop.ViewModels;
 public partial class SettingsViewModel : ViewModelBase
 #pragma warning restore CA1001
 {
+    // Phase 148: the key from LLM_API_KEY while SOVRANT_ENV_OVERRIDE is on: shown locked, not saved.
+    public Sovrant.Runtime.Config.EnvLock ApiKeyLock { get; } =
+        Sovrant.Runtime.Config.EnvLock.ForCredential(Sovrant.Api.Auth.CredentialKeys.LlmApiKey);
+
     private readonly SovrantConfig _config;
     private readonly IPermissionModeAccessor _permissionModeAccessor;
     private readonly SidebarViewModel _sidebar;
@@ -658,7 +662,7 @@ public partial class SettingsViewModel : ViewModelBase
             // (server) and ApplyUserPreferencesAsync (boot path) both look up
             // CredentialKeys.LlmApiKey, so writing here keeps the running process
             // and the next boot in agreement.
-            if (!string.IsNullOrWhiteSpace(ApiKey))
+            if (!string.IsNullOrWhiteSpace(ApiKey) && ApiKeyLock.IsEditable)
                 await _credentials.StoreAsync(CredentialKeys.LlmApiKey, new string(ApiKey.Where(c => c < 128).ToArray()).Trim());
 
             // Hot-swap runtime config, env vars, and auth provider.

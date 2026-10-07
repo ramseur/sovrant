@@ -247,6 +247,9 @@
   /* pattern: SETTINGS (sectioned form) */
   .form{max-width:760px;padding:0 22px 26px;display:flex;flex-direction:column;gap:16px}
   .fsec{border:1px solid var(--border);border-radius:11px;background:var(--card);overflow:hidden}
+  .frowi.locked > .sw, .frowi.locked > select, .frowi.locked > input{opacity:.45;pointer-events:none}
+  .fenv{font-size:12px;color:var(--t2);margin-top:6px;padding:6px 9px;border-radius:7px;border:1px dashed var(--border)}
+  .fenv code{font-size:11.5px}
   .fsec > h4{margin:0;font-size:13px;font-weight:600;padding:13px 16px;border-bottom:1px solid var(--border)}
   .frowi{display:flex;align-items:center;gap:16px;padding:13px 16px;border-bottom:1px solid var(--border)}
   .frowi:last-child{border-bottom:none}
@@ -855,13 +858,16 @@ function setMcpState(v){ mcpState=v; render(); }
 function toggleMcpMenu(){ mcpMenu=!mcpMenu; render(); }
 function setLoginState(v){ loginState=v; render(); }
 /* Phase 145 — account menu (rail footer) and Admin → Users sign-ins. */
-let acctMenu=false, acctRemember=false, usersTab='people';
+let acctMenu=false, acctRemember=false, usersTab='people', envOverride=false;
 /* Phase 145 Part B — which Workspaces row is open: the personal default set, or a team workspace. */
 let wsSel='personal';
 function setWsSel(v){ wsSel=v; render(); }
 function toggleAcct(){ acctMenu=!acctMenu; render(); }
 function setAcctRemember(v){ acctRemember=v; acctMenu=true; render(); }
 function setUsersTab(k){ usersTab=k; render(); }
+function toggleEnvOverride(){ envOverride=!envOverride; render(); }
+/* Phase 148: with SOVRANT_ENV_OVERRIDE on, these Governance rows come from the environment. */
+const GOV_ENV_LOCKS={'Retain audit log':'SOVRANT_GOVERNANCE_AUDIT_LOG','Allow file and shell tools on this server':'SOVRANT_GOVERNANCE_HOST_FILE_TOOLS'};
 /* Phase 145 A7 — Users → "Registration & sign-in": how people get in, and how long they stay in. */
 const USERS_REG_SECS=[
   ['Registration',[['Open registration','Anyone can create an account from the Sign in page.','sw:1'],
@@ -1036,14 +1042,18 @@ function overviewHTML(s){
 }
 
 function fsecHTML(secs){
-  return secs.map(([h,rows])=>`<div class="fsec">${h?`<h4>${h}</h4>`:''}${rows.map(([t,d,ctl])=>{
+  return secs.map(([h,rows])=>`<div class="fsec">${h?`<h4>${h}</h4>`:''}${rows.map(([t,d,ctl0])=>{
+    /* Phase 148: "@SOVRANT_X" on a control = set by the server's environment with SOVRANT_ENV_OVERRIDE on:
+       the control is disabled and the row says why and how to change it. */
+    const [ctl,lockVar]=ctl0.split('@');
     const [kind,val]=ctl.split(':');
     let c='';
     if(kind==='sw') c=`<div class="sw${val==='1'?' on':''}"></div>`;
     if(kind==='n') c=`<input class="inpb" style="min-width:110px;text-align:right" value="${val}">`;
     if(kind==='sel') c=`<select class="inpb"><option>${val}</option></select>`;
     if(kind==='st'){const m={ok:['b-ok','Healthy'],fail:['b-warn','Failing'],mut:['b-mut','Offline']}[val];c=`<span class="badge ${m[0]}" style="margin:0">${m[1]}</span>`;}
-    return `<div class="frowi"><div class="fl"><div class="ft">${t}</div>${d?`<div class="fd">${d}</div>`:''}</div>${c}</div>`;
+    const note=lockVar?`<div class="fenv">Set by the server's environment (<code>${lockVar}</code>). To change it here, turn off <code>SOVRANT_ENV_OVERRIDE</code>.</div>`:'';
+    return `<div class="frowi${lockVar?' locked':''}"><div class="fl"><div class="ft">${t}</div>${d?`<div class="fd">${d}</div>`:''}${note}</div>${c}</div>`;
   }).join('')}</div>`).join('');
 }
 function settingsHTML(s){
@@ -1429,6 +1439,9 @@ function render(){
   } else if(cur==='workspaces'){
     ct.style.display='flex';
     ct.innerHTML=[['personal','Default set'],['team','Team workspace']].map(([k,t])=>`<button class="cbtn${wsSel===k?' on':''}" onclick="setWsSel('${k}')">${t}</button>`).join('');
+  } else if(cur==='governance'){
+    ct.style.display='flex';
+    ct.innerHTML=`<button class="cbtn${envOverride?' on':''}" onclick="toggleEnvOverride()">SOVRANT_ENV_OVERRIDE on</button>`;
   } else if(cur==='users'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${acctMenu?' on':''}" onclick="toggleAcct()">Account menu</button>`
@@ -1454,7 +1467,9 @@ function render(){
       note:'Phase 145 A7 — sign-in rules for everyone. Changes apply at each browser\'s next check (within about a minute): shorter limits shorten existing sign-ins, turning "Keep me signed in" off makes remembered browsers follow the inactivity and maximum limits, and longer limits never extend a sign-in that already exists.'});
   else if(s.p==='Browse') inner=browseHTML(s);
   else if(s.p==='Overview') inner=overviewHTML(s);
-  else if(s.p==='Settings') inner=settingsHTML(s);
+  else if(s.p==='Settings') inner=settingsHTML(cur==='governance'&&envOverride
+      ? {...s,secs:s.secs.map(([h,rows])=>[h,rows.map(([t,d,c])=>[t,d,GOV_ENV_LOCKS[t]?`${c}@${GOV_ENV_LOCKS[t]}`:c])])}
+      : s);
   else if(s.p==='Conversation') inner=chatHTML(s);
   document.getElementById('view').innerHTML = (s.g
     ? railHTML(s)+`<div class="content">${ctxHTML(s)}<div class="body">${inner}</div></div>`
@@ -1515,6 +1530,7 @@ function buildIconRef(){
   if(h.has('usersreg')) { cur='users'; usersTab='reg'; }
   if(h.has('workspaces')) cur='workspaces';
   if(h.has('governance')) cur='governance';
+  if(h.has('envlock')) { cur='governance'; envOverride=true; }
   if(h.has('teamws')) { cur='workspaces'; wsSel='team'; }
   if(h.has('login')) cur='login';
   if(h.has('acct')) acctMenu=true;

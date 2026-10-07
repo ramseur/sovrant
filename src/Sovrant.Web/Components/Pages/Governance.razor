@@ -20,8 +20,9 @@
         <div class="gov-field-row">
             <div>
                 <span class="gov-field-label">Governance Level</span>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceLevel)" />
             </div>
-            <select class="gov-field-input" @bind="_level">
+            <select class="gov-field-input" @bind="_level" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceLevel)">
                 <option value="permissive">Permissive</option>
                 <option value="standard">Standard</option>
                 <option value="strict">Strict</option>
@@ -32,9 +33,10 @@
             <div>
                 <div class="toggle-title">Audit Logging</div>
                 <div class="toggle-desc">Log all agent actions for audit trail</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceAuditLog)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_auditLog" />
+                <input type="checkbox" @bind="_auditLog" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceAuditLog)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -43,9 +45,10 @@
             <div>
                 <div class="toggle-title">Allow file and shell tools on this server</div>
                 <div class="toggle-desc">Read, write, search and run commands on this server — for everyone, admins included. These tools run as the server's own account with no folder limits, so an agent could reach other people's files, the database and the server's settings. Leave off unless this server is used by one trusted team.</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceHostFileTools)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_hostFileTools" />
+                <input type="checkbox" @bind="_hostFileTools" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceHostFileTools)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -53,9 +56,10 @@
             <div>
                 <div class="toggle-title">Let members use file and shell tools</div>
                 <div class="toggle-desc">Only applies when file and shell tools are allowed on this server. Off: only admins can use them.</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceMemberFileTools)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_memberFileTools" disabled="@(!_hostFileTools)" />
+                <input type="checkbox" @bind="_memberFileTools" disabled="@(!_hostFileTools || Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceMemberFileTools))" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -63,9 +67,10 @@
 
     <!-- Blocked Commands -->
     <h2>Blocked Commands</h2>
+    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceBlockedCommands)" />
     <div class="input-group input-group-tight">
-        <input type="text" @bind="_newBlockedCmd" placeholder="e.g. rm -rf /" />
-        <button class="btn-primary btn-inline-add" @onclick="AddBlockedCommand">Add</button>
+        <input type="text" @bind="_newBlockedCmd" placeholder="e.g. rm -rf /" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceBlockedCommands)" />
+        <button class="btn-primary btn-inline-add" @onclick="AddBlockedCommand" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceBlockedCommands)">Add</button>
     </div>
     @if (_blockedCommands.Count == 0)
     {
@@ -75,15 +80,16 @@
     {
         <div class="gov-item gov-item-danger">
             <code class="gov-item-text gov-text-danger">@cmd</code>
-            <button class="btn-sm btn-danger" @onclick="() => _blockedCommands.Remove(cmd)">Remove</button>
+            <button class="btn-sm btn-danger" @onclick="() => _blockedCommands.Remove(cmd)" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceBlockedCommands)">Remove</button>
         </div>
     }
 
     <!-- Protected Files -->
     <h2 class="mt-16">Protected Files</h2>
+    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceProtectedFiles)" />
     <div class="input-group input-group-tight">
-        <input type="text" @bind="_newProtectedFile" placeholder="e.g. .env, credentials.json" />
-        <button class="btn-primary btn-inline-add" @onclick="AddProtectedFile">Add</button>
+        <input type="text" @bind="_newProtectedFile" placeholder="e.g. .env, credentials.json" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceProtectedFiles)" />
+        <button class="btn-primary btn-inline-add" @onclick="AddProtectedFile" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceProtectedFiles)">Add</button>
     </div>
     @if (_protectedFiles.Count == 0)
     {
@@ -93,15 +99,16 @@
     {
         <div class="gov-item gov-item-warn">
             <code class="gov-item-text gov-text-warn">@f</code>
-            <button class="btn-sm btn-danger" @onclick="() => _protectedFiles.Remove(f)">Remove</button>
+            <button class="btn-sm btn-danger" @onclick="() => _protectedFiles.Remove(f)" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceProtectedFiles)">Remove</button>
         </div>
     }
 
     <!-- Secret Patterns -->
     <h2 class="mt-16">Secret Detection Patterns</h2>
+    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceSecretPatterns)" />
     <div class="input-group input-group-tight">
-        <input type="text" @bind="_newSecretPattern" placeholder="e.g. sk-[a-zA-Z0-9]+" />
-        <button class="btn-primary btn-inline-add" @onclick="AddSecretPattern">Add</button>
+        <input type="text" @bind="_newSecretPattern" placeholder="e.g. sk-[a-zA-Z0-9]+" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceSecretPatterns)" />
+        <button class="btn-primary btn-inline-add" @onclick="AddSecretPattern" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceSecretPatterns)">Add</button>
     </div>
     @if (_secretPatterns.Count == 0)
     {
@@ -111,7 +118,7 @@
     {
         <div class="gov-item gov-item-default">
             <code class="gov-item-text">@p</code>
-            <button class="btn-sm btn-danger" @onclick="() => _secretPatterns.Remove(p)">Remove</button>
+            <button class="btn-sm btn-danger" @onclick="() => _secretPatterns.Remove(p)" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceSecretPatterns)">Remove</button>
         </div>
     }
 
@@ -131,6 +138,10 @@
     private string _newProtectedFile = string.Empty;
     private string _newSecretPattern = string.Empty;
     private string _status = string.Empty;
+
+    // Phase 148: settings the server's environment sets while SOVRANT_ENV_OVERRIDE is on.
+    private static string? Lock(string key) => Sovrant.Runtime.Config.EnvBackedSettings.LockedBy(key);
+    private static bool Locked(string key) => Lock(key) is not null;
 
     protected override void OnInitialized()
     {

@@ -72,12 +72,20 @@ public sealed record WebSignInSettings(bool RememberAllowed, int RememberDays, i
 
     public static WebSignInSettings Load(IWorkspaceSettingsStore? settings, Func<string, string?>? env = null)
     {
-        var start = WebSignInPolicy.FromEnvironment(env ?? Environment.GetEnvironmentVariable);
-        var allowed = ReadBool(settings, WorkspaceSettingsKeys.WebSignInRememberAllowed) ?? start.RememberAllowed;
-        var days = ReadInt(settings, WorkspaceSettingsKeys.WebSignInRememberDays)
-            ?? (start.RememberAllowed ? (int)Math.Round(start.RememberLifetime.TotalDays) : (int)WebSignInPolicy.Default.RememberLifetime.TotalDays);
-        var idle = ReadInt(settings, WorkspaceSettingsKeys.WebSignInIdleMinutes) ?? (int)Math.Round(start.IdleTimeout.TotalMinutes);
-        var max = ReadInt(settings, WorkspaceSettingsKeys.WebSignInMaxHours) ?? (int)Math.Round(start.AbsoluteLifetime.TotalHours);
+        var e = env ?? Environment.GetEnvironmentVariable;
+        var start = WebSignInPolicy.FromEnvironment(e);
+        // Phase 148: with SOVRANT_ENV_OVERRIDE on, a set variable wins (the app shows it locked).
+        var envWins = Config.EnvOverride.IsOn(e);
+        bool FromEnv(string variable) => envWins && !string.IsNullOrWhiteSpace(e(variable));
+        var envDays = start.RememberAllowed ? (int)Math.Round(start.RememberLifetime.TotalDays) : (int)WebSignInPolicy.Default.RememberLifetime.TotalDays;
+        var allowed = FromEnv(WebSignInPolicy.RememberDaysVariable) ? start.RememberAllowed
+            : ReadBool(settings, WorkspaceSettingsKeys.WebSignInRememberAllowed) ?? start.RememberAllowed;
+        var days = FromEnv(WebSignInPolicy.RememberDaysVariable) ? envDays
+            : ReadInt(settings, WorkspaceSettingsKeys.WebSignInRememberDays) ?? envDays;
+        var idle = FromEnv(WebSignInPolicy.IdleMinutesVariable) ? (int)Math.Round(start.IdleTimeout.TotalMinutes)
+            : ReadInt(settings, WorkspaceSettingsKeys.WebSignInIdleMinutes) ?? (int)Math.Round(start.IdleTimeout.TotalMinutes);
+        var max = FromEnv(WebSignInPolicy.MaxSessionHoursVariable) ? (int)Math.Round(start.AbsoluteLifetime.TotalHours)
+            : ReadInt(settings, WorkspaceSettingsKeys.WebSignInMaxHours) ?? (int)Math.Round(start.AbsoluteLifetime.TotalHours);
         return new WebSignInSettings(allowed, Math.Max(1, days), Math.Max(1, idle), Math.Max(1, max));
     }
 

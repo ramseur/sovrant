@@ -40,10 +40,12 @@
                     BorderBrush="{DynamicResource SurfaceBorder}"
                     BorderThickness="1">
                 <StackPanel Orientation="Horizontal" Spacing="12">
-                    <CheckBox IsChecked="{Binding Enabled}" />
+                    <CheckBox IsChecked="{Binding Enabled}" IsEnabled="{Binding EnabledLock.IsEditable}" />
                     <StackPanel>
                         <TextBlock Text="Trust Boundary Enabled" FontWeight="SemiBold" FontSize="14"
                                    Foreground="{DynamicResource TextPrimary}" />
+                        <TextBlock Text="{Binding EnabledLock.Note}" IsVisible="{Binding EnabledLock.IsLocked}"
+                                   FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         <TextBlock Text="Master switch for the entire pipeline (sanitizer + intent verification)."
                                    FontSize="11" Foreground="{DynamicResource TextMuted}" />
                     </StackPanel>
@@ -59,17 +61,19 @@
                     BorderThickness="1">
                 <StackPanel Spacing="10">
                     <StackPanel Orientation="Horizontal" Spacing="12">
-                        <CheckBox IsChecked="{Binding SanitizerEnabled}" />
+                        <CheckBox IsChecked="{Binding SanitizerEnabled}" IsEnabled="{Binding SanitizerEnabledLock.IsEditable}" />
                         <StackPanel>
                             <TextBlock Text="Sanitizer Enabled" FontWeight="SemiBold" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="{Binding SanitizerEnabledLock.Note}" IsVisible="{Binding SanitizerEnabledLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                             <TextBlock Text="Detect and act on PII, corporate data, and custom patterns."
                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>
                     </StackPanel>
 
                     <DockPanel>
-                        <ComboBox DockPanel.Dock="Right" SelectedItem="{Binding SanitizerMode}"
+                        <ComboBox DockPanel.Dock="Right" SelectedItem="{Binding SanitizerMode}" IsEnabled="{Binding SanitizerModeLock.IsEditable}"
                                   Width="120">
                             <ComboBoxItem Content="redact" />
                             <ComboBoxItem Content="warn" />
@@ -78,16 +82,20 @@
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Mode" FontWeight="SemiBold" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="{Binding SanitizerModeLock.Note}" IsVisible="{Binding SanitizerModeLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                             <TextBlock Text="redact replaces; warn logs only; block refuses."
                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>
                     </DockPanel>
 
                     <StackPanel Orientation="Horizontal" Spacing="12">
-                        <CheckBox IsChecked="{Binding LogRedactions}" />
+                        <CheckBox IsChecked="{Binding LogRedactions}" IsEnabled="{Binding LogRedactionsLock.IsEditable}" />
                         <StackPanel>
                             <TextBlock Text="Log Redactions" FontWeight="SemiBold" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="{Binding LogRedactionsLock.Note}" IsVisible="{Binding LogRedactionsLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                             <TextBlock Text="Record what was redacted, for the audit trail."
                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>
@@ -99,13 +107,15 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Corporate Domains" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{Binding DomainsLock.Note}" IsVisible="{Binding DomainsLock.IsLocked}"
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                 <DockPanel>
                     <Button DockPanel.Dock="Right"
                             Content="Add"
-                            Command="{Binding AddDomainCommand}"
+                            Command="{Binding AddDomainCommand}" IsEnabled="{Binding DomainsLock.IsEditable}"
                             Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
                             Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
-                    <TextBox Text="{Binding NewDomain}"
+                    <TextBox Text="{Binding NewDomain}" IsEnabled="{Binding DomainsLock.IsEditable}"
                              PlaceholderText="e.g. acme.internal"
                              FontSize="12" Padding="8,6" CornerRadius="6" />
                 </DockPanel>
@@ -119,7 +129,7 @@
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right"
                                             Content="Remove"
-                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveDomainCommand}"
+                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveDomainCommand}" IsEnabled="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).DomainsLock.IsEditable}"
                                             CommandParameter="{Binding}"
                                             Padding="6,2" CornerRadius="4" FontSize="10"
                                             Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
@@ -140,15 +150,17 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Allow List" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{Binding AllowLock.Note}" IsVisible="{Binding AllowLock.IsLocked}"
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                 <TextBlock Text="Patterns or domains that should never be redacted."
                            FontSize="11" Foreground="{DynamicResource TextMuted}" />
                 <DockPanel>
                     <Button DockPanel.Dock="Right"
                             Content="Add"
-                            Command="{Binding AddAllowCommand}"
+                            Command="{Binding AddAllowCommand}" IsEnabled="{Binding AllowLock.IsEditable}"
                             Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
                             Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
-                    <TextBox Text="{Binding NewAllow}"
+                    <TextBox Text="{Binding NewAllow}" IsEnabled="{Binding AllowLock.IsEditable}"
                              PlaceholderText="e.g. example.com"
                              FontSize="12" Padding="8,6" CornerRadius="6" />
                 </DockPanel>
@@ -162,7 +174,7 @@
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right"
                                             Content="Remove"
-                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveAllowCommand}"
+                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveAllowCommand}" IsEnabled="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).AllowLock.IsEditable}"
                                             CommandParameter="{Binding}"
                                             Padding="6,2" CornerRadius="4" FontSize="10"
                                             Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
@@ -183,15 +195,17 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Exempt Providers" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{Binding ExemptLock.Note}" IsVisible="{Binding ExemptLock.IsLocked}"
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                 <TextBlock Text="Providers that bypass sanitization (e.g. local-only models)."
                            FontSize="11" Foreground="{DynamicResource TextMuted}" />
                 <DockPanel>
                     <Button DockPanel.Dock="Right"
                             Content="Add"
-                            Command="{Binding AddExemptCommand}"
+                            Command="{Binding AddExemptCommand}" IsEnabled="{Binding ExemptLock.IsEditable}"
                             Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
                             Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
-                    <TextBox Text="{Binding NewExempt}"
+                    <TextBox Text="{Binding NewExempt}" IsEnabled="{Binding ExemptLock.IsEditable}"
                              PlaceholderText="e.g. ollama"
                              FontSize="12" Padding="8,6" CornerRadius="6" />
                 </DockPanel>
@@ -205,7 +219,7 @@
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right"
                                             Content="Remove"
-                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveExemptCommand}"
+                                            Command="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).RemoveExemptCommand}" IsEnabled="{Binding $parent[ItemsControl].((vm:TrustBoundaryViewModel)DataContext).ExemptLock.IsEditable}"
                                             CommandParameter="{Binding}"
                                             Padding="6,2" CornerRadius="4" FontSize="10"
                                             Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
@@ -288,28 +302,34 @@
                     BorderThickness="1">
                 <StackPanel Spacing="10">
                     <StackPanel Orientation="Horizontal" Spacing="12">
-                        <CheckBox IsChecked="{Binding IntentEnabled}" />
+                        <CheckBox IsChecked="{Binding IntentEnabled}" IsEnabled="{Binding IntentEnabledLock.IsEditable}" />
                         <StackPanel>
                             <TextBlock Text="Intent Verification Enabled" FontWeight="SemiBold" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="{Binding IntentEnabledLock.Note}" IsVisible="{Binding IntentEnabledLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                             <TextBlock Text="Inspect each turn for intent before sending to the model."
                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="12">
-                        <CheckBox IsChecked="{Binding ClarifyAmbiguous}" />
+                        <CheckBox IsChecked="{Binding ClarifyAmbiguous}" IsEnabled="{Binding ClarifyLock.IsEditable}" />
                         <StackPanel>
                             <TextBlock Text="Clarify Ambiguous Intent" FontWeight="SemiBold" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="{Binding ClarifyLock.Note}" IsVisible="{Binding ClarifyLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                             <TextBlock Text="Ask the user to clarify before acting on ambiguous requests."
                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" Spacing="12">
-                        <CheckBox IsChecked="{Binding BlockHarmful}" />
+                        <CheckBox IsChecked="{Binding BlockHarmful}" IsEnabled="{Binding BlockHarmfulLock.IsEditable}" />
                         <StackPanel>
                             <TextBlock Text="Block Harmful Intent" FontWeight="SemiBold" FontSize="13"
                                        Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="{Binding BlockHarmfulLock.Note}" IsVisible="{Binding BlockHarmfulLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                             <TextBlock Text="Refuse turns whose intent is judged clearly harmful."
                                        FontSize="11" Foreground="{DynamicResource TextMuted}" />
                         </StackPanel>

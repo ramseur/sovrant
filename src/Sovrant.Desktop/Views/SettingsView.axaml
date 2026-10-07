@@ -109,11 +109,13 @@
                 <StackPanel Spacing="6">
                     <TextBlock Text="{Binding ApiKeyLabel}" FontSize="13" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextSecondary}" />
-                    <TextBox Text="{Binding ApiKey}"
+                    <TextBox Text="{Binding ApiKey}" IsEnabled="{Binding ApiKeyLock.IsEditable}"
                              PasswordChar="*"
                              PlaceholderText="{Binding ApiKeyWatermark}"
                              CornerRadius="8"
                              Padding="12,8" />
+                    <TextBlock Text="{Binding ApiKeyLock.Note}" IsVisible="{Binding ApiKeyLock.IsLocked}"
+                               FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                 </StackPanel>
 
                 <!-- Base URL -->

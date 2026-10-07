@@ -4406,3 +4406,8 @@ a.home-card:hover { border-color: var(--brand-primary); }
    readers announce the new page. It isn't a control, so don't draw a focus outline around it (it showed
    as a dark box around "What are you working on?" / "Welcome back" after a refresh). */
 h1:focus, h1[tabindex="-1"]:focus { outline: none; }
+
+/* Phase 148 — a control the server's environment sets (SOVRANT_ENV_OVERRIDE on): disabled, with this note */
+.env-lock-note { margin-top: 6px; padding: 6px 9px; border: 1px dashed var(--surface-border); border-radius: 7px;
+    font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+.env-lock-note code { font-size: 11.5px; }

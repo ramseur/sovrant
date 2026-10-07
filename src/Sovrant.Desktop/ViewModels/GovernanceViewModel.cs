@@ -22,6 +22,14 @@ public partial class GovernanceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _hostFileToolsEnabled;
 
+    // Phase 148: controls the server's environment sets while SOVRANT_ENV_OVERRIDE is on.
+    public Sovrant.Runtime.Config.EnvLock AuditLogLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceAuditLog);
+    public Sovrant.Runtime.Config.EnvLock HostToolsLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceHostFileTools);
+    public Sovrant.Runtime.Config.EnvLock MemberToolsLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceMemberFileTools);
+    public Sovrant.Runtime.Config.EnvLock BlockedLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceBlockedCommands);
+    public Sovrant.Runtime.Config.EnvLock ProtectedLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceProtectedFiles);
+    public Sovrant.Runtime.Config.EnvLock SecretsLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceSecretPatterns);
+
     [ObservableProperty]
     private string _newBlockedCommand = string.Empty;
 

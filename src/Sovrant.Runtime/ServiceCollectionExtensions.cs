@@ -226,8 +226,9 @@ public static class ServiceCollectionExtensions
 
         // Workspace settings store — budgets, session caps, and other
         // runtime-mutable knobs that previously lived in env vars only.
-        services.AddSingleton<IWorkspaceSettingsStore>(sp =>
-            new SqliteWorkspaceSettingsStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        // Phase 148: with SOVRANT_ENV_OVERRIDE on, settings set by the environment can't be changed here.
+        services.AddSingleton<IWorkspaceSettingsStore>(sp => new Config.EnvLockedSettingsStore(
+            new SqliteWorkspaceSettingsStore(sp.GetRequiredService<ISqliteConnectionFactory>())));
 
         // Phase 88-A — per-user preference store. Replaces the user-facing
         // fields previously written to ~/.sovrant/settings.json. API keys
@@ -516,6 +517,9 @@ public static class ServiceCollectionExtensions
             services.GetRequiredService<Mcp.ICredentialStore>(), Environment.GetEnvironmentVariable,
             services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Runtime.EnvCredentialSeeder"), ct).ConfigureAwait(false);
         Config.EnvCredentialSeeder.ApplyDefaults(services.GetRequiredService<SovrantConfig>(), Environment.GetEnvironmentVariable);
+        // Phase 148: the same rule for settings — env values seed the database once (override off).
+        if (services.GetService<IWorkspaceSettingsStore>() is { } settingsStore)
+            await Config.EnvBackedSettings.SeedAsync(settingsStore, Environment.GetEnvironmentVariable, ct).ConfigureAwait(false);
 
         // Phase 88-C — apply persisted user preferences and the active
         // provider's credential to the runtime SovrantConfig. The migrator

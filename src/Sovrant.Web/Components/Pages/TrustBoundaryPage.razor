@@ -36,9 +36,10 @@
             <div>
                 <div class="toggle-title">Trust Boundary Enabled</div>
                 <div class="toggle-desc">Master switch for the entire pipeline (sanitizer + intent verification).</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.TrustBoundaryEnabled)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_enabled" />
+                <input type="checkbox" @bind="_enabled" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.TrustBoundaryEnabled)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -51,9 +52,10 @@
             <div>
                 <div class="toggle-title">Sanitizer Enabled</div>
                 <div class="toggle-desc">Detect and act on PII, corporate data, and custom patterns.</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerEnabled)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_sanitizerEnabled" />
+                <input type="checkbox" @bind="_sanitizerEnabled" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerEnabled)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -62,8 +64,9 @@
             <div>
                 <span class="gov-field-label">Mode</span>
                 <div class="toggle-desc">redact replaces; warn logs only; block refuses.</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerMode)" />
             </div>
-            <select class="gov-field-input" @bind="_sanitizerMode">
+            <select class="gov-field-input" @bind="_sanitizerMode" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerMode)">
                 <option value="redact">redact</option>
                 <option value="warn">warn</option>
                 <option value="block">block</option>
@@ -74,9 +77,10 @@
             <div>
                 <div class="toggle-title">Log Redactions</div>
                 <div class="toggle-desc">Record what was redacted, for the audit trail.</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerLogRedactions)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_logRedactions" />
+                <input type="checkbox" @bind="_logRedactions" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerLogRedactions)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -84,9 +88,10 @@
 
     <!-- Corporate Domains -->
     <h2 class="mt-16">Corporate Domains</h2>
+    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerCorporateDomains)" />
     <div class="input-group input-group-tight">
-        <input type="text" @bind="_newDomain" placeholder="e.g. acme.internal" />
-        <button class="btn-primary btn-inline-add" @onclick="AddDomain">Add</button>
+        <input type="text" @bind="_newDomain" placeholder="e.g. acme.internal" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerCorporateDomains)" />
+        <button class="btn-primary btn-inline-add" @onclick="AddDomain" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerCorporateDomains)">Add</button>
     </div>
     @if (_corporateDomains.Count == 0)
     {
@@ -96,16 +101,17 @@
     {
         <div class="gov-item gov-item-warn">
             <code class="gov-item-text gov-text-warn">@d</code>
-            <button class="btn-sm btn-danger" @onclick="() => _corporateDomains.Remove(d)">Remove</button>
+            <button class="btn-sm btn-danger" @onclick="() => _corporateDomains.Remove(d)" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerCorporateDomains)">Remove</button>
         </div>
     }
 
     <!-- Allow List -->
     <h2 class="mt-16">Allow List</h2>
+    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerAllowList)" />
     <p class="text-muted text-sm">Patterns or domains that should never be redacted.</p>
     <div class="input-group input-group-tight">
-        <input type="text" @bind="_newAllow" placeholder="e.g. example.com" />
-        <button class="btn-primary btn-inline-add" @onclick="AddAllow">Add</button>
+        <input type="text" @bind="_newAllow" placeholder="e.g. example.com" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerAllowList)" />
+        <button class="btn-primary btn-inline-add" @onclick="AddAllow" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerAllowList)">Add</button>
     </div>
     @if (_allowList.Count == 0)
     {
@@ -115,16 +121,17 @@
     {
         <div class="gov-item gov-item-default">
             <code class="gov-item-text">@a</code>
-            <button class="btn-sm btn-danger" @onclick="() => _allowList.Remove(a)">Remove</button>
+            <button class="btn-sm btn-danger" @onclick="() => _allowList.Remove(a)" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerAllowList)">Remove</button>
         </div>
     }
 
     <!-- Exempt Providers -->
     <h2 class="mt-16">Exempt Providers</h2>
+    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerExemptProviders)" />
     <p class="text-muted text-sm">Providers that bypass sanitization (e.g. local-only models).</p>
     <div class="input-group input-group-tight">
-        <input type="text" @bind="_newExempt" placeholder="e.g. ollama" />
-        <button class="btn-primary btn-inline-add" @onclick="AddExempt">Add</button>
+        <input type="text" @bind="_newExempt" placeholder="e.g. ollama" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerExemptProviders)" />
+        <button class="btn-primary btn-inline-add" @onclick="AddExempt" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerExemptProviders)">Add</button>
     </div>
     @if (_exemptProviders.Count == 0)
     {
@@ -134,7 +141,7 @@
     {
         <div class="gov-item gov-item-default">
             <code class="gov-item-text">@p</code>
-            <button class="btn-sm btn-danger" @onclick="() => _exemptProviders.Remove(p)">Remove</button>
+            <button class="btn-sm btn-danger" @onclick="() => _exemptProviders.Remove(p)" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerExemptProviders)">Remove</button>
         </div>
     }
 
@@ -174,9 +181,10 @@
             <div>
                 <div class="toggle-title">Intent Verification Enabled</div>
                 <div class="toggle-desc">Inspect each turn for intent before sending to the model.</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentVerificationEnabled)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_intentEnabled" />
+                <input type="checkbox" @bind="_intentEnabled" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentVerificationEnabled)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -184,9 +192,10 @@
             <div>
                 <div class="toggle-title">Clarify Ambiguous Intent</div>
                 <div class="toggle-desc">Ask the user to clarify before acting on ambiguous requests.</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentClarifyAmbiguous)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_clarifyAmbiguous" />
+                <input type="checkbox" @bind="_clarifyAmbiguous" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentClarifyAmbiguous)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -194,9 +203,10 @@
             <div>
                 <div class="toggle-title">Block Harmful Intent</div>
                 <div class="toggle-desc">Refuse turns whose intent is judged clearly harmful.</div>
+                <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentBlockHarmful)" />
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_blockHarmful" />
+                <input type="checkbox" @bind="_blockHarmful" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentBlockHarmful)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -227,6 +237,10 @@
     private string _newPatternRegex = string.Empty;
     private string _newPatternAction = "redact";
     private string _status = string.Empty;
+
+    // Phase 148: settings the server's environment sets while SOVRANT_ENV_OVERRIDE is on.
+    private static string? Lock(string key) => Sovrant.Runtime.Config.EnvBackedSettings.LockedBy(key);
+    private static bool Locked(string key) => Lock(key) is not null;
 
     protected override void OnInitialized()
     {

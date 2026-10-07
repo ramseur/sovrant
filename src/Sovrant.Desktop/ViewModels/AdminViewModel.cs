@@ -246,6 +246,13 @@ public partial class AdminViewModel : ViewModelBase
         [.. WebSignInSettings.MaxHourChoices.Select(h => new SignInChoice(h, WebSignInSettings.Describe(TimeSpan.FromHours(h))))];
 
     [ObservableProperty] private bool _rememberAllowed;
+
+    // Phase 148: controls the server's environment sets while SOVRANT_ENV_OVERRIDE is on.
+    public Sovrant.Runtime.Config.EnvLock RememberAllowedLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberAllowed);
+    public Sovrant.Runtime.Config.EnvLock RememberDaysLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberDays);
+    public Sovrant.Runtime.Config.EnvLock IdleMinutesLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInIdleMinutes);
+    public Sovrant.Runtime.Config.EnvLock MaxHoursLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInMaxHours);
+    public Sovrant.Runtime.Config.EnvLock RunMinutesLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.RunMaxMinutes);
     [ObservableProperty] private SignInChoice? _selectedRememberDays;
     [ObservableProperty] private SignInChoice? _selectedIdleMinutes;
     [ObservableProperty] private SignInChoice? _selectedMaxHours;

@@ -13375,7 +13375,7 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 ### Acceptance criteria
 - [x] Full test suite clean on several consecutive runs — done 2026-10-07: 5 clean full runs in a row after fixing temp-file cleanup (51 classes), MCP retry waits, coordinator timer races, the Server test host's background scheduler, and a real Web page-load bug the repeats exposed
 - [x] Every way of stopping a workflow leaves it Cancelled (or Failed) with the reason — done 2026-10-07: cancel stops the run (`WorkflowRuns`), the store keeps cancelled cancelled, `/workflow cancel` uses the shared cancel
-- [ ] One switch (`SOVRANT_ENV_OVERRIDE`): off — env seeds settings and keys once, the app's values win; on — env wins and the app disables those controls with a note (settings and keys)
+- [x] One switch (`SOVRANT_ENV_OVERRIDE`): off — env seeds settings and keys once, the app's values win; on — env wins and the app disables those controls with a note (settings and keys) — done 2026-10-07 (`EnvOverride`, `EnvBackedSettings`, `EnvLockedSettingsStore`, `EnvLock`; Web Governance/Trust Boundary/Users, Desktop the same plus the API key field)
 - [ ] Compaction: window-relative trigger, pinned essentials, fast-tier summary, originals kept
 - [ ] Server launch profile and runtime port agree
 - [ ] `SystemPromptBuilder` gone (or merged)

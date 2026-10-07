@@ -145,7 +145,7 @@ dotnet run --project src/Sovrant.Cli -- auth delete llm
 cat key.txt | dotnet run --project src/Sovrant.Cli -- auth set llm --stdin
 ```
 
-**From the environment (12-factor / containers / CI):** set the key in the shell, the container's env, or a `.env` file. On first boot it's imported into the encrypted keystore, and a provider is set up for you; after that the stored value wins, so changes made in the UI stick. Set `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply env values on every start.
+**From the environment (12-factor / containers / CI):** set the key in the shell, the container's env, or a `.env` file. On first boot it's imported into the encrypted keystore, and a provider is set up for you; after that the stored value wins, so changes made in the UI stick. Set `SOVRANT_ENV_OVERRIDE=true` to re-apply env values on every start.
 
 Linux / macOS / WSL:
 ```bash
@@ -198,7 +198,7 @@ curl -X POST http://localhost:5200/v1/auth/register \
 export SVT_TOKEN="svt_..."
 ```
 
-All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` by default. Environment variables (e.g. `LLM_API_KEY`, from the shell, container env or `.env`) are imported into it on first boot — or on every start with `SOVRANT_ENV_KEYS_OVERRIDE=true` — for 12-factor / CI deployments and always take precedence over the stored value.
+All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` by default. Environment variables (e.g. `LLM_API_KEY`, from the shell, container env or `.env`) are imported into it on first boot — or on every start with `SOVRANT_ENV_OVERRIDE=true` — for 12-factor / CI deployments and always take precedence over the stored value.
 
 ```bash
 # Non-streaming
@@ -777,7 +777,7 @@ GET  /v1/evals/{name}/history
 
 **CLI:** use `sovrant auth set llm` (prompts without echo) to store the key in the same encrypted keystore, then set the base URL with `sovrant auth set base-url` or `LLM_BASE_URL`. Keys stored this way are managed, rotatable, and never land in shell history or config files.
 
-> **CI / scripted deployments and containers:** set `LLM_API_KEY` (plus optional `LLM_BASE_URL`, `SOVRANT_MODEL`) in the environment or a `.env` file. On first boot the key is imported into the encrypted keystore and becomes one shared provider (owned by the first admin) in the default model set for everyone's personal workspace, so there's nothing to click through. After that the stored value wins; set `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply env values on every start.
+> **CI / scripted deployments and containers:** set `LLM_API_KEY` (plus optional `LLM_BASE_URL`, `SOVRANT_MODEL`) in the environment or a `.env` file. On first boot the key is imported into the encrypted keystore and becomes one shared provider (owned by the first admin) in the default model set for everyone's personal workspace, so there's nothing to click through. After that the stored value wins; set `SOVRANT_ENV_OVERRIDE=true` to re-apply env values on every start.
 
 > Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
 
@@ -1075,14 +1075,14 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 
 ### Environment Variables
 
-Every variable works from the shell, a container's environment, or a `.env` file in the app's working directory ([`.env.example`](.env.example) is the full, annotated list; a test fails if it documents a variable the code doesn't read). API-key variables marked **(stored)** are imported into the encrypted credential store on first boot, after which the stored value wins (edit it in the UI or with `sovrant auth set <name>`); `SOVRANT_ENV_KEYS_OVERRIDE=true` re-imports them on every start.
+Every variable works from the shell, a container's environment, or a `.env` file in the app's working directory ([`.env.example`](.env.example) is the full, annotated list; a test fails if it documents a variable the code doesn't read). API-key variables marked **(stored)** are imported into the encrypted credential store on first boot, after which the stored value wins (edit it in the UI or with `sovrant auth set <name>`); `SOVRANT_ENV_OVERRIDE=true` re-imports them on every start.
 
 | Variable | Required | Description |
 |---|---|---|
 | `LLM_API_KEY` | Yes (or the setup screen / `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Becomes one shared provider in the default model set for personal workspaces. Alias: `OPENAI_API_KEY` |
 | `LLM_BASE_URL` | No | Provider base URL. Default: inferred from the key (`sk-or-` → OpenRouter, `sk-ant-` → Anthropic), else `https://api.openai.com/v1` |
 | `SOVRANT_MODEL` | No | Default model when a user hasn't picked one |
-| `SOVRANT_ENV_KEYS_OVERRIDE` | No | `true` = env keys replace stored keys on every start (default: imported on first boot only) |
+| `SOVRANT_ENV_OVERRIDE` | No | How env relates to the app, for keys and settings. Default: env values seed the app once and the app's values win after that. `true`: env values are final — used on every start, and shown disabled in the app with a note. (`SOVRANT_ENV_KEYS_OVERRIDE` still accepted.) |
 | `OPENROUTER_API_KEY` | No | Live model metadata and pricing from OpenRouter — **(stored)** as `openrouter` |
 | `SOVRANT_PORT` | No | Server HTTP port (default: `5200`) — Server only |
 | `SOVRANT_WEB_PORT` | No | Web HTTP port (default: `5100`) — Web only |

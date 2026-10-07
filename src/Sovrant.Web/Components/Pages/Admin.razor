@@ -178,9 +178,10 @@
                 <div>
                     <div class="toggle-title">Allow "Keep me signed in"</div>
                     <div class="toggle-desc">Shows the checkbox on Sign in. Turn off where people shouldn't stay signed in for days — remembered browsers then follow the limits below.</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberAllowed)" />
                 </div>
                 <label class="toggle-switch">
-                    <input type="checkbox" checked="@_signIn.RememberAllowed" @onchange="ToggleRememberAsync" />
+                    <input type="checkbox" checked="@_signIn.RememberAllowed" @onchange="ToggleRememberAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberAllowed)" />
                     <span class="toggle-slider"></span>
                 </label>
             </div>
@@ -188,8 +189,9 @@
                 <div>
                     <div class="toggle-title">Keep signed in for</div>
                     <div class="toggle-desc">How long "Keep me signed in" lasts on a browser.</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberDays)" />
                 </div>
-                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_rememberDays" @bind:after="SaveSignInSettingsAsync">
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_rememberDays" @bind:after="SaveSignInSettingsAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberDays)">
                     @foreach (var v in Choices(WebSignInSettings.RememberDayChoices, _rememberDays))
                     {
                         <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromDays(v))</option>
@@ -200,8 +202,9 @@
                 <div>
                     <div class="toggle-title">Sign out after inactivity</div>
                     <div class="toggle-desc">Renewed while the person is active.</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInIdleMinutes)" />
                 </div>
-                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_idleMinutes" @bind:after="SaveSignInSettingsAsync">
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_idleMinutes" @bind:after="SaveSignInSettingsAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInIdleMinutes)">
                     @foreach (var v in Choices(WebSignInSettings.IdleMinuteChoices, _idleMinutes))
                     {
                         <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromMinutes(v))</option>
@@ -212,8 +215,9 @@
                 <div>
                     <div class="toggle-title">Sign out after at most</div>
                     <div class="toggle-desc">However active they are, unless they chose "Keep me signed in".</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInMaxHours)" />
                 </div>
-                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_maxHours" @bind:after="SaveSignInSettingsAsync">
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_maxHours" @bind:after="SaveSignInSettingsAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInMaxHours)">
                     @foreach (var v in Choices(WebSignInSettings.MaxHourChoices, _maxHours))
                     {
                         <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromHours(v))</option>
@@ -224,8 +228,9 @@
                 <div>
                     <div class="toggle-title">Stop runs after</div>
                     <div class="toggle-desc">A reply, workflow or swarm still running after this long is stopped, keeping what it finished. Signing out doesn't stop your work; Sign out everywhere and Revoke do.</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.RunMaxMinutes)" />
                 </div>
-                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_runMinutes" @bind:after="SaveRunLimitAsync">
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_runMinutes" @bind:after="SaveRunLimitAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.RunMaxMinutes)">
                     @foreach (var v in Choices(Sovrant.Runtime.Conversation.RunLimits.MinuteChoices, _runMinutes))
                     {
                         <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromMinutes(v))</option>
@@ -434,6 +439,10 @@
     // ── Phase 145 A7: sign-in rules ─────────────────────────────────────────
     private WebSignInSettings _signIn = WebSignInSettings.Load(null);
     private int _rememberDays, _idleMinutes, _maxHours, _runMinutes;
+
+    // Phase 148: settings the server's environment sets while SOVRANT_ENV_OVERRIDE is on.
+    private static string? Lock(string key) => Sovrant.Runtime.Config.EnvBackedSettings.LockedBy(key);
+    private static bool Locked(string key) => Lock(key) is not null;
 
     private Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore? SettingsStore =>
         Services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>();

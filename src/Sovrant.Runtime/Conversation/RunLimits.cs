@@ -18,9 +18,12 @@ public static class RunLimits
 
     public static TimeSpan Load(IWorkspaceSettingsStore? settings, Func<string, string?>? env = null)
     {
-        var fromStore = settings is null ? null : Read(settings);
-        if (Positive(fromStore) is { } s) return TimeSpan.FromMinutes(s);
-        if (Positive((env ?? Environment.GetEnvironmentVariable)(MaxRunMinutesVariable)) is { } e) return TimeSpan.FromMinutes(e);
+        env ??= Environment.GetEnvironmentVariable;
+        var fromEnv = Positive(env(MaxRunMinutesVariable));
+        // Phase 148: with SOVRANT_ENV_OVERRIDE on, the variable wins (the app shows it locked).
+        if (Config.EnvOverride.IsOn(env) && fromEnv is { } locked) return TimeSpan.FromMinutes(locked);
+        if (Positive(settings is null ? null : Read(settings)) is { } s) return TimeSpan.FromMinutes(s);
+        if (fromEnv is { } e) return TimeSpan.FromMinutes(e);
         return TimeSpan.FromMinutes(DefaultMinutes);
     }
 

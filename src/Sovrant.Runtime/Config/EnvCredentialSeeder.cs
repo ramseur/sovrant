@@ -52,12 +52,25 @@ public static partial class EnvCredentialSeeder
         return FirstValue(env, Keys[0].Variables);
     }
 
-    /// <summary>True when SOVRANT_ENV_KEYS_OVERRIDE is "true" or "1".</summary>
+    /// <summary>True when <c>SOVRANT_ENV_OVERRIDE</c> (or the older <c>SOVRANT_ENV_KEYS_OVERRIDE</c>) is on.</summary>
     public static bool OverrideEnabled(Func<string, string?> env)
     {
         ArgumentNullException.ThrowIfNull(env);
-        var value = env(OverrideVariable)?.Trim();
-        return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) || value == "1";
+        return EnvOverride.IsOn(env);
+    }
+
+    /// <summary>
+    /// With the override on, the variable that sets <paramref name="credentialKey"/> — the app shows that
+    /// key locked. Null when the app may change it.
+    /// </summary>
+    public static string? LockedBy(string credentialKey, Func<string, string?>? env = null)
+    {
+        env ??= Environment.GetEnvironmentVariable;
+        if (!EnvOverride.IsOn(env)) return null;
+        foreach (var (key, variables) in Keys)
+            if (key == credentialKey)
+                return variables.FirstOrDefault(v => !string.IsNullOrWhiteSpace(env(v)));
+        return null;
     }
 
     /// <summary>

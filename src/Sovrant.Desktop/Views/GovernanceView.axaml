@@ -39,24 +39,28 @@
                     <DockPanel>
                         <Button DockPanel.Dock="Right"
                                 Content="Toggle"
-                                Command="{Binding ToggleAuditLogCommand}"
+                                Command="{Binding ToggleAuditLogCommand}" IsEnabled="{Binding AuditLogLock.IsEditable}"
                                 Padding="8,4" CornerRadius="4" FontSize="11"
                                 Background="Transparent" Foreground="{DynamicResource TextSecondary}" />
-                        <StackPanel Orientation="Horizontal" Spacing="12">
-                            <TextBlock Text="Audit Logging:" FontWeight="SemiBold" FontSize="14"
-                                       Foreground="{DynamicResource TextPrimary}" />
-                            <TextBlock Text="Enabled" FontSize="14"
-                                       Foreground="{DynamicResource StatusPass}"
-                                       IsVisible="{Binding AuditLogEnabled}" />
-                            <TextBlock Text="Disabled" FontSize="14"
-                                       Foreground="{DynamicResource StatusFail}"
-                                       IsVisible="{Binding !AuditLogEnabled}" />
+                        <StackPanel Spacing="2">
+                            <StackPanel Orientation="Horizontal" Spacing="12">
+                                <TextBlock Text="Audit Logging:" FontWeight="SemiBold" FontSize="14"
+                                           Foreground="{DynamicResource TextPrimary}" />
+                                <TextBlock Text="Enabled" FontSize="14"
+                                           Foreground="{DynamicResource StatusPass}"
+                                           IsVisible="{Binding AuditLogEnabled}" />
+                                <TextBlock Text="Disabled" FontSize="14"
+                                           Foreground="{DynamicResource StatusFail}"
+                                           IsVisible="{Binding !AuditLogEnabled}" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding AuditLogLock.Note}" IsVisible="{Binding AuditLogLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>
                     </DockPanel>
                     <DockPanel>
                         <Button DockPanel.Dock="Right"
                                 Content="Toggle"
-                                Command="{Binding ToggleHostFileToolsCommand}"
+                                Command="{Binding ToggleHostFileToolsCommand}" IsEnabled="{Binding HostToolsLock.IsEditable}"
                                 Padding="8,4" CornerRadius="4" FontSize="11"
                                 Background="Transparent" Foreground="{DynamicResource TextSecondary}" />
                         <StackPanel Spacing="2">
@@ -73,12 +77,14 @@
                             <TextBlock Text="For everyone, admins included. They run as the server's own account with no folder limits, so an agent could reach other people's files, the database and the server's settings. Leave off unless one trusted team uses the server. Doesn't affect this desktop app."
                                        FontSize="12" TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextSecondary}" />
+                            <TextBlock Text="{Binding HostToolsLock.Note}" IsVisible="{Binding HostToolsLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>
                     </DockPanel>
                     <DockPanel>
                         <Button DockPanel.Dock="Right"
                                 Content="Toggle"
-                                Command="{Binding ToggleMemberFileToolsCommand}"
+                                Command="{Binding ToggleMemberFileToolsCommand}" IsEnabled="{Binding MemberToolsLock.IsEditable}"
                                 Padding="8,4" CornerRadius="4" FontSize="11"
                                 Background="Transparent" Foreground="{DynamicResource TextSecondary}" />
                         <StackPanel Spacing="2">
@@ -95,6 +101,8 @@
                             <TextBlock Text="These tools run as the server's account with no folder limits, so a member's agent could reach other people's files. Only applies when the switch above is on; otherwise nobody can use them on Web or Server."
                                        FontSize="12" TextWrapping="Wrap"
                                        Foreground="{DynamicResource TextSecondary}" />
+                            <TextBlock Text="{Binding MemberToolsLock.Note}" IsVisible="{Binding MemberToolsLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                         </StackPanel>
                     </DockPanel>
                 </StackPanel>
@@ -104,13 +112,15 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Blocked Commands" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{Binding BlockedLock.Note}" IsVisible="{Binding BlockedLock.IsLocked}"
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                 <DockPanel>
                     <Button DockPanel.Dock="Right"
                             Content="Add"
-                            Command="{Binding AddBlockedCommandCommand}"
+                            Command="{Binding AddBlockedCommandCommand}" IsEnabled="{Binding BlockedLock.IsEditable}"
                             Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
                             Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
-                    <TextBox Text="{Binding NewBlockedCommand}"
+                    <TextBox Text="{Binding NewBlockedCommand}" IsEnabled="{Binding BlockedLock.IsEditable}"
                              PlaceholderText="e.g. rm -rf /"
                              FontSize="12" Padding="8,6" CornerRadius="6" />
                 </DockPanel>
@@ -124,7 +134,7 @@
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right"
                                             Content="Remove"
-                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveBlockedCommandCommand}"
+                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveBlockedCommandCommand}" IsEnabled="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).BlockedLock.IsEditable}"
                                             CommandParameter="{Binding}"
                                             Padding="6,2" CornerRadius="4" FontSize="10"
                                             Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
@@ -145,13 +155,15 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Protected Files" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{Binding ProtectedLock.Note}" IsVisible="{Binding ProtectedLock.IsLocked}"
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                 <DockPanel>
                     <Button DockPanel.Dock="Right"
                             Content="Add"
-                            Command="{Binding AddProtectedFileCommand}"
+                            Command="{Binding AddProtectedFileCommand}" IsEnabled="{Binding ProtectedLock.IsEditable}"
                             Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
                             Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
-                    <TextBox Text="{Binding NewProtectedFile}"
+                    <TextBox Text="{Binding NewProtectedFile}" IsEnabled="{Binding ProtectedLock.IsEditable}"
                              PlaceholderText="e.g. .env, credentials.json"
                              FontSize="12" Padding="8,6" CornerRadius="6" />
                 </DockPanel>
@@ -165,7 +177,7 @@
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right"
                                             Content="Remove"
-                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveProtectedFileCommand}"
+                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveProtectedFileCommand}" IsEnabled="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).ProtectedLock.IsEditable}"
                                             CommandParameter="{Binding}"
                                             Padding="6,2" CornerRadius="4" FontSize="10"
                                             Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
@@ -186,13 +198,15 @@
             <StackPanel Spacing="8">
                 <TextBlock Text="Secret Detection Patterns" FontSize="16" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="{Binding SecretsLock.Note}" IsVisible="{Binding SecretsLock.IsLocked}"
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
                 <DockPanel>
                     <Button DockPanel.Dock="Right"
                             Content="Add"
-                            Command="{Binding AddSecretPatternCommand}"
+                            Command="{Binding AddSecretPatternCommand}" IsEnabled="{Binding SecretsLock.IsEditable}"
                             Padding="10,6" CornerRadius="6" Margin="8,0,0,0"
                             Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
-                    <TextBox Text="{Binding NewSecretPattern}"
+                    <TextBox Text="{Binding NewSecretPattern}" IsEnabled="{Binding SecretsLock.IsEditable}"
                              PlaceholderText="e.g. sk-[a-zA-Z0-9]{32}"
                              FontSize="12" Padding="8,6" CornerRadius="6" />
                 </DockPanel>
@@ -206,7 +220,7 @@
                                 <DockPanel>
                                     <Button DockPanel.Dock="Right"
                                             Content="Remove"
-                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveSecretPatternCommand}"
+                                            Command="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).RemoveSecretPatternCommand}" IsEnabled="{Binding $parent[ItemsControl].((vm:GovernanceViewModel)DataContext).SecretsLock.IsEditable}"
                                             CommandParameter="{Binding}"
                                             Padding="6,2" CornerRadius="4" FontSize="10"
                                             Background="#44F44336" Foreground="{DynamicResource StatusFail}" />
