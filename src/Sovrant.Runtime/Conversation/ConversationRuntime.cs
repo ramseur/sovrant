@@ -188,6 +188,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             switch (entry.Role)
             {
                 case "user" when !string.IsNullOrEmpty(entry.Content):
+                    // A user message followed by another one never got a reply (its turn failed):
+                    // only answered messages go to the model.
+                    DropUnansweredTail();
                     _history.Add(InputMessage.UserText(entry.Content));
                     break;
                 case "assistant" when !string.IsNullOrEmpty(entry.Content):
@@ -195,6 +198,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     break;
             }
         }
+
+        // The last message may be unanswered too (the previous turn failed).
+        DropUnansweredTail();
 
         // Inject multi-layered memory (session summaries, learned patterns, instincts)
         // plus user-saved workspace_memory entries scoped to the active workspace/project (Phase 81).
@@ -243,6 +249,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // each turn. Disposed when the turn ends (including early returns).
         using var approvalScope = _approvalCache?.BeginTurn();
 
+        // A previous turn in this conversation that failed leaves its request at the end; drop it so
+        // this message isn't read as a reminder to finish it.
+        DropUnansweredTail();
         _history.Add(InputMessage.UserText(userMessage));
         await AppendSessionEntryAsync("user", userMessage, ct).ConfigureAwait(false);
 
@@ -728,6 +737,26 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     /// <inheritdoc/>
     public void Reset() => _history.Clear();
+
+    /// <summary>
+    /// Removes a request that never got a reply from the end of the history, together with any
+    /// half-finished tool exchange from that failed turn (a tool call without its result can't be
+    /// sent back to a provider anyway). Without this, a model sees old unanswered requests and acts on
+    /// them when the person later says something unrelated — e.g. "are you here?" producing a PDF
+    /// requested weeks earlier in a turn that had failed. The messages stay in the saved conversation
+    /// (and on screen); they just aren't part of what the model is asked to respond to.
+    /// </summary>
+    private void DropUnansweredTail()
+    {
+        while (_history.Count > 0)
+        {
+            var last = _history[^1];
+            var unanswered = last.Role == "user"
+                || (last.Role == "assistant" && last.Content.Any(b => b is InputContentBlock.ToolUseBlock));
+            if (!unanswered) break;
+            _history.RemoveAt(_history.Count - 1);
+        }
+    }
 
     private static readonly int[] s_retryDelaysMs = [1000, 2000, 4000];
 
