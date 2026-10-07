@@ -351,12 +351,15 @@
                 _streamingMsg = isRunning ? lastAssistant : null;
                 _isSending = isRunning;
                 _isBackgroundSession = isRunning;
+                ShowWaitingApprovals();
                 StateHasChanged();
                 await ScrollToBottom();
                 return;
             }
 
             await LoadSessionAsync(sessionId);
+            ShowWaitingApprovals();
+            StateHasChanged();
         });
     }
 
@@ -429,6 +432,27 @@
     {
         InvokeAsync(() =>
         {
+            // Phase 145 A8.2: a request from another conversation stays waiting — the banner at the top
+            // links to it, and its card appears when that conversation is opened.
+            if (request.SessionId is not null && _sessionId is not null && request.SessionId != _sessionId)
+                return;
+            ShowApprovalCard(request);
+            StateHasChanged();
+        });
+    }
+
+    /// <summary>Cards for approvals that waited for this conversation while you were away (A8.2).</summary>
+    private void ShowWaitingApprovals()
+    {
+        foreach (var r in ConfirmationHandler.PendingFor(Me).Where(r => r.SessionId == _sessionId))
+            ShowApprovalCard(r);
+    }
+
+    private void ShowApprovalCard(ConfirmationRequest request)
+    {
+        if (request.IsAnswered || _messages.Any(m => m.ToolUses.Any(t => ReferenceEquals(t.PendingRequest, request))))
+            return;
+        {
             var lastAssistant = _messages.FindLast(m => m.Role == "assistant");
             lastAssistant?.ToolUses.Add(new ToolUseModel
             {
@@ -438,8 +462,7 @@
                 PendingRequest = request,
                 Result = request.Input.ToString(),
             });
-            StateHasChanged();
-        });
+        }
     }
 
     private async Task HandleKeyDown(KeyboardEventArgs e)

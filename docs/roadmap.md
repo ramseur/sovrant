@@ -13205,12 +13205,14 @@ Bash and the file tools run **on the server itself**, as its OS account. On a ho
 15. Load test: several hundred concurrent circuits on one Web server; record memory per circuit and SignalR limits; publish sizing guidance for admins.
 16. Multi-instance (several Web servers behind a load balancer) needs shared Data Protection keys, sticky sessions and everything on Postgres (Phase 134 Part B). Documented as the next step, not built here.
 
-### Open questions
-- **Long-running work vs. sign-in expiry.** A reply, workflow or swarm can run longer than the idle timeout while the person isn't touching the page. Decide before shortening the 1-hour default:
-  - **Work outlives the sign-in:** work you started keeps running on the server as you (the `AmbientPrincipal` groundwork from the stopgaps already carries the owner into background work), and its result lands in the conversation for your next sign-in. This is Phase 92's "come back and it's done" contract (persistence of result, not presence), and Phase 86 background continuation, applied to Web sign-out.
-  - **A running turn counts as activity:** probably yes, so a session doesn't expire under a reply that's still streaming; but an unattended run shouldn't keep a shared computer signed in for 12 hours.
-  - **Approvals while signed out:** a run that needs a tool approval waits, and the request is still there after the next sign-in (not auto-denied, not auto-approved).
-  - Once these are reliable, revisit a shorter default (e.g. 30 minutes).
+### Long-running work and sign-in (decided 2026-10-07 → A8)
+The open question on long-running work vs. sign-in expiry is decided:
+- **A run time limit, 2 hours by default** — admins change it in the Sign-in section (Users → Registration & sign-in). It caps wasted compute, energy and spend for work nobody is watching; the USD budgets (`BudgetEnforcer`) stay the money cap.
+- **Work outlives the sign-in** — signing out or timing out doesn't stop your work; it runs as you until it finishes or hits the limit, and the result is in the conversation when you're back.
+- **A running reply doesn't keep you signed in** — sign-in ends on its normal schedule.
+- **Approvals wait** for you (up to the run limit) instead of being refused when no tab of yours is open.
+- **Security sign-outs stop work** — "Sign out everywhere", an admin revoke or a disabled account stop that person's running work.
+- **Shorter idle sign-out (30 minutes): later**, once A8 is in use.
 
 ### Non-goals
 - SSO (Supabase Auth, later).
@@ -13229,6 +13231,12 @@ Bash and the file tools run **on the server itself**, as its OS account. On a ho
 - [x] Multi-user tests and a load test of several hundred circuits; sizing guidance published — built 2026-10-07: `tools/Sovrant.LoadTest` (real sign-ins and Blazor circuits), 1,000 people on 4 cores within a 2 GB limit with no errors; `ConcurrentUsersTests`; [docs/web-sizing.md](web-sizing.md). Found and fixed: concurrent Argon2id checks used 64 MB each with no limit (sign-in rush peaked at 3 GB) — now one per core, up to 8. Not covered: chat replies under load (provider-bound) and multi-instance (item 16)
 - [x] Design mock for the small UI changes on both mocks (2026-10-06): "Keep me signed in for 30 days" + Timed out / Revoked notices on Login; account menu from the rail footer (lifetime, Sign out, Sign out of all browsers); Admin → Users "Signed in on" with Revoke and Sign out everywhere. Logged in `docs/design/README.md`
 - [x] **A7 — Sign-in policy for admins (built 2026-10-07):** Users → "Registration & sign-in" tab (Web; Desktop under the registration switches) gets a **Sign-in** section: Allow "Keep me signed in" (on/off — off hides the checkbox), Keep signed in for (7 / 14 / 30 / 90 days), Sign out after inactivity (15 min / 30 min / 1 h / 2 h / 8 h), Sign out after at most (8 / 12 / 24 h). Stored as global settings; the `SOVRANT_WEB_*` variables become the starting values. Default "Keep me signed in" drops from 30 to **14 days** (common business default; regulated sites can turn it off — some places won't want teams signed in that long). Changes apply to existing sign-ins at their next check (within about a minute): a remembered sign-in can't outlast the current length, turning it off makes remembered sign-ins follow the normal idle/maximum limits, and raising a limit never extends an existing sign-in. The Sign in checkbox text reflects the current settings
+- [x] **A8 — Long-running work (built 2026-10-07; Server's approvals over SignalR still refuse when no client is connected — Phase 146; a revoke made from Desktop can't stop work running in a separate Web process):**
+  - **A8.1 Run time limit:** one limit for any run — chat reply, workflow run, swarm, scheduled job — **2 hours by default**, set by admins in the Sign-in section of Users → Registration & sign-in (15 min / 30 min / 1 h / 2 h / 4 h / 8 h; `SOVRANT_MAX_RUN_MINUTES` starting value). At the limit the run stops cleanly, keeps what it finished, and the conversation/run says "Stopped after 2 hours — the limit set by your admin". Time spent waiting for an approval counts toward it. The per-reply turn timeout (`SOVRANT_TURN_TIMEOUT_SECONDS`, 5 min) stays inside it but no longer counts time spent waiting for an approval.
+  - **A8.2 Approvals wait:** when a run needs an approval and none of the person's tabs is open, the request waits (until answered, the run limit, or the run is stopped) instead of being refused. It's shown when they next open a tab — the conversation and Command Center say "Waiting for your approval".
+  - **A8.3 Security sign-outs stop work:** "Sign out everywhere", an admin revoke and disabling an account cancel that person's running work (chat replies, workflow runs, swarms) — work shouldn't continue as someone who was just locked out. Ordinary sign-out and idle timeout don't.
+  - Tests: run limit stops a long run and records why; approval waits while no tab is open and is answered after one opens; revoke-all cancels running work; ordinary sign-out doesn't.
+  - Later (not A8): idle sign-out default 1 h → 30 min.
 - [ ] Background work outside a chat (scheduled workflows, webhooks, swarms started without a conversation) uses its owner's model pick — today it runs on the install default
 - [ ] UAT on `development` before 2.1.0: sign-in (timeouts, Keep me signed in, account menu, sign out everywhere), Admin "Signed in on Web" and revoke, per-person model and the personal default model set, Governance file/shell tool switches, admin-only slash commands — on Web and Desktop
 - [ ] GitHub #32 closed with a reply

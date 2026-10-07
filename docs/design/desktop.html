@@ -869,7 +869,8 @@ const USERS_REG_SECS=[
   ['Sign-in',[['Allow "Keep me signed in"','Shows the checkbox on Sign in. Turn off where people shouldn\'t stay signed in for days — remembered browsers then follow the limits below.','sw:1'],
               ['Keep signed in for','How long "Keep me signed in" lasts on a browser.','sel:14 days'],
               ['Sign out after inactivity','Renewed while the person is active.','sel:1 hour'],
-              ['Sign out after at most','However active they are, unless they chose "Keep me signed in".','sel:12 hours']]]];
+              ['Sign out after at most','However active they are, unless they chose "Keep me signed in".','sel:12 hours'],
+              ['Stop runs after','A reply, workflow or swarm still running after this long is stopped, keeping what it finished. Signing out does not stop your work; Sign out everywhere and Revoke do.','sel:2 hours']]]];
 function setWelcomeRole(v){ welcomeRole=v; render(); }
 function setOrchView(v){ orchView=v; render(); }
 
@@ -1306,7 +1307,7 @@ function homeTasks(admin){
   return admin?[
       [true,'Connect a model provider','OpenRouter connected',''],
       [all||!first,'Enable providers for a workspace','Admins choose what each workspace can use','Open Workspaces'],
-      [all,'Invite your team','Add people and set their roles','Open Users'],
+      [all,'Add your team','Open registration so people can sign up, then set their roles','Open Users'],
       [all,'Connect an integration','GitHub, Slack, databases and more','Open Integrations'],
       [all,'Create your first agent','Give it instructions, tools and knowledge','Create agent'],
     ]:[

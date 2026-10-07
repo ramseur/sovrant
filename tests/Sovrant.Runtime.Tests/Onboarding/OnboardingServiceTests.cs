@@ -43,9 +43,10 @@ public sealed class OnboardingServiceTests : IAsyncDisposable
         try { Directory.Delete(_baseDir, recursive: true); } catch { /* best-effort */ }
     }
 
-    private OnboardingService Build(SovrantConfig? config = null, bool withPrefs = true)
+    private OnboardingService Build(SovrantConfig? config = null, bool withPrefs = true, Sovrant.Runtime.Users.IUserService? users = null)
     {
         var services = new ServiceCollection();
+        if (users is not null) services.AddSingleton(users);
         if (withPrefs) services.AddSingleton<IUserPreferenceStore>(_prefs);
         services.AddSingleton<IProviderProfileStore>(_profiles);
         services.AddSingleton<IKnowledgeStore>(_knowledge);
@@ -109,6 +110,35 @@ public sealed class OnboardingServiceTests : IAsyncDisposable
         Assert.True(byKey["integration"].Done);
         Assert.True(byKey["agent"].Done);
         Assert.Equal(3, later.DoneCount);
+    }
+
+    [Fact]
+    public async Task Add_Your_Team_Ticks_When_Someone_Else_Has_Registered()
+    {
+        // People join by registering into their own personal workspace (no invites on Web), so the step
+        // used to stay unticked forever. Real SQLite user store.
+        var dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_onboard_{Guid.NewGuid():N}.db");
+        var storage = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, dbPath);
+        await storage.InitializeAsync();
+        try
+        {
+            var users = new Sovrant.Runtime.Users.SqliteUserStore(storage, NullLogger<Sovrant.Runtime.Users.SqliteUserStore>.Instance);
+            await users.CreateAsync(userId: "admin@x", role: "admin");
+            var alone = await Build(users: users).GetWelcomeAsync("admin@x", isAdmin: true, workspaceId: null);
+            var step = alone.Checklist.Single(c => c.Key == "invite");
+            Assert.False(step.Done);
+            Assert.Equal("Add your team", step.Title);
+
+            await users.CreateAsync(userId: "sam@x");
+            var withTeam = await Build(users: users).GetWelcomeAsync("admin@x", isAdmin: true, workspaceId: null);
+            Assert.True(withTeam.Checklist.Single(c => c.Key == "invite").Done);
+        }
+        finally
+        {
+            await storage.DisposeAsync();
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try { File.Delete(dbPath); } catch (IOException) { }
+        }
     }
 
     [Fact]

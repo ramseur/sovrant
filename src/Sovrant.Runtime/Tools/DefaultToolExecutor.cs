@@ -100,8 +100,11 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
                 if (_approvalCache is not null && _approvalCache.IsAllowed(toolName))
                     break; // user already said "always allow this turn" for this tool
                 LogConfirmationRequired(_logger, toolName);
-                var userDecision = await _confirmationHandler
-                    .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
+                ConfirmationDecision userDecision;
+                // Waiting for the person doesn't use up the reply's own timeout (Phase 145 A8.1).
+                using (Sovrant.Runtime.Conversation.RunDeadline.Current?.PauseForApproval())
+                    userDecision = await _confirmationHandler
+                        .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
                 if (userDecision == ConfirmationDecision.Deny)
                 {
                     LogDenied(_logger, toolName);
@@ -147,8 +150,11 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
                 _approvalCache?.IsAllowed(toolName) != true)
             {
                 LogTrustConfirmation(_logger, toolName, trustVerdict.MatchedPattern ?? "*");
-                var trustDecision = await _confirmationHandler
-                    .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
+                ConfirmationDecision trustDecision;
+                // Waiting for the person doesn't use up the reply's own timeout (Phase 145 A8.1).
+                using (Sovrant.Runtime.Conversation.RunDeadline.Current?.PauseForApproval())
+                    trustDecision = await _confirmationHandler
+                        .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
                 if (trustDecision == ConfirmationDecision.Deny)
                 {
                     LogDenied(_logger, toolName);

@@ -220,6 +220,18 @@
                     }
                 </select>
             </div>
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Stop runs after</div>
+                    <div class="toggle-desc">A reply, workflow or swarm still running after this long is stopped, keeping what it finished. Signing out doesn't stop your work; Sign out everywhere and Revoke do.</div>
+                </div>
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_runMinutes" @bind:after="SaveRunLimitAsync">
+                    @foreach (var v in Choices(Sovrant.Runtime.Conversation.RunLimits.MinuteChoices, _runMinutes))
+                    {
+                        <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromMinutes(v))</option>
+                    }
+                </select>
+            </div>
         </div>
     }
 
@@ -421,7 +433,7 @@
 
     // ── Phase 145 A7: sign-in rules ─────────────────────────────────────────
     private WebSignInSettings _signIn = WebSignInSettings.Load(null);
-    private int _rememberDays, _idleMinutes, _maxHours;
+    private int _rememberDays, _idleMinutes, _maxHours, _runMinutes;
 
     private Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore? SettingsStore =>
         Services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>();
@@ -430,11 +442,19 @@
     {
         _signIn = WebSignInSettings.Load(SettingsStore);
         (_rememberDays, _idleMinutes, _maxHours) = (_signIn.RememberDays, _signIn.IdleMinutes, _signIn.MaxHours);
+        _runMinutes = (int)Sovrant.Runtime.Conversation.RunLimits.Load(SettingsStore).TotalMinutes;
     }
 
     /// <summary>The standard choices, plus the current value if it came from an env variable and isn't one of them.</summary>
     private static IEnumerable<int> Choices(IReadOnlyList<int> standard, int current) =>
         standard.Contains(current) ? standard : standard.Append(current).Order();
+
+    private async Task SaveRunLimitAsync()
+    {
+        if (SettingsStore is not { } store) return;
+        await Sovrant.Runtime.Conversation.RunLimits.SaveAsync(store, _runMinutes);
+        _status = "Run time limit saved. It applies to runs that start from now on.";
+    }
 
     private async Task ToggleRememberAsync(ChangeEventArgs e)
     {

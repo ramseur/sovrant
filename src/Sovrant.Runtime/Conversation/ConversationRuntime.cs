@@ -24,6 +24,7 @@ namespace Sovrant.Runtime.Conversation;
 public sealed partial class ConversationRuntime : IConversationRuntime
 {
     private const int MaxToolRounds = 20;
+    private readonly IWorkspaceSettingsStore? _settings;
     private const int MaxRepeatedToolCalls = 3;
 
     private readonly ISmartRouter _router;
@@ -157,6 +158,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // to a static snapshot resolved once from env > store > settings.json.
         _compaction = compaction ?? LiveSettings.Static(
             CompactionSettings.Resolve(settings, fallback: _config.CompactThreshold));
+        _settings = settings;
         _approvalCache = approvalCache;
         _mcpClients = mcpClients;
         _artifactStore = artifactStore;
@@ -270,7 +272,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             Environment.GetEnvironmentVariable("SOVRANT_TURN_TIMEOUT_SECONDS"), out var tts) && tts > 0 ? tts : 300;
         var originalCt = ct;
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        turnCts.CancelAfter(TimeSpan.FromSeconds(turnTimeoutSeconds));
+        // Phase 145 A8.1: the per-reply timeout plus the admin's run time limit. Waiting for an approval
+        // pauses the per-reply timeout (the person may be away) but still counts toward the run limit.
+        using var deadline = RunDeadline.Begin(turnCts, TimeSpan.FromSeconds(turnTimeoutSeconds), RunLimits.Load(_settings));
+        // A8.3: a security sign-out of the owner stops this reply.
+        using var running = Auth.RunningWork.Track(
+            SessionContext.Current?.OwnerUserId ?? _ownerUserId ?? Auth.AmbientPrincipal.Current?.UserId, turnCts);
         ct = turnCts.Token;
 
         var round = 0;
@@ -725,8 +732,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         if (timedOut)
         {
             turnSw.Stop();
-            yield return new RuntimeEvent.RuntimeError(
-                $"Turn timed out after {turnTimeoutSeconds} seconds.");
+            yield return new RuntimeEvent.RuntimeError(running.StoppedBySignOut ? Auth.RunningWork.StoppedMessage
+                : deadline.RunLimitReached ? RunLimits.StoppedMessage(deadline.RunLimit)
+                : $"Turn timed out after {turnTimeoutSeconds} seconds.");
             yield break;
         }
 

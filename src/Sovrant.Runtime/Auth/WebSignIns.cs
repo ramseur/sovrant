@@ -385,7 +385,20 @@ internal sealed class SqliteWebSignInService(ISqliteConnectionFactory connection
         cmd.Parameters.AddWithValue("$now", Ts(_clock.GetUtcNow()));
         cmd.Parameters.AddWithValue("$reason", reason);
         cmd.Parameters.AddWithValue("$id", signInId);
-        return await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
+        var revoked = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false) > 0;
+        // A8.3: an admin signing someone out stops their running work too.
+        if (revoked && reason == WebSignInRevokeReasons.Admin && await UserOfAsync(signInId, ct).ConfigureAwait(false) is { } userId)
+            RunningWork.StopAllFor(userId);
+        return revoked;
+    }
+
+    private async Task<string?> UserOfAsync(string signInId, CancellationToken ct)
+    {
+        using var connection = connectionFactory.CreateConnection();
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT user_id FROM web_sign_ins WHERE sign_in_id = $id";
+        cmd.Parameters.AddWithValue("$id", signInId);
+        return await cmd.ExecuteScalarAsync(ct).ConfigureAwait(false) as string;
     }
 
     public async Task<int> RevokeAllAsync(string userId, string reason, string? exceptSignInId = null, CancellationToken ct = default)
@@ -400,7 +413,11 @@ internal sealed class SqliteWebSignInService(ISqliteConnectionFactory connection
         cmd.Parameters.AddWithValue("$reason", reason);
         cmd.Parameters.AddWithValue("$uid", userId);
         cmd.Parameters.AddWithValue("$except", (object?)exceptSignInId ?? DBNull.Value);
-        return await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        var count = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
+        // A8.3: "Sign out everywhere" and an admin sign-out stop the person's running work.
+        if (reason is WebSignInRevokeReasons.SignOutEverywhere or WebSignInRevokeReasons.Admin)
+            RunningWork.StopAllFor(userId);
+        return count;
     }
 
     /// <summary>

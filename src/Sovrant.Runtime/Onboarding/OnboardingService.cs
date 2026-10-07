@@ -175,9 +175,12 @@ public sealed class OnboardingService(IServiceProvider services)
             }
         }
 
-        var invited = false;
+        // Someone besides the first admin has an account (people join by registering; there are no
+        // invites on Web yet), or a team workspace has more than one member.
+        var invited = services.GetService<Sovrant.Runtime.Users.IUserService>() is { } userService
+            && await userService.CountAsync(ct: ct).ConfigureAwait(false) > 1;
         var wsService = services.GetService<IWorkspaceService>();
-        if (wsService is not null)
+        if (!invited && wsService is not null)
         {
             foreach (var ws in workspaces)
             {
@@ -197,7 +200,7 @@ public sealed class OnboardingService(IServiceProvider services)
                 provider is not null, "Set up a provider", WelcomeTarget.ProviderSetup),
             new("workspace-providers", "Enable providers for a workspace", "Admins choose what each workspace can use",
                 anyEnabled, "Open Workspaces", WelcomeTarget.Workspaces),
-            new("invite", "Invite your team", "Add people and set their roles", invited, "Open Users", WelcomeTarget.Users),
+            new("invite", "Add your team", "Open registration so people can sign up, then set their roles", invited, "Open Users", WelcomeTarget.Users),
             new("integration", "Connect an integration",
                 integrations > 0 ? $"{integrations} connected" : "GitHub, Slack, databases and more",
                 integrations > 0, "Open Integrations", WelcomeTarget.Integrations),

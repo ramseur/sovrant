@@ -347,7 +347,10 @@ internal sealed partial class SqliteUserStore : IUserService
         var rows = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
 
         if (rows > 0)
+        {
             LogUserDeactivated(_logger, userId);
+            Sovrant.Runtime.Auth.RunningWork.StopAllFor(userId); // A8.3: a disabled account's work stops
+        }
         return rows > 0;
     }
 

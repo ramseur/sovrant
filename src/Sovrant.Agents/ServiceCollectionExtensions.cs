@@ -97,7 +97,9 @@ public static class ServiceCollectionExtensions
         // OpenClaw bus client — optional; no-ops when McpClientRegistry has no "openclaw" entry.
         services.AddSingleton<OpenClawBusClient>();
         services.AddSingleton<SwarmOrchestrator>();
-        services.AddSingleton<ISwarmOrchestrator>(sp => sp.GetRequiredService<SwarmOrchestrator>());
+        // Phase 145 A8.1: every swarm is held to the admin's run time limit.
+        services.AddSingleton<ISwarmOrchestrator>(sp => new TimeLimitedSwarmOrchestrator(
+            sp.GetRequiredService<SwarmOrchestrator>(), sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
         services.AddSingleton<SwarmQualityGate>();
         services.AddSingleton<ISwarmQualityGate>(sp => sp.GetRequiredService<SwarmQualityGate>());
 

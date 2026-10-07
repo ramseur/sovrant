@@ -74,6 +74,15 @@
 
     <main class="content-area">
         <TopContextBar />
+        @if (WaitingApproval is { } waiting)
+        {
+            @* Phase 145 A8.2: a run of yours is waiting for an approval somewhere you aren't looking. *@
+            <div class="approval-banner" role="status">
+                <SovrantIcon Name="@IconNames.Warning" Size="15" />
+                <span>A run is waiting for your approval (<b>@waiting.ToolName</b>). It waits until you answer, or until the run time limit.</span>
+                <a class="btn btn-sm btn-primary" href="@($"/chat?session={Uri.EscapeDataString(waiting.SessionId ?? string.Empty)}")">Open</a>
+            </div>
+        }
         @Body
     </main>
 
@@ -109,7 +118,36 @@
             Nav.NavigateTo(Session.SignedOutReason is { } why ? $"/login?reason={why}" : "/login", forceLoad: false);
         Nav.LocationChanged += OnLocationChanged;
         MarkKnowledgeVisited(Nav.Uri);
+        if (Approvals is { } approvals)
+        {
+            approvals.PendingChanged += OnPendingApprovalsChanged;
+            ActiveContext.OnChanged += OnActiveContextChangedForBanner;
+        }
     }
+
+    // ── Phase 145 A8.2: waiting approvals banner ────────────────────────────
+    private Sovrant.Web.Adapters.BlazorConfirmationHandler? Approvals =>
+        Services.GetService<Sovrant.Web.Adapters.BlazorConfirmationHandler>();
+
+    /// <summary>The first approval waiting for this person that isn't already on screen.</summary>
+    private Sovrant.Web.Adapters.ConfirmationRequest? WaitingApproval
+    {
+        get
+        {
+            if (Approvals is not { } approvals || Session.UserId is null) return null;
+            var onChat = Nav.ToBaseRelativePath(Nav.Uri) is var path
+                && (path.Length == 0 || path.StartsWith("chat", StringComparison.OrdinalIgnoreCase) || path.StartsWith('?'));
+            return approvals.PendingFor(Session.UserId)
+                .FirstOrDefault(r => !(onChat && r.SessionId == ActiveContext.CurrentSessionId) && r.SessionId is not null);
+        }
+    }
+
+    private void OnPendingApprovalsChanged(string owner)
+    {
+        if (owner == Session.UserId) _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void OnActiveContextChangedForBanner() => _ = InvokeAsync(StateHasChanged);
 
     // Phase 140 — opening any Knowledge page ticks "Explore Knowledge" on the member checklist.
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
@@ -193,6 +231,11 @@
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChanged;
+        if (Approvals is { } approvals)
+        {
+            approvals.PendingChanged -= OnPendingApprovalsChanged;
+            ActiveContext.OnChanged -= OnActiveContextChangedForBanner;
+        }
         _signInWatch.Cancel();
         _signInWatch.Dispose();
         _dotNetRef?.Dispose();

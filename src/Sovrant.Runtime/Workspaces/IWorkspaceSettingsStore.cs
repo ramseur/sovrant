@@ -155,6 +155,9 @@ public static class WorkspaceSettingsKeys
     public const string WebSignInIdleMinutes = "web_signin.idle_minutes";
     public const string WebSignInMaxHours = "web_signin.max_hours";
 
+    /// <summary>Phase 145 A8.1 — the longest any run may take, in minutes (global; default 120).</summary>
+    public const string RunMaxMinutes = "runs.max_minutes";
+
     /// <summary>Phase 145 Part B (global row): the default profile for personal workspaces (its default model is used).</summary>
     public const string PersonalDefaultProfileId = "provider.personal_default_profile_id";
 

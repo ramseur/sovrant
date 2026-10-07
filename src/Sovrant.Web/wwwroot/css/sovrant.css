@@ -4393,3 +4393,11 @@ a.home-card:hover { border-color: var(--brand-primary); }
 .home-allset-tick { width: 20px; height: 20px; border-radius: 50%; background: var(--status-pass); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .home-allset-text { flex: 1; color: var(--text-secondary); }
 .home-allset-text b { color: var(--text-primary); }
+
+/* Phase 145 A8.2 — a run is waiting for your approval somewhere you aren't looking */
+.approval-banner { display: flex; align-items: center; gap: 10px; margin: 8px 16px 0; padding: 8px 12px;
+    border: 1px solid var(--status-warn); border-radius: 8px; background: var(--surface-card);
+    color: var(--text-primary); font-size: 13px; line-height: 1.4; }
+.approval-banner svg { color: var(--status-warn); flex-shrink: 0; }
+.approval-banner span { flex: 1; min-width: 0; }
+.approval-banner .btn { flex-shrink: 0; text-decoration: none; }

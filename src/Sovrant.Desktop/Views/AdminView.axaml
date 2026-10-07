@@ -361,6 +361,24 @@
                     </DockPanel>
                 </Border>
 
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding RunMinuteChoices}"
+                                  SelectedItem="{Binding SelectedRunMinutes}"
+                                  MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Stop runs after" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="A reply, workflow or swarm still running after this long is stopped, keeping what it finished. Signing out doesn't stop your work; Sign out everywhere and Revoke do."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->

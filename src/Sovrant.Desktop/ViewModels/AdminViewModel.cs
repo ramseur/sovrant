@@ -249,6 +249,9 @@ public partial class AdminViewModel : ViewModelBase
     [ObservableProperty] private SignInChoice? _selectedRememberDays;
     [ObservableProperty] private SignInChoice? _selectedIdleMinutes;
     [ObservableProperty] private SignInChoice? _selectedMaxHours;
+    [ObservableProperty] private SignInChoice? _selectedRunMinutes;
+    public IReadOnlyList<SignInChoice> RunMinuteChoices { get; } =
+        [.. Sovrant.Runtime.Conversation.RunLimits.MinuteChoices.Select(m => new SignInChoice(m, WebSignInSettings.Describe(TimeSpan.FromMinutes(m))))];
     private bool _loadingSignInSettings;
 
     private void LoadSignInSettings()
@@ -260,6 +263,7 @@ public partial class AdminViewModel : ViewModelBase
         SelectedRememberDays = Pick(RememberDayChoices, s.RememberDays);
         SelectedIdleMinutes = Pick(IdleMinuteChoices, s.IdleMinutes);
         SelectedMaxHours = Pick(MaxHourChoices, s.MaxHours);
+        SelectedRunMinutes = Pick(RunMinuteChoices, (int)Sovrant.Runtime.Conversation.RunLimits.Load(_wsSettings).TotalMinutes);
         _loadingSignInSettings = false;
     }
 
@@ -271,6 +275,25 @@ public partial class AdminViewModel : ViewModelBase
     partial void OnSelectedRememberDaysChanged(SignInChoice? value) => SaveSignInSettings();
     partial void OnSelectedIdleMinutesChanged(SignInChoice? value) => SaveSignInSettings();
     partial void OnSelectedMaxHoursChanged(SignInChoice? value) => SaveSignInSettings();
+
+    partial void OnSelectedRunMinutesChanged(SignInChoice? value)
+    {
+        if (_loadingSignInSettings || value is null) return;
+        _ = SaveRunLimitAsync(value.Value);
+    }
+
+    private async Task SaveRunLimitAsync(int minutes)
+    {
+        try
+        {
+            await Sovrant.Runtime.Conversation.RunLimits.SaveAsync(_wsSettings, minutes).ConfigureAwait(true);
+            Status = "Run time limit saved. It applies to runs that start from now on.";
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.Data.Common.DbException)
+        {
+            Error = $"Couldn't save the run time limit: {ex.Message}";
+        }
+    }
 
     private async void SaveSignInSettings()
     {
