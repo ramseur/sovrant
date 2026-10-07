@@ -50,6 +50,7 @@ What we are actively working on and shipping next, in priority order.
 | **2.1.0 — in progress** | Phase 134 | Postgres / Supabase — every known Postgres and Supabase issue in one phase: privacy flag missing from Postgres conversation lists (admins see private titles in Command Center), migrator copies only conversations + credentials, no Postgres test run, split SQLite/Postgres backend, Supabase RLS (was Phase 127) |
 | **2.1.0 — built** | Stopgaps | Web: no automatic sign-in after a restart; Web and Server: file and shell tools off for members by default (admins can turn them on); README warns that Web is single-user until Phase 145 |
 | **2.1.0 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each member picks from the workspace's admin-configured models, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
+| **2.1.0 — next** | Phase 148 | Technical debt and improvements — flaky tests, stuck workflow status, settings precedence, compaction, port mismatch, dead code, stale debt table, README numbers, no personal data in tests/mocks/docs |
 | **Next — after 145** | Phase 146 | Web in front of Server for enterprise — each Web user signs in to Server as themselves (per-browser cookie on Web, their own Server token, one SignalR connection per tab); end-to-end tests of the headless setup; audit and fix what it finds (was Phase 145 Part C) |
 | **Later** | Phase 147 | Sandboxed code execution for hosted Web — when hosted users need Bash or file tools, they run in an isolated container per workspace or conversation (never on the server), like Claude Code's cloud sandboxes and claude.ai's code execution |
 | **Planned — unscheduled** | Chat composer picker | Pick skills, agents and Knowledge items for a chat from the message box (see "Planned — unscheduled" at the end) |
@@ -13349,3 +13350,32 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 - **Approval:** where a document needs sign-off (e.g. produced by a workflow), the preview is where it's approved or sent back — tie in with plan review and workflow acceptance (Phase 129).
 - **Constraints:** no host file access on hosted servers (Phase 145 Part D); renditions must not need tools installed on the server unless an admin opts in.
 - **Decided 2026-10-07:** Web shows no "Open folder" (it can't open a folder on the server for you; Download .zip is the Web way). Desktop keeps "Open folder", standard for desktop apps.
+
+---
+
+## Phase 148 — 2.1.0 technical debt and improvements
+
+**Status:** Planned (2026-10-07), approved. 2.1.0 is a technical-debt and improvements release on top of Phase 145; a final UAT runs after these fixes.
+
+### What ships
+1. **Flaky tests** — make reliable: Agents `OrchestrationCoordinatorTests` cancellation, MCP `McpToolRegistrarRetryTests`, `GroupMailboxTests`. Release test runs must be clean.
+2. **A workflow stopped by hand can stay "Running"** — only the CLI and the swarm driver record a cancel; cancelling a run's token otherwise leaves its status Running (the A8 run limit and security sign-outs already record theirs). Every stop records Cancelled with the reason.
+3. **Admin settings silently ignored when an env variable is set** — `WorkspaceSettingsResolver` reads env before the database, so changing governance switches, budgets etc. in the app does nothing if the variable is set. Either the admin's setting wins (as A7/A8 do — env becomes the starting value) or the UI says "set by the server's environment"; decide per setting.
+4. **Conversation compaction (tactical fix)** — trigger as a share of the active model's context window (not a fixed token count); pin what must survive (acceptance criteria, latest tool error, open blockers) instead of a hardcoded last-4 messages; summarise on the `fast` tier, not the main model; keep the originals retrievable instead of dropping them. (Known Issues / Debt.)
+5. **Port mismatch** — Server's `launchSettings.json` says 5091; Kestrel uses 5200 (`SOVRANT_PORT`). Align them so quick restarts and parallel test runs don't collide.
+6. **Dead code** — `SystemPromptBuilder` is unused (the prompt is built in `ConversationRuntime`); remove it and its tests, or fold anything still useful into the runtime.
+7. **Stale debt table** — close entries already fixed after a check: per-turn timeout (turn timeout + A8 run limit), CORS (`SOVRANT_CORS_ORIGINS`), selected model not saved on reload (both apps save it).
+8. **README numbers** — tools, endpoints, tests and similar counts refreshed for the release.
+9. **No personal data in tests, mocks or docs** — replace the maintainer's name and email in `AvatarTextTests`, `AvatarText` comments, both design mocks and the roadmap with a neutral example person (Alex Morgan, alex@example.com). Keep the repository URL (`github.com/ramseur/sovrant`) and the company security contact. Also correct the old repository name (`ramseur/sovrant-engine`) in `sdk/js/package.json` and the model-metadata request header.
+
+### Acceptance criteria
+- [ ] Full test suite clean on several consecutive runs
+- [ ] Every way of stopping a workflow leaves it Cancelled (or Failed) with the reason
+- [ ] Each env-backed admin setting either follows the admin's choice or says it's set by the environment
+- [ ] Compaction: window-relative trigger, pinned essentials, fast-tier summary, originals kept
+- [ ] Server launch profile and runtime port agree
+- [ ] `SystemPromptBuilder` gone (or merged)
+- [ ] Debt table up to date
+- [ ] README numbers current
+- [ ] No personal name or email in tests, mocks or docs (repository URL and company contact excepted)
+- [ ] Final UAT on `development`, then the 2.1.0 release
