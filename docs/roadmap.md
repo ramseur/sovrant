@@ -52,6 +52,8 @@ What we are actively working on and shipping next, in priority order.
 | **2.1.0 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each member picks from the workspace's admin-configured models, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
 | **Next — after 145** | Phase 146 | Web in front of Server for enterprise — each Web user signs in to Server as themselves (per-browser cookie on Web, their own Server token, one SignalR connection per tab); end-to-end tests of the headless setup; audit and fix what it finds (was Phase 145 Part C) |
 | **Later** | Phase 147 | Sandboxed code execution for hosted Web — when hosted users need Bash or file tools, they run in an isolated container per workspace or conversation (never on the server), like Claude Code's cloud sandboxes and claude.ai's code execution |
+| **Planned — unscheduled** | Chat composer picker | Pick skills, agents and Knowledge items for a chat from the message box (see "Planned — unscheduled" at the end) |
+| **Planned — unscheduled** | Privacy toggle in the top bar | Once privacy covers documents, agent runs and orchestrations (see "Planned — unscheduled" at the end) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -13226,6 +13228,8 @@ Bash and the file tools run **on the server itself**, as its OS account. On a ho
 - [x] File and shell tools off on hosted Web and Server for everyone by default (master switch + member switch); blocked tools hidden from the model (per-conversation Bash folder dropped — Phase 147) — built 2026-10-07; audit also blocked `TaskCreate` (runs shell commands) and dropped the server's memory files and git status from hosted prompts. Follow-ups done 2026-10-07: eval runs admin-only (route and `/eval`), plus other shared-impact slash commands admin-only on Web; `WebFetch` checks every connection's address (hostnames, redirects, rebinding)
 - [x] Multi-user tests and a load test of several hundred circuits; sizing guidance published — built 2026-10-07: `tools/Sovrant.LoadTest` (real sign-ins and Blazor circuits), 1,000 people on 4 cores within a 2 GB limit with no errors; `ConcurrentUsersTests`; [docs/web-sizing.md](web-sizing.md). Found and fixed: concurrent Argon2id checks used 64 MB each with no limit (sign-in rush peaked at 3 GB) — now one per core, up to 8. Not covered: chat replies under load (provider-bound) and multi-instance (item 16)
 - [x] Design mock for the small UI changes on both mocks (2026-10-06): "Keep me signed in for 30 days" + Timed out / Revoked notices on Login; account menu from the rail footer (lifetime, Sign out, Sign out of all browsers); Admin → Users "Signed in on" with Revoke and Sign out everywhere. Logged in `docs/design/README.md`
+- [ ] Background work outside a chat (scheduled workflows, webhooks, swarms started without a conversation) uses its owner's model pick — today it runs on the install default
+- [ ] UAT on `development` before 2.1.0: sign-in (timeouts, Keep me signed in, account menu, sign out everywhere), Admin "Signed in on Web" and revoke, per-person model and the personal default model set, Governance file/shell tool switches, admin-only slash commands — on Web and Desktop
 - [ ] GitHub #32 closed with a reply
 
 ### Relationship to other phases
@@ -13298,3 +13302,28 @@ People using a hosted Sovrant may still need agents that run code, edit files or
 ### Relationship to other phases
 - **Phase 145 Part D** — turns host tools off on hosted servers; this phase brings code execution back safely.
 - **Phase 124** — directory controls remain for local and trusted single-team installs.
+
+---
+
+## Planned — unscheduled
+
+Agreed ideas without a phase number yet. Each gets a phase, a plan and a design mock before any code (plan → approval → roadmap → mock → code).
+
+### Chat composer picker — skills, agents and Knowledge items
+
+**Status:** Planned (2026-10-06), not started.
+
+Let people choose what a chat uses from the message box: **skills, agents and every Knowledge-tab item** (pages, guides, templates, and so on), on Web and Desktop.
+
+- **First step:** the design mocks (`docs/design/web.html`, `desktop.html`) don't show the chat's message options at all. Bring them up to date with today's options, then design the picker.
+- **Questions to settle:** does a pick apply to one message or the whole conversation? How does it show in the conversation? How does it interact with automatic knowledge routing (Phase 116) and agent chats?
+- Related: Knowledge pages (Phases 112–116), Agents, Skills.
+
+### Privacy toggle in the top bar
+
+**Status:** Deferred until privacy covers more than conversations.
+
+Today the Private/Public toggle sits in the chat header and applies to that conversation only. The top bar holds settings that feel global (model, MCP, workspace), so a toggle there now would suggest it also covers documents, agent runs and orchestrations — which it doesn't.
+
+- **When:** once documents, agent runs and orchestrations have privacy too.
+- **Then:** move it into the top bar next to the MCP switcher as a contextual control: on a chat it sets that conversation's privacy, on an agent run that run's, and so on.
