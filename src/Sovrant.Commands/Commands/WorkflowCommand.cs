@@ -199,11 +199,8 @@ public sealed class WorkflowCommand : ISlashCommand
         if (workflow.Status is WorkflowStatus.Completed or WorkflowStatus.Failed or WorkflowStatus.Cancelled)
             return new SlashCommandResult($"Workflow already in terminal state: {workflow.Status}");
 
-        await _store.AppendEventAsync(
-            workflow.Id, WorkflowEventTypes.Cancelled, "{}", ct: ct).ConfigureAwait(false);
-        await _store.UpdateStateAsync(
-            workflow.Id, WorkflowStatus.Cancelled,
-            completedAt: DateTimeOffset.UtcNow, ct: ct).ConfigureAwait(false);
+        // Same cancel as the Workflows page and API: records it and stops a run in progress.
+        await _store.CancelAsync(workflow, ct).ConfigureAwait(false);
 
         return new SlashCommandResult($"Workflow `{workflow.Id}` cancelled.");
     }

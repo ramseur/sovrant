@@ -27,6 +27,8 @@ public sealed class TimeLimitedWorkflowExecutor(
         var wf = await store.GetAsync(workflowId, ct).ConfigureAwait(false);
         var owner = wf?.OwnerUserId;
         using var running = Sovrant.Runtime.Auth.RunningWork.Track(owner, limited);
+        // Cancelling the workflow stops this run (Phase 148).
+        using var cancellable = WorkflowRuns.Track(workflowId, limited);
         // Started outside a chat (Workflows page, API, scheduler): run on the owner's model pick, not
         // the install default. Inside a chat, the conversation's context already carries it.
         var background = SessionContext.Current is null
@@ -36,6 +38,11 @@ public sealed class TimeLimitedWorkflowExecutor(
         try
         {
             return await inner.RunAsync(workflowId, limited.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellable.Cancelled && !ct.IsCancellationRequested)
+        {
+            // Cancelled by hand: the cancel already recorded it; return the workflow as it is now.
+            return (await store.GetAsync(workflowId, CancellationToken.None).ConfigureAwait(false))!;
         }
         catch (OperationCanceledException) when (running.StoppedBySignOut && !ct.IsCancellationRequested)
         {

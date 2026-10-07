@@ -39,6 +39,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Fixed
 
+- **Cancelling a workflow didn't stop it.** Cancel (Workflows page on Web and Desktop, the API, `/workflow cancel`) only changed the status: the run carried on, kept using the model, and then wrote its own status over the cancel — so a cancelled workflow could show "running" again, or finish anyway. Cancel now stops the run, and a cancelled workflow can't be changed back by a run that's still finishing (including one in another app). Shutting down still leaves running workflows to resume after a restart.
 - **Web: a page load could fail now and then on a busy server.** The new waiting-approvals banner looked up a service while the page was being torn down after prerendering, when the request's services were already gone; the error aborted the response. It now looks the service up once when the layout starts.
 - **A cancelled agent task could be reported as "timed out".** When the caller cancelled and the coordinator's own timeout had also fired by the time the cancellation was handled (a busy server), the caller's cancellation now wins — it happened first.
 - **Web: a dark box around the page heading after a refresh.** The heading is focused on load so screen readers announce the page; the browser drew its focus outline around it. The outline is now hidden for headings (they aren't controls), and the focus move stays.

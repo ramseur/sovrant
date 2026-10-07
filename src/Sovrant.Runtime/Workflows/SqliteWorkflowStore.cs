@@ -196,7 +196,10 @@ internal sealed class SqliteWorkflowStore(ISqliteConnectionFactory connectionFac
                 completed_at = COALESCE($completedAt, completed_at),
                 updated_at   = $now
             WHERE id = $id
+              AND (status <> 'cancelled' OR $status = 'cancelled')
             """;
+        // A cancelled workflow stays cancelled: a run that hadn't stopped yet (or one in another
+        // process) can't write its own status over the cancel.
         cmd.Parameters.AddWithValue("$id", workflowId);
         cmd.Parameters.AddWithValue("$status", StatusToString(status));
         cmd.Parameters.AddWithValue("$planJson", (object?)planJson ?? DBNull.Value);
