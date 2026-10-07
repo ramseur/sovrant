@@ -75,7 +75,7 @@
                     <div class="model-tree-models">
                         @foreach (var model in _selectedTreeGroup.Models)
                         {
-                            var isActive = model.Id.Equals(Config.Model, StringComparison.OrdinalIgnoreCase);
+                            var isActive = model.Id.Equals(Sovrant.Web.Program.IsRemoteMode ? Config.Model : _savedModelId, StringComparison.OrdinalIgnoreCase);
                             <button class="model-tree-model-item @(isActive ? "active" : "")"
                                     @onclick="() => SelectModel(_selectedTreeGroup, model.Id)">
                                 <span class="model-tree-model-name">@ShortenModelName(model.Id)</span>
@@ -431,10 +431,14 @@
             ? _providerProfiles.FirstOrDefault(p => p.ProfileId == savedProfileId)
             : null;
 
+        _savedModelId = savedModel;
+
         // Phase 138: a saved profile that isn't enabled for this workspace is switched off for
         // the running process (so it's never contacted here); it comes back on when it's
         // available again. Only once the workspace's profiles actually loaded.
-        if (_profilesLoaded)
+        // Phase 145 Part B: embedded Web is shared, so nothing global is touched here — each chat
+        // turn resolves the member's pick against this workspace (ModelSelection) instead.
+        if (_profilesLoaded && Sovrant.Web.Program.IsRemoteMode)
         {
             await Sovrant.Runtime.Providers.ActiveProviderGuard.ReconcileAsync(
                 Config, savedProfileId,
@@ -459,9 +463,13 @@
         {
             _currentModel = ShortenModelName(savedModel);
             _currentProvider = matched.Provider;
-            _isConnected = !string.IsNullOrWhiteSpace(Config.ApiKey);
+            // Embedded: the profile is admin-configured and allowed here, so it's usable.
+            _isConnected = !Sovrant.Web.Program.IsRemoteMode || !string.IsNullOrWhiteSpace(Config.ApiKey);
         }
     }
+
+    /// <summary>The member's own saved model (Phase 145 Part B), for marking the active row.</summary>
+    private string _savedModelId = string.Empty;
 
     private async Task LoadProviderProfilesAsync()
     {
@@ -680,26 +688,25 @@
 
         var apiKey = await Credentials.RetrieveAsync(group.CredentialId) ?? string.Empty;
 
-        Config.ApiKey = apiKey;
-        Config.MaxTokens = group.MaxTokens;
-        Config.Model = model;
-        AuthProvider.ApiKey = apiKey;
-
-        if (!string.IsNullOrWhiteSpace(group.BaseUrl))
+        if (Sovrant.Web.Program.IsRemoteMode)
         {
-            var parsed = new Uri(group.BaseUrl);
+            // Remote mode (until Phase 145 Part C): one process-wide selection, as before.
+            Config.ApiKey = apiKey;
+            Config.MaxTokens = group.MaxTokens;
+            Config.Model = model;
+            AuthProvider.ApiKey = apiKey;
+            var parsed = string.IsNullOrWhiteSpace(group.BaseUrl) ? null : new Uri(group.BaseUrl);
             Config.BaseUrl = parsed;
             AuthProvider.BaseUrl = parsed;
         }
-        else
-        {
-            Config.BaseUrl = null;
-            AuthProvider.BaseUrl = null;
-        }
+        // Embedded (Phase 145 Part B): the pick is this member's own. It's saved as their preference
+        // (below) and applied to their conversations per turn; the global config is never touched,
+        // so one member switching models doesn't switch anyone else's.
 
         _currentModel = ShortenModelName(model);
         _currentProvider = group.Provider;
-        _isConnected = !string.IsNullOrWhiteSpace(apiKey);
+        _savedModelId = model;
+        _isConnected = !Sovrant.Web.Program.IsRemoteMode || !string.IsNullOrWhiteSpace(apiKey);
         _treeOpen = false;
         _dropdownStyle = string.Empty;
         await UnbindLightDismissAsync();
@@ -725,7 +732,8 @@
                 group.MaxTokens.ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (!string.IsNullOrWhiteSpace(group.BaseUrl))
                 await Prefs.SetAsync(userId, UserPreferenceKeys.BaseUrl, group.BaseUrl);
-            if (!string.IsNullOrWhiteSpace(apiKey))
+            // Remote mode only: embedded Web must not overwrite the install's default key with one member's pick.
+            if (Sovrant.Web.Program.IsRemoteMode && !string.IsNullOrWhiteSpace(apiKey))
                 await Credentials.StoreAsync(CredentialKeys.LlmApiKey, apiKey);
         }
         catch { /* best effort */ }

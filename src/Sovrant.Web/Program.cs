@@ -159,6 +159,10 @@ public static class Program
                 builder.Services.AddSovrantPostgresStorage(connStr, bootstrapConfig.LegacyKeystorePath);
             }
 
+            // Phase 145 Part B: each conversation can use its own shared provider profile (the member's
+            // pick); everything else goes to the install's default router.
+            Sovrant.Runtime.Conversation.SessionProviderRoutingExtensions.AddSessionProviderRouting(builder.Services);
+
             // Web-specific overrides
             var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);
             // Phase 145: each conversation is judged by its owner's mode (set per chat turn); config's mode

@@ -128,13 +128,13 @@ public static class WebAuth
             ctx.Request.Headers.UserAgent.ToString(), ctx.Connection.RemoteIpAddress?.ToString(), policy, ctx.RequestAborted).ConfigureAwait(false);
         WriteCookie(ctx, token, signIn);
 
-        // Same first-sign-in work Login.razor used to do: the user's row/workspace and their preferences.
+        // The user's row and personal workspace. Their preferences are NOT copied into the global
+        // config any more (Phase 145 Part B): each conversation applies its owner's pick itself.
         _ = Task.Run(async () =>
         {
             try
             {
                 await Program.SeedUserAndWorkspaceAsync(services, userId).ConfigureAwait(false);
-                await services.ApplyUserPreferencesForUserAsync(userId).ConfigureAwait(false);
             }
 #pragma warning disable CA1031 // best-effort; sign-in already succeeded
             catch (Exception ex)

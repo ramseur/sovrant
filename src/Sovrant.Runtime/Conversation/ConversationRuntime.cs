@@ -31,6 +31,13 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly IToolRegistry _toolRegistry;
     private readonly ISessionStore _sessionStore;
     private readonly SovrantConfig _config;
+
+    /// <summary>
+    /// The model for this turn: the conversation's own choice (<see cref="SessionContext"/>, set per
+    /// session by the host — Phase 145: each member's pick on a shared Web server; Server's per-session
+    /// model) or else the install default. Never read the global <c>_config.Model</c> directly.
+    /// </summary>
+    private string Model => SessionContext.Current?.Model is { Length: > 0 } m ? m : _config.Model;
     private readonly ILogger<ConversationRuntime> _logger;
     private readonly IHookRunner _hookRunner;
     private readonly MemoryInjector? _memoryInjector;
@@ -226,11 +233,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var turnSw = Stopwatch.StartNew();
-        LogTurnStart(_logger, SessionId, _config.Model);
+        LogTurnStart(_logger, SessionId, Model);
 
         // Ambient logging scope — session_id and model appear on every log line within this turn.
         using var sessionScope = _logger.BeginScope(
-            new Dictionary<string, object?> { ["session_id"] = SessionId, ["model"] = _config.Model });
+            new Dictionary<string, object?> { ["session_id"] = SessionId, ["model"] = Model });
 
         // Phase 87 Track E — fresh "always allow this turn" approval set for
         // each turn. Disposed when the turn ends (including early returns).
@@ -399,8 +406,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             }
 
             var request = new MessagesRequest(
-                _config.Model,
-                CapMaxTokens(_config.Model, _config.MaxTokens),
+                Model,
+                CapMaxTokens(Model, _config.MaxTokens),
                 messagesForRequest)
             {
                 System = _systemPrompt,
@@ -452,10 +459,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             LogProviderSelected(_logger, resolvedProvider.Name);
 
             // Emit model/provider info immediately so UIs can show it before text streams.
-            // Use _config.Model (the user's selected model) rather than request.Model
+            // Use Model (the user's selected model) rather than request.Model
             // which may have been overridden by intent routing to a different tier.
             if (round == 0)
-                yield return new RuntimeEvent.ModelSelected(_config.Model, FriendlyProviderName(resolvedProvider));
+                yield return new RuntimeEvent.ModelSelected(Model, FriendlyProviderName(resolvedProvider));
 
             var llmSw = Stopwatch.StartNew();
 
@@ -492,7 +499,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             if (!string.IsNullOrEmpty(assistantText))
             {
                 await AppendSessionEntryAsync("assistant", assistantText,
-                    ct, model: _config.Model,
+                    ct, model: Model,
                     provider: FriendlyProviderName(resolvedProvider),
                     inputTokens: accumulated.InputTokens,
                     outputTokens: accumulated.OutputTokens)
@@ -556,7 +563,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     LogTurnComplete(_logger, turnSw.ElapsedMilliseconds, accumulated.InputTokens, accumulated.OutputTokens);
                     yield return new RuntimeEvent.TurnComplete(
                         "end_turn", accumulated.InputTokens, accumulated.OutputTokens,
-                        Model: _config.Model, ProviderName: FriendlyProviderName(resolvedProvider));
+                        Model: Model, ProviderName: FriendlyProviderName(resolvedProvider));
                     var costEvt1 = RecordCostIfEnabled(accumulated.InputTokens, accumulated.OutputTokens);
                     if (costEvt1 is not null) yield return costEvt1;
                     yield break;
@@ -575,7 +582,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     accumulated.StopReason,
                     accumulated.InputTokens,
                     accumulated.OutputTokens,
-                    Model: _config.Model,
+                    Model: Model,
                     ProviderName: FriendlyProviderName(resolvedProvider));
                 var costEvt2 = RecordCostIfEnabled(accumulated.InputTokens, accumulated.OutputTokens);
                 if (costEvt2 is not null) yield return costEvt2;
@@ -948,7 +955,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         var summarizedCount = cutPoint;
 
         var summaryRequest = new MessagesRequest(
-            _config.Model,
+            Model,
             2048,
             [InputMessage.UserText(
                 "Summarise the following conversation history in 3-5 concise paragraphs. " +
@@ -1273,7 +1280,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     {
         if (_costFacade is null) return null;
         var record = _costFacade.RecordTurn(
-            _sessionId, _config.Model, inputTokens, outputTokens);
+            _sessionId, Model, inputTokens, outputTokens);
         return new RuntimeEvent.TurnCost(record.EstimatedUsd, record.Source);
     }
 
@@ -1281,7 +1288,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     {
         var sb = new StringBuilder(
             "You are a highly capable AI assistant with access to tools. " +
-            $"You are powered by the {_config.Model} model, served through the Sovrant runtime. " +
+            $"You are powered by the {Model} model, served through the Sovrant runtime. " +
             "When asked what model or provider you are, state your actual model name. " +
             "When you have tools available, USE them proactively to accomplish the user's request. " +
             "Do not just describe what you would do — actually do it by calling the appropriate tools. " +
@@ -1737,7 +1744,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 ? tools.Take(DefaultMaxToolsFallback).ToList()
                 : tools;
 
-        var caps = _capabilityRegistry.GetCapabilities(_config.Model);
+        var caps = _capabilityRegistry.GetCapabilities(Model);
 
         // Model doesn't support native tool calling — don't send tools.
         if (!caps.NativeTools)

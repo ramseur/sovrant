@@ -176,6 +176,8 @@
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
     [Inject] private Sovrant.Runtime.Preferences.IUserPreferenceStore Prefs { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Providers.IProviderProfileStore ProfileStore { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore WsSettings { get; set; } = default!;
     [Inject] private Sovrant.Agents.Templates.AgentTemplateRegistry AgentRegistry { get; set; } = default!;
     [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
     [Inject] private Sovrant.Runtime.Governance.IAuditStore AuditStore { get; set; } = default!;
@@ -677,6 +679,16 @@
             // The owner keys the pooled runtime (and matches BeginTurn/EndTurn), so two users never share one.
             var pooled = await SessionPool.GetOrCreateAsync(sessionId, ownerUserId: Me,
                 agentSystemPrompt: _agentSystemPrompt, agentName: _agentName, ct: ct);
+
+            // Phase 145 Part B: this member's model pick (from the admin-configured models allowed on
+            // the current workspace) applies to this conversation only — routed by SessionProviderRouter.
+            if (!Sovrant.Web.Program.IsRemoteMode && !string.IsNullOrEmpty(Me))
+            {
+                var pick = await Sovrant.Runtime.Providers.ModelSelection.ResolveAsync(
+                    Me, ActiveContext.WorkspaceId, Prefs, ProfileStore, WsSettings, ct);
+                pooled.Config.ProviderProfileId = pick?.ProfileId;
+                pooled.Config.Model = pick?.Model;
+            }
 
             // Phase 145: this user's permission mode applies to this conversation only. Applied when the
             // conversation starts or the saved preference changes, so EnterPlanMode/ExitPlanMode (which
