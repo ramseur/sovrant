@@ -54,6 +54,7 @@ What we are actively working on and shipping next, in priority order.
 | **Later** | Phase 147 | Sandboxed code execution for hosted Web — when hosted users need Bash or file tools, they run in an isolated container per workspace or conversation (never on the server), like Claude Code's cloud sandboxes and claude.ai's code execution |
 | **Planned — unscheduled** | Chat composer picker | Pick skills, agents and Knowledge items for a chat from the message box (see "Planned — unscheduled" at the end) |
 | **Planned — unscheduled** | Privacy toggle in the top bar | Once privacy covers documents, agent runs and orchestrations (see "Planned — unscheduled" at the end) |
+| **Planned — unscheduled** | Viewing generated documents | Preview PDFs, Word and PowerPoint files in the app instead of downloading or opening folders (see "Planned — unscheduled" at the end) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -13336,3 +13337,15 @@ Today the Private/Public toggle sits in the chat header and applies to that conv
 
 - **When:** once documents, agent runs and orchestrations have privacy too.
 - **Then:** move it into the top bar next to the MCP switcher as a contextual control: on a chat it sets that conversation's privacy, on an agent run that run's, and so on.
+
+### Viewing generated documents (PDF, Word, PowerPoint)
+
+**Status:** Planned (2026-10-07), needs a plan before it's scheduled.
+
+Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word (.docx) and PowerPoint (.pptx) files. Today you see them as file names in the chat and on Artifacts, and to look at one you download it, or on Desktop use "Open folder". On Web that means a download for every look; on a shared server folders aren't an option at all.
+
+- **Goal:** look at a generated document where it was made — in the chat and on Artifacts, on Web and Desktop — without downloading it first, then download, share or approve it from there.
+- **Ideas to evaluate:** PDFs in the browser's or an embedded PDF viewer; Word/PowerPoint shown through a PDF or HTML rendition made when the document is generated (so the preview matches the file); first-page thumbnails on chat cards and Artifacts; the original file always one click away.
+- **Approval:** where a document needs sign-off (e.g. produced by a workflow), the preview is where it's approved or sent back — tie in with plan review and workflow acceptance (Phase 129).
+- **Constraints:** no host file access on hosted servers (Phase 145 Part D); renditions must not need tools installed on the server unless an admin opts in.
+- **Decided 2026-10-07:** Web shows no "Open folder" (it can't open a folder on the server for you; Download .zip is the Web way). Desktop keeps "Open folder", standard for desktop apps.
