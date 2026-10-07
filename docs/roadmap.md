@@ -49,7 +49,7 @@ What we are actively working on and shipping next, in priority order.
 | **2.0 — done** | Phase 144 | Environment configuration that works everywhere — every `.env.example` variable honoured from shell, container env or `.env`; provider keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE`); Web port, forwarded headers, `/health` + `/ready` (GitHub #33, #34, #35) ✅ |
 | **2.1.0 — in progress** | Phase 134 | Postgres / Supabase — every known Postgres and Supabase issue in one phase: privacy flag missing from Postgres conversation lists (admins see private titles in Command Center), migrator copies only conversations + credentials, no Postgres test run, split SQLite/Postgres backend, Supabase RLS (was Phase 127) |
 | **2.1.0 — built** | Stopgaps | Web: no automatic sign-in after a restart; Web and Server: file and shell tools off for members by default (admins can turn them on); README warns that Web is single-user until Phase 145 |
-| **2.1.0 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each user's own model and keys, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
+| **2.1.0 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each member picks from the workspace's admin-configured models, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -259,7 +259,7 @@ The engine is fully functional across five delivery modes with enterprise multi-
 | Home tabs — Overview (guide first, centred like the chat welcome, fits a laptop screen) and Activity (today's stats + activity table); always opens on Overview; header text wraps at any width (Web + Desktop) | Phase 142 | Built |
 | SDK & API parity — every app feature reachable over HTTP and the JS SDK. Part A (2.0, built): workflow plan / edit / cancel, MCP status + retry, privacy setters. Part B (planned): ~14 older server routes the SDK never wrapped, idempotent-only SDK retries, workflow left behind when planning fails, SDK type check + tests in CI | Phase 143 | Part A Built · Part B Planned |
 | Environment configuration that works everywhere — every documented env variable works from the shell, container env or `.env` on every app it applies to; provider API keys from env (seed on first boot, `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply every start); Web hosting parity (`SOVRANT_WEB_PORT`, forwarded headers, `/health` + `/ready`); docs match the code | Phase 144 | Built |
-| Multi-user Web — per-browser sign-in (HttpOnly cookie, 1 h idle + 12 h absolute + 30-day "Remember me", all env-settable), per-tab services instead of process-wide singletons, per-user model / provider / keys, headless mode with per-user Server sign-in, per-conversation Bash and a path to safe file/shell tools for members (with Phase 124), multi-user tests + load test (GitHub #32) | Phase 145 | Planned — next (2.1.0) |
+| Multi-user Web — per-browser sign-in (HttpOnly cookie, 1 h idle + 12 h absolute + 30-day "Remember me", all env-settable), per-tab services instead of process-wide singletons, per-member choice of the workspace's admin-configured models (no personal providers or keys), headless mode with per-user Server sign-in, per-conversation Bash and a path to safe file/shell tools for members (with Phase 124), multi-user tests + load test (GitHub #32) | Phase 145 | Planned — next (2.1.0) |
 
 ### v1.0 release polish ✅
 
@@ -13166,6 +13166,8 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 | Sign-in lifetime | **Revised 2026-10-06:** signed out after **1 hour idle** (renewed by activity) and after **12 hours** regardless; optional **30-day "Keep me signed in"**. All env-settable: `SOVRANT_WEB_IDLE_MINUTES` (60), `SOVRANT_WEB_MAX_SESSION_HOURS` (12), `SOVRANT_WEB_REMEMBER_DAYS` (30; `0` hides the checkbox). The first draft said 8 hours sliding (too long for something that runs tools on a server), then 30 minutes; **1 hour until long-running work is reliable across a sign-out** (see Open questions). |
 | SSO | Later, through Supabase Auth (Phase 40C). The cookie design leaves room for it. |
 | Headless mode | Each user signs in to Server with their own account; `SOVRANT_API_TOKEN` becomes optional (service use only) |
+| Models, providers and keys (2026-10-07) | **Admins configure them; members only use what's configured.** No personal providers, API keys or models. A member may pick **any model the admin has allowed on the workspace they're in**, and that pick applies to them only — today a pick in the top bar rewrites the global config, so one person switching changes everyone's model. |
+| Models in personal workspaces (2026-10-07) | **A default model set for every personal workspace, plus per-workspace enablement for team workspaces** — LibreChat's "base config for everyone, overrides per group" pattern mapped onto workspaces. The admin chooses the default set once (Admin → Workspaces or Providers); every personal workspace gets it, including new users'. Team workspaces keep today's strict per-workspace enablement. Bring-your-own keys (LibreChat's `user_provided`) are out for now. |
 
 ### What ships
 
@@ -13176,10 +13178,12 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 4. Remove the static `Program.SovrantUserId` and `SetUserId`; every call site asks the circuit's principal.
 5. Admin can see and revoke a user's active sign-ins (Admin → Users).
 
-**Part B — Each user's own model, provider and keys**
-6. `SovrantConfig` holds install-wide defaults only. Each chat session builds its own config from that user's preferences and active provider profile (today's `ApplyUserPreferencesAsync` logic, applied per session instead of to the global).
-7. API keys are resolved per session from the user's provider profile credential, replacing the global `MutableAuthProvider` hot-swap.
-8. Background work (workflows, swarms, teams, scheduler) carries the owner explicitly and builds that owner's config.
+**Part B — Shared, admin-configured models; each member picks their own (revised 2026-10-07)**
+6. Providers, API keys and the model list stay admin-configured and shared (workspace-scoped provider profiles + per-workspace enablement, as today). No personal providers or keys.
+7. A member's model pick (top bar) is saved as **their** preference and applied to **their** conversations only: each conversation runs on the picked profile's provider and key (a per-session router built from the shared profile — the pool already supports a per-session router override) instead of rewriting the global `SovrantConfig` / `MutableAuthProvider`. Signing in no longer copies anyone's choice into the global config; the global config is only the install default for work outside a conversation.
+8. The picker offers only models allowed on the member's current workspace; switching workspace re-checks the pick (falls back to the workspace default if the old one isn't allowed there). Personal workspaces allow the admin's **default model set** (one admin setting, applied to every personal workspace); team workspaces use their own enablement.
+9. Phase 144 env seeding becomes one shared, admin-owned profile for `LLM_API_KEY`, placed in the default set, instead of a provider profile per user.
+10. Background work (workflows, swarms, teams, scheduler) runs on its owner's pick for that workspace.
 
 **Part C — Headless mode (Web in front of Server)**
 9. Web's login form signs in against Server (`/v1/auth/login`); each circuit gets its own API client with that user's token. No shared token in the Web process.
@@ -13212,7 +13216,8 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 - [ ] Two browsers signed in as different users each see only their own identity, context, chats, approvals and model
 - [ ] No process-wide user state left in Web (`Program.SovrantUserId` gone; per-user services are scoped)
 - [ ] Sign-in cookie: HttpOnly, Secure on HTTPS; 1 h idle (renewed by activity, also across the SignalR circuit), 12 h absolute, 30-day "Keep me signed in"; all three env-settable and documented; sign-out and admin revoke work
-- [ ] Each user's model, provider and API key apply only to their own chats, including background work
+- [ ] A member's model pick (from the workspace's admin-configured models) applies only to their own chats, including background work; picking never changes anyone else's model; no personal providers or keys
+- [ ] Admin default model set applies to every personal workspace (including new users'); env `LLM_API_KEY` seeds one shared profile in it
 - [ ] Headless mode: each Web user is their own Server user; no shared token needed
 - [ ] Per-conversation Bash working directory
 - [ ] Multi-user tests and a load test of several hundred circuits; sizing guidance published
