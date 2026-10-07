@@ -13360,7 +13360,11 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 ### What ships
 1. **Flaky tests** — make reliable: Agents `OrchestrationCoordinatorTests` cancellation, MCP `McpToolRegistrarRetryTests`, `GroupMailboxTests`. Release test runs must be clean.
 2. **A workflow stopped by hand can stay "Running"** — only the CLI and the swarm driver record a cancel; cancelling a run's token otherwise leaves its status Running (the A8 run limit and security sign-outs already record theirs). Every stop records Cancelled with the reason.
-3. **Admin settings silently ignored when an env variable is set** — `WorkspaceSettingsResolver` reads env before the database, so changing governance switches, budgets etc. in the app does nothing if the variable is set. Either the admin's setting wins (as A7/A8 do — env becomes the starting value) or the UI says "set by the server's environment"; decide per setting.
+3. **Admin settings silently ignored when an env variable is set** — `WorkspaceSettingsResolver` reads env before the database, so changing governance switches, trust-boundary options etc. in the app does nothing if the variable is set. **Decided 2026-10-07 — extend Phase 144's key rule to settings, with one switch:**
+   - **`SOVRANT_ENV_OVERRIDE`** (one switch for keys and settings; `SOVRANT_ENV_KEYS_OVERRIDE` still accepted as the older name).
+   - **Off (default) — env seeds the database:** at startup, each `SOVRANT_*` setting variable whose setting isn't stored yet is written once; after that the stored value wins and admins change it in the app. (Keys already work this way.)
+   - **On — env is final:** the environment value is used, and in the app the control is **disabled with a note**: "Set by the server's environment (`SOVRANT_…`). To change it here, turn off `SOVRANT_ENV_OVERRIDE`." Saving it from the app is refused. Applies to settings (Governance, Trust Boundary, Users → Registration & sign-in, and any other page that edits an env-backed setting) **and to provider keys set from the environment**.
+   - Covers the 28 resolver-backed settings plus the A7 sign-in and A8 run-limit settings, so everything follows one rule.
 4. **Conversation compaction (tactical fix)** — trigger as a share of the active model's context window (not a fixed token count); pin what must survive (acceptance criteria, latest tool error, open blockers) instead of a hardcoded last-4 messages; summarise on the `fast` tier, not the main model; keep the originals retrievable instead of dropping them. (Known Issues / Debt.)
 5. **Port mismatch** — Server's `launchSettings.json` says 5091; Kestrel uses 5200 (`SOVRANT_PORT`). Align them so quick restarts and parallel test runs don't collide.
 6. **Dead code** — `SystemPromptBuilder` is unused (the prompt is built in `ConversationRuntime`); remove it and its tests, or fold anything still useful into the runtime.
@@ -13371,7 +13375,7 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 ### Acceptance criteria
 - [x] Full test suite clean on several consecutive runs — done 2026-10-07: 5 clean full runs in a row after fixing temp-file cleanup (51 classes), MCP retry waits, coordinator timer races, the Server test host's background scheduler, and a real Web page-load bug the repeats exposed
 - [x] Every way of stopping a workflow leaves it Cancelled (or Failed) with the reason — done 2026-10-07: cancel stops the run (`WorkflowRuns`), the store keeps cancelled cancelled, `/workflow cancel` uses the shared cancel
-- [ ] Each env-backed admin setting either follows the admin's choice or says it's set by the environment
+- [ ] One switch (`SOVRANT_ENV_OVERRIDE`): off — env seeds settings and keys once, the app's values win; on — env wins and the app disables those controls with a note (settings and keys)
 - [ ] Compaction: window-relative trigger, pinned essentials, fast-tier summary, originals kept
 - [ ] Server launch profile and runtime port agree
 - [ ] `SystemPromptBuilder` gone (or merged)
