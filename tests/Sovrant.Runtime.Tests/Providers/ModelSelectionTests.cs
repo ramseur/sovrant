@@ -79,4 +79,62 @@ public sealed class ModelSelectionTests : IAsyncDisposable
     {
         Assert.Null(await Resolve("sam@example.com", ws: "ws-empty"));
     }
+
+    // ── Work outside a chat uses its owner's pick, not the install default ──────────────────────
+
+    [Fact]
+    public async Task Background_Work_Gets_Its_Owners_Pick()
+    {
+        await _prefs.SetAsync("sam@example.com", UserPreferenceKeys.ActiveProviderProfileId, "anthropic");
+        await _prefs.SetAsync("sam@example.com", UserPreferenceKeys.Model, "claude-opus");
+
+        var context = await BackgroundModel.ContextForAsync("sam@example.com", Ws, "s-1", _prefs, _profiles, _ws);
+
+        Assert.NotNull(context);
+        Assert.Equal(("sam@example.com", "anthropic", "claude-opus", "s-1"),
+            (context!.OwnerUserId, context.ProviderProfileId, context.Model, context.SessionId));
+        Assert.Null(await BackgroundModel.ContextForAsync(null, Ws, null, _prefs, _profiles, _ws)); // no owner
+    }
+
+    [Fact]
+    public async Task A_Workflow_Started_Outside_A_Chat_Runs_On_Its_Owners_Model()
+    {
+        await _prefs.SetAsync("sam@example.com", UserPreferenceKeys.ActiveProviderProfileId, "anthropic");
+        await _prefs.SetAsync("sam@example.com", UserPreferenceKeys.Model, "claude-opus");
+        var store = new Sovrant.Runtime.Workflows.SqliteWorkflowStore(_storage);
+        var wf = await store.CreateAsync("goal", workspaceId: Ws, ownerUserId: "sam@example.com");
+        var seen = new Recorder();
+        var executor = new Sovrant.Runtime.Workflows.TimeLimitedWorkflowExecutor(seen, store, _ws, prefs: _prefs, profiles: _profiles);
+
+        await executor.RunAsync(wf.Id);
+
+        Assert.Equal(("claude-opus", "anthropic", "sam@example.com"), seen.Context);
+    }
+
+    [Fact]
+    public async Task A_Workflow_Started_From_A_Chat_Keeps_That_Conversations_Model()
+    {
+        await _prefs.SetAsync("sam@example.com", UserPreferenceKeys.ActiveProviderProfileId, "anthropic");
+        var store = new Sovrant.Runtime.Workflows.SqliteWorkflowStore(_storage);
+        var wf = await store.CreateAsync("goal", workspaceId: Ws, ownerUserId: "sam@example.com");
+        var seen = new Recorder();
+        var executor = new Sovrant.Runtime.Workflows.TimeLimitedWorkflowExecutor(seen, store, _ws, prefs: _prefs, profiles: _profiles);
+
+        using (Sovrant.Runtime.Conversation.SessionContext.Push(new Sovrant.Runtime.Conversation.SessionConfig
+               { OwnerUserId = "sam@example.com", ProviderProfileId = "openai", Model = "gpt-4o" }))
+            await executor.RunAsync(wf.Id);
+
+        Assert.Equal(("gpt-4o", "openai", "sam@example.com"), seen.Context);
+    }
+
+    private sealed class Recorder : Sovrant.Runtime.Workflows.IWorkflowExecutor
+    {
+        public (string?, string?, string?) Context { get; private set; }
+        public Task<Sovrant.Runtime.Workflows.Workflow> RunAsync(string workflowId, CancellationToken ct = default)
+        {
+            var c = Sovrant.Runtime.Conversation.SessionContext.Current;
+            Context = (c?.Model, c?.ProviderProfileId, c?.OwnerUserId);
+            return Task.FromResult<Sovrant.Runtime.Workflows.Workflow>(null!);
+        }
+    }
 }

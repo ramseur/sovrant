@@ -13238,7 +13238,7 @@ The open question on long-running work vs. sign-in expiry is decided:
   - **A8.3 Security sign-outs stop work:** "Sign out everywhere", an admin revoke and disabling an account cancel that person's running work (chat replies, workflow runs, swarms) — work shouldn't continue as someone who was just locked out. Ordinary sign-out and idle timeout don't.
   - Tests: run limit stops a long run and records why; approval waits while no tab is open and is answered after one opens; revoke-all cancels running work; ordinary sign-out doesn't.
   - Later (not A8): idle sign-out default 1 h → 30 min.
-- [ ] Background work outside a chat (scheduled workflows, webhooks, swarms started without a conversation) uses its owner's model pick — today it runs on the install default
+- [x] Background work outside a chat (scheduled workflows, webhooks, swarms started without a conversation) uses its owner's model pick — built 2026-10-07 (`BackgroundModel`; workflows from a chat keep that conversation's model)
 - [ ] UAT on `development` before 2.1.0: sign-in (timeouts, Keep me signed in, account menu, sign out everywhere), Admin "Signed in on Web" and revoke, per-person model and the personal default model set, Governance file/shell tool switches, admin-only slash commands — on Web and Desktop
 - [ ] GitHub #32 closed with a reply
 

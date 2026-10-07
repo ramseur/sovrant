@@ -1,6 +1,8 @@
 using System.Text;
 using Sovrant.Api.Routing;
 using Sovrant.Runtime.Conversation;
+using Microsoft.Extensions.DependencyInjection;
+using Sovrant.Server.Auth;
 using Sovrant.Server.Permissions;
 using Sovrant.Server.ServerConfig;
 using Sovrant.Server.Webhooks;
@@ -80,6 +82,18 @@ internal static class WebhookRoutes
         var runtime = pooled.Runtime;
         var sessionLock = pooled.Lock;
         var sessionConfig = pooled.Config;
+
+        // No model asked for and none set on this webhook conversation yet: use the webhook owner's
+        // (the token's user) model pick, not the install default.
+        if (req.Model is null && sessionConfig is not null && string.IsNullOrEmpty(sessionConfig.Model)
+            && await Sovrant.Runtime.Providers.BackgroundModel.ContextForAsync(ctx.GetUserId(), workspaceId: null, sessionId,
+                ctx.RequestServices.GetService<Sovrant.Runtime.Preferences.IUserPreferenceStore>(),
+                ctx.RequestServices.GetService<Sovrant.Runtime.Providers.IProviderProfileStore>(),
+                ctx.RequestServices.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>(), ct).ConfigureAwait(false) is { } pick)
+        {
+            sessionConfig.ProviderProfileId = pick.ProviderProfileId;
+            sessionConfig.Model = pick.Model;
+        }
 
         var model = req.Model ?? sessionConfig?.Model ?? serverConfig.Model;
 

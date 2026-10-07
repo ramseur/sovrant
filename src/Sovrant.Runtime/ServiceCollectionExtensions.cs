@@ -374,7 +374,8 @@ public static class ServiceCollectionExtensions
         // Phase 145 A8.1: every workflow run is held to the admin's run time limit.
         services.AddSingleton<IWorkflowExecutor>(sp => new TimeLimitedWorkflowExecutor(
             sp.GetRequiredService<LlmWorkflowExecutor>(), sp.GetRequiredService<IWorkflowStore>(),
-            sp.GetService<IWorkspaceSettingsStore>(), sp.GetService<WorkflowSessionNotifier>()));
+            sp.GetService<IWorkspaceSettingsStore>(), sp.GetService<WorkflowSessionNotifier>(),
+            prefs: sp.GetService<Preferences.IUserPreferenceStore>(), profiles: sp.GetService<Providers.IProviderProfileStore>()));
         services.AddSingleton<WorkflowExportService>();
         services.AddSingleton<WorkflowPlanningService>();
 

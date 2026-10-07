@@ -39,6 +39,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Fixed
 
+- **Work outside a chat ran on the install default model.** Workflow runs (Workflows page, API, scheduler), webhooks and swarms started through the API now use their owner's model pick from the models allowed in their workspace — the same choice as their chats. A workflow started from a chat keeps that conversation's model.
 - **Admin Home said "Invite your team" even after people had joined.** The step only counted members of team workspaces, but people join by registering into their own personal workspace, and Web has no invites yet. It's now "Add your team" (open registration, then set roles) and ticks once anyone else has an account.
 - **Web: a new workspace didn't appear in the top bar until you signed in again.** Creating or deleting a workspace under Admin → Workspaces didn't tell the top bar. It does now, and the top bar also rechecks your workspaces on every page change — so one someone else adds you to shows up too. If the workspace you're in is deleted, you're moved back to your personal workspace.
 - **Web: dropdown lists looked broken in the dark theme.** The page never told the browser it was dark, so open lists were drawn in the browser's light style with light text. Native controls now follow the theme, and option lists use the theme's colours.

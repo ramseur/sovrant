@@ -99,7 +99,9 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<SwarmOrchestrator>();
         // Phase 145 A8.1: every swarm is held to the admin's run time limit.
         services.AddSingleton<ISwarmOrchestrator>(sp => new TimeLimitedSwarmOrchestrator(
-            sp.GetRequiredService<SwarmOrchestrator>(), sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
+            sp.GetRequiredService<SwarmOrchestrator>(), sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>(),
+            prefs: sp.GetService<Sovrant.Runtime.Preferences.IUserPreferenceStore>(),
+            profiles: sp.GetService<Sovrant.Runtime.Providers.IProviderProfileStore>()));
         services.AddSingleton<SwarmQualityGate>();
         services.AddSingleton<ISwarmQualityGate>(sp => sp.GetRequiredService<SwarmQualityGate>());
 

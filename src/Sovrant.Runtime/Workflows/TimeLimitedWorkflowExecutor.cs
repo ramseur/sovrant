@@ -14,7 +14,9 @@ public sealed class TimeLimitedWorkflowExecutor(
     IWorkflowStore store,
     IWorkspaceSettingsStore? settings,
     WorkflowSessionNotifier? notifier = null,
-    TimeProvider? clock = null) : IWorkflowExecutor
+    TimeProvider? clock = null,
+    Sovrant.Runtime.Preferences.IUserPreferenceStore? prefs = null,
+    Sovrant.Runtime.Providers.IProviderProfileStore? profiles = null) : IWorkflowExecutor
 {
     public async Task<Workflow> RunAsync(string workflowId, CancellationToken ct = default)
     {
@@ -22,8 +24,15 @@ public sealed class TimeLimitedWorkflowExecutor(
         using var timer = new CancellationTokenSource(limit, clock ?? TimeProvider.System);
         using var limited = CancellationTokenSource.CreateLinkedTokenSource(ct, timer.Token);
         // A8.3: a security sign-out of the owner stops the run.
-        var owner = (await store.GetAsync(workflowId, ct).ConfigureAwait(false))?.OwnerUserId;
+        var wf = await store.GetAsync(workflowId, ct).ConfigureAwait(false);
+        var owner = wf?.OwnerUserId;
         using var running = Sovrant.Runtime.Auth.RunningWork.Track(owner, limited);
+        // Started outside a chat (Workflows page, API, scheduler): run on the owner's model pick, not
+        // the install default. Inside a chat, the conversation's context already carries it.
+        var background = SessionContext.Current is null
+            ? await Sovrant.Runtime.Providers.BackgroundModel.ContextForAsync(owner, wf?.WorkspaceId, wf?.SessionId, prefs, profiles, settings, ct).ConfigureAwait(false)
+            : null;
+        using var asOwner = background is null ? null : SessionContext.Push(background);
         try
         {
             return await inner.RunAsync(workflowId, limited.Token).ConfigureAwait(false);
