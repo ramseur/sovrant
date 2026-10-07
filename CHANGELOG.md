@@ -29,6 +29,10 @@ Versions correspond to tags on the `main` branch.
 
 ### Fixed
 
+- **Leaving a running chat and coming back broke the reply.** Three causes, on Web and Desktop:
+  - **Long replies lost their middle:** the buffer that rebuilds a reply you navigated away from stopped at 500 events, and a long reply streams thousands of text pieces. Text pieces are now merged, so the whole reply comes back.
+  - **Web:** the rest of the reply was attached to your *previous* answer instead of its own message.
+  - **Desktop:** coming back through the sidebar added the start of the reply a second time; coming back from Home or Command Center opened the conversation without the running reply. All paths now pick up the running chat where it is.
 - **Old, unanswered requests could be carried out later.** When a turn failed (no reply), the message stayed in what the model was sent, so a later unrelated message could set it off. Reported: a conversation held six unanswered "make a pdf on using ai at non profits" messages from a failed turn weeks earlier; replying "are you here" made the model generate that PDF. Messages that never got a reply (and any half-finished tool step from that turn) are no longer sent to the model, on Web, Desktop, Server and the CLI. They stay in the conversation, so you can resend one deliberately.
 - **A conversation's own model was ignored:** the conversation runtime always used the server-wide model, so Sovrant.Server's per-session model (`model` on a chat request, or set on a session) was saved but never used. It's used now.
 - **Postgres: new conversations were public:** the Postgres store didn't set `is_private` when it created a conversation, so the column default (0, public) applied. New conversations are now private, as on SQLite. Conversations created on Postgres before this fix keep their current setting; owners can make any of them Private from the chat header.

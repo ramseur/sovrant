@@ -395,11 +395,11 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         var lastAssistant = Messages.LastOrDefault(m => m.Role == "assistant");
         if (lastAssistant is null) return;
 
-        var (buffered, isRunning) = _activeSessions.Attach(SessionId, evt =>
+        // This chat stayed attached while it was parked (it's the same view model), so it already
+        // has every event: re-attach for what comes next, but don't replay the buffer onto it — that
+        // added the start of the reply a second time.
+        var (_, isRunning) = _activeSessions.Attach(SessionId, evt =>
             Dispatcher.UIThread.Post(() => HandleEvent((RuntimeEvent)evt, lastAssistant)));
-
-        foreach (var evt in buffered)
-            HandleEvent((RuntimeEvent)evt, lastAssistant);
 
         IsSending = isRunning;
         _isBackgroundSession = isRunning;

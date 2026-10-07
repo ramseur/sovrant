@@ -335,7 +335,10 @@
             if (ActiveSessions.HasSession(sessionId))
             {
                 await LoadSessionAsync(sessionId);
-                var lastAssistant = _messages.FindLast(m => m.Role == "assistant");
+                // The running reply isn't saved yet, so the saved history ends with your message:
+                // give the reply its own bubble. (FindLast picked the previous answer, so the rest of
+                // the running reply was glued onto it.)
+                var lastAssistant = _messages.LastOrDefault() is { Role: "assistant" } tail ? tail : null;
                 if (lastAssistant is null)
                 {
                     lastAssistant = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };

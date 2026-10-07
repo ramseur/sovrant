@@ -113,9 +113,9 @@ public partial class MainViewModel : ViewModelBase
         {
             case "session":
                 if (string.IsNullOrEmpty(e.DetailRoute)) return; // masked — private, not owned by viewer
-                var chat = CreateChatViewModel();
-                CurrentPage = chat;
-                await chat.LoadSessionAsync(e.Id);
+                // Same path as the sidebar, so a conversation still running in the background is
+                // picked up where it is instead of reloaded without its reply.
+                OnSessionResumeRequested(this, e.Id);
                 break;
             case "agent-run":
                 if (string.IsNullOrEmpty(e.DetailRoute)) return; // masked — private, not owned by viewer
@@ -138,11 +138,9 @@ public partial class MainViewModel : ViewModelBase
         switch (e.Kind)
         {
             case "session":
-                var chat = CreateChatViewModel();
-                CurrentPage = chat;
                 SelectedGroup = "chat";
                 OnSelectedGroupChanged("chat");
-                await chat.LoadSessionAsync(e.Id);
+                OnSessionResumeRequested(this, e.Id); // re-attaches a conversation still running in the background
                 break;
             case "agent-run":
                 var cockpit = _services.GetRequiredService<CommandCenterViewModel>();
