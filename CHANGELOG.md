@@ -35,6 +35,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Internal
 
+- New `Sovrant.Web.Tests` project: multi-user tests that run the real Web app in-process on a throwaway database (one cookie jar per simulated browser).
 - **Desktop:** all 72 `TextBox.Watermark` uses renamed to `PlaceholderText` (Avalonia 12 marks `Watermark` obsolete). The Desktop build is free of AVLN5001 warnings.
 - **New `Sovrant.Hosting` project:** ASP.NET Core hosting helpers shared by Web and Server only, so Desktop and the CLI don't pull in ASP.NET Core. `ForwardedHeadersSetup` now lives there once instead of being copied into both apps.
 

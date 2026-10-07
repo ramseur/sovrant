@@ -27,5 +27,6 @@
     <Project Path="tests/Sovrant.Tools.Tests/Sovrant.Tools.Tests.csproj" />
     <Project Path="tests/Sovrant.Mcp.Tests/Sovrant.Mcp.Tests.csproj" />
     <Project Path="tests/Sovrant.Ui.Tests/Sovrant.Ui.Tests.csproj" />
+    <Project Path="tests/Sovrant.Web.Tests/Sovrant.Web.Tests.csproj" />
   </Folder>
 </Solution>
