@@ -51,6 +51,7 @@ What we are actively working on and shipping next, in priority order.
 | **2.1.0 — built** | Stopgaps | Web: no automatic sign-in after a restart; Web and Server: file and shell tools off for members by default (admins can turn them on); README warns that Web is single-user until Phase 145 |
 | **2.1.0 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each member picks from the workspace's admin-configured models, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
 | **Next — after 145** | Phase 146 | Web in front of Server for enterprise — each Web user signs in to Server as themselves (per-browser cookie on Web, their own Server token, one SignalR connection per tab); end-to-end tests of the headless setup; audit and fix what it finds (was Phase 145 Part C) |
+| **Later** | Phase 147 | Sandboxed code execution for hosted Web — when hosted users need Bash or file tools, they run in an isolated container per workspace or conversation (never on the server), like Claude Code's cloud sandboxes and claude.ai's code execution |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -13191,10 +13192,11 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 **Part C — Headless mode (Web in front of Server) → moved to Phase 146 (2026-10-07)**
 9–10. Moved to **Phase 146 — Web in front of Server for enterprise**, which also tests that setup end to end and fixes what it finds. Order here is now D, then E: embedded Web is what we use internally, so it's made solid and measured first.
 
-**Part D — Tools on a shared server**
-11. Per-conversation Bash working directory (`ShellSessionState` per session).
-12. **Stopgap (2.1.0):** file and shell tools (Read, Write, Edit, Glob, Grep, Bash, and other tools that touch the server's disk) are off for non-admins on Web by default, with an admin setting to turn them on.
-13. **Path for members:** each workspace (and personal workspace) gets its own working folder on the server; members' file and shell tools are confined to it using Phase 124's enforcement (allowed/blocked directories, applied per workspace). Phase 124 is a prerequisite for turning member tools on by default. Later option: run Bash in a per-workspace container for OS-level isolation.
+**Part D — Tools on a shared server (revised 2026-10-07)**
+Bash and the file tools run **on the server itself**, as its OS account. On a hosted, multi-user server that's the riskiest thing Sovrant does: any agent could reach other people's files, the database, or the server's config. Hosted services don't do this — Claude Code runs these tools on your own machine or in an isolated cloud sandbox per session, and claude.ai runs code in a sandboxed container. So:
+11. **Off on hosted Web and Server for everyone, admins included, by default.** A master switch, "Allow file and shell tools on this server" (Governance; `SOVRANT_GOVERNANCE_HOST_FILE_TOOLS`), turns them back on for a single trusted team that accepts the risk; members additionally need "Let members use file and shell tools" (the 2.1.0 stopgap). Blocked tools are also left out of the tool list the model sees, so it doesn't try them. Desktop and the CLI run on your own machine and are unaffected.
+12. **Stopgap (2.1.0, built):** member file/shell tools off by default with an admin switch — now the second level under item 11.
+13. ~~Per-conversation Bash working directory; per-workspace folders confined by Phase 124~~ — replaced by **Phase 147 (sandboxed code execution)**: if hosted users need to run code, it runs in an isolated sandbox per workspace or conversation, never on the host.
 
 **Part E — Proof**
 14. Multi-user tests: two or more simulated users at once; identity, active context, approvals, preferences and data never cross.
@@ -13221,13 +13223,13 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 - [x] A member's model pick (from the workspace's admin-configured models) applies only to their own chats; picking never changes anyone else's model; no personal providers or keys (`PerSessionModelTests`, `ModelSelectionTests`, `SharedModelAccessTests`) — background work outside a chat runs on the install default until it carries its owner's pick
 - [x] Admin default model set applies to every personal workspace (including new users'); changing it takes effect for everyone without a restart (removed models fall back to the workspace default); env `LLM_API_KEY` seeds one shared profile in it
 - [ ] Headless mode: each Web user is their own Server user; no shared token needed
-- [ ] Per-conversation Bash working directory
+- [ ] File and shell tools off on hosted Web and Server for everyone by default (master switch + member switch); blocked tools hidden from the model (per-conversation Bash folder dropped — Phase 147)
 - [ ] Multi-user tests and a load test of several hundred circuits; sizing guidance published
 - [x] Design mock for the small UI changes on both mocks (2026-10-06): "Keep me signed in for 30 days" + Timed out / Revoked notices on Login; account menu from the rail footer (lifetime, Sign out, Sign out of all browsers); Admin → Users "Signed in on" with Revoke and Sign out everywhere. Logged in `docs/design/README.md`
 - [ ] GitHub #32 closed with a reply
 
 ### Relationship to other phases
-- **Phase 124** (file system access controls) — prerequisite for member file/shell tools by default (Part D).
+- **Phase 124** (file system access controls) — still useful for Desktop/CLI and trusted single-team servers; hosted code execution moves to **Phase 147** (sandboxes).
 - **Phase 134** (Postgres / Supabase) — Part B there is needed for multi-instance hosting.
 - **Phase 40C** (Supabase) — SSO comes from Supabase Auth later.
 - **Phase 143 Part B** (SDK & API) — headless mode leans on Server's auth endpoints.
@@ -13267,3 +13269,32 @@ Remote mode (`SOVRANT_RUNTIME_MODE=remote`) works for one person but is still si
 - **Phase 145** — embedded multi-user Web; this phase brings the same guarantees to Web in front of Server.
 - **Phase 143 Part B** — SDK & API parity; the headless setup relies on Server's API.
 - **Phase 134 Part B** — split backend; multi-instance Server needs it.
+
+---
+
+## Phase 147 — Sandboxed code execution for hosted Web
+
+**Status:** Planned (2026-10-07). Follows from Phase 145 Part D: on hosted Web and Server, Bash and the file tools are off for everyone by default because they would run on the server itself.
+
+### Why
+
+People using a hosted Sovrant may still need agents that run code, edit files or use a shell (data analysis, builds, scaffolding). Running those on the shared server isn't safe. Hosted AI products run them in isolation instead: Claude Code on the web uses a cloud sandbox per session; claude.ai's code execution runs in a sandboxed container, separate from the service and from other users.
+
+### What ships (to be designed)
+
+1. **A sandbox per workspace or per conversation** (decide which): a container with its own filesystem and no access to the host, the database, other users' sandboxes, or (by default) the network. Resource limits (CPU, memory, disk, run time).
+2. **Tools redirected into the sandbox:** Bash, Read/Write/Edit, Glob/Grep, code tools — same tool names, executed inside the sandbox when the server is hosted. The host-tool switch (Phase 145) stays for trusted single-team servers that want host access.
+3. **Files in and out:** upload files into the sandbox; artifacts produced there are saved through the normal artifact store.
+4. **Lifecycle and cost:** start on first use, stop when idle, clean up; admin settings for limits; per-workspace usage visible to admins.
+5. **Backends:** Docker on the same host first; pluggable for a remote sandbox service later.
+
+### Acceptance criteria
+- [ ] Design decided (per workspace vs per conversation; backend; network policy) and written here
+- [ ] Code-running tools work for hosted users without touching the server's own filesystem
+- [ ] One user's sandbox can't see another's, the host, or the database
+- [ ] Limits enforced; idle sandboxes cleaned up
+- [ ] Desktop and the CLI unchanged (tools run locally)
+
+### Relationship to other phases
+- **Phase 145 Part D** — turns host tools off on hosted servers; this phase brings code execution back safely.
+- **Phase 124** — directory controls remain for local and trusted single-team installs.
