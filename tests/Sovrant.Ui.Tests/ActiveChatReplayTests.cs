@@ -54,4 +54,22 @@ public sealed class ActiveChatReplayTests
         var (buffered, _) = sessions.Attach("s1", _ => { });
         Assert.Equal(FullReply, string.Concat(buffered.OfType<RuntimeEvent.TextChunk>().Select(t => t.Text)));
     }
+
+    [Fact]
+    public void A_Finished_Reply_Is_Not_Running_So_Reopening_Loads_It_Instead_Of_Replaying()
+    {
+        // It stays in the Active list (ticked) after finishing; reopening it must load the saved
+        // conversation, not replay the reply on top of it (that showed it twice).
+        using var sessions = new ActiveSessionsService();
+        using var cts = new CancellationTokenSource();
+        Assert.True(sessions.TryRegister("s1", "are you here", cts));
+        sessions.PushEvent("s1", new RuntimeEvent.TextChunk("Yes, I'm here."));
+        Assert.True(sessions.IsRunning("s1"));
+
+        sessions.Complete("s1");
+
+        Assert.True(sessions.HasSession("s1"));   // still listed, ticked
+        Assert.False(sessions.IsRunning("s1"));   // but not replayed
+        Assert.False(sessions.IsRunning("nope"));
+    }
 }

@@ -330,9 +330,10 @@
             _sessionCost = 0;
             ActiveContext.PendingResumeSessionId = null;
 
-            // If this session has a running background turn, replay buffered events
-            // and re-subscribe live instead of loading from DB.
-            if (ActiveSessions.HasSession(sessionId))
+            // If this session's reply is still running, replay its buffered events and re-subscribe
+            // live. A reply that already finished is saved, so it just loads — replaying it too showed
+            // it twice (it stays in the Active list, ticked, until dismissed).
+            if (ActiveSessions.IsRunning(sessionId))
             {
                 await LoadSessionAsync(sessionId);
                 // The running reply isn't saved yet, so the saved history ends with your message:
@@ -346,6 +347,16 @@
                 }
                 var (buffered, isRunning) = ActiveSessions.Attach(sessionId, evt =>
                     InvokeAsync(() => { HandleEvent((RuntimeEvent)evt, lastAssistant); StateHasChanged(); return Task.CompletedTask; }));
+                if (!isRunning)
+                {
+                    // It finished just now, between the check and attaching: load the saved conversation.
+                    ActiveSessions.Detach(sessionId);
+                    _messages.Clear();
+                    await LoadSessionAsync(sessionId);
+                    ShowWaitingApprovals();
+                    StateHasChanged();
+                    return;
+                }
                 foreach (var evt in buffered)
                     HandleEvent((RuntimeEvent)evt, lastAssistant);
                 _streamingMsg = isRunning ? lastAssistant : null;

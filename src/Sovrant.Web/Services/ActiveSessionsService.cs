@@ -62,6 +62,13 @@ public sealed class ActiveSessionsService : IDisposable
     }
 
     /// <summary>Removes the live handler without cancelling. Called on Chat dispose.</summary>
+    /// <summary>True while this conversation's reply is still running (not finished, failed or cancelled).</summary>
+    public bool IsRunning(string sessionId)
+    {
+        lock (_lock)
+            return _sessions.TryGetValue(sessionId, out var entry) && entry.Status == ActiveSessionStatus.Running;
+    }
+
     public void Detach(string sessionId)
     {
         lock (_lock)
