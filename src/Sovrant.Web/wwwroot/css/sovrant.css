@@ -4401,3 +4401,8 @@ a.home-card:hover { border-color: var(--brand-primary); }
 .approval-banner svg { color: var(--status-warn); flex-shrink: 0; }
 .approval-banner span { flex: 1; min-width: 0; }
 .approval-banner .btn { flex-shrink: 0; text-decoration: none; }
+
+/* Blazor's <FocusOnNavigate Selector="h1"> focuses the page heading on load and navigation, so screen
+   readers announce the new page. It isn't a control, so don't draw a focus outline around it (it showed
+   as a dark box around "What are you working on?" / "Welcome back" after a refresh). */
+h1:focus, h1[tabindex="-1"]:focus { outline: none; }
