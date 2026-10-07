@@ -13167,7 +13167,7 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 | SSO | Later, through Supabase Auth (Phase 40C). The cookie design leaves room for it. |
 | Headless mode | Each user signs in to Server with their own account; `SOVRANT_API_TOKEN` becomes optional (service use only) |
 | Models, providers and keys (2026-10-07) | **Admins configure them; members only use what's configured.** No personal providers, API keys or models. A member may pick **any model the admin has allowed on the workspace they're in**, and that pick applies to them only — today a pick in the top bar rewrites the global config, so one person switching changes everyone's model. |
-| Models in personal workspaces (2026-10-07) | **A default model set for every personal workspace, plus per-workspace enablement for team workspaces** — LibreChat's "base config for everyone, overrides per group" pattern mapped onto workspaces. The admin chooses the default set once (Admin → Workspaces or Providers); every personal workspace gets it, including new users'. Team workspaces keep today's strict per-workspace enablement. Bring-your-own keys (LibreChat's `user_provided`) are out for now. |
+| Models in personal workspaces (2026-10-07) | **A default model set for every personal workspace, plus per-workspace enablement for team workspaces** — LibreChat's "base config for everyone, overrides per group" pattern mapped onto workspaces. The default set is **one admin setting** (Admin → Workspaces or Providers), not a per-workspace list, and the admin can **change it at any time**: every personal workspace gets the current set, including new users'. Team workspaces keep today's strict per-workspace enablement. Bring-your-own keys (LibreChat's `user_provided`) are out for now. |
 
 ### What ships
 
@@ -13181,7 +13181,7 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 **Part B — Shared, admin-configured models; each member picks their own (revised 2026-10-07)**
 6. Providers, API keys and the model list stay admin-configured and shared (workspace-scoped provider profiles + per-workspace enablement, as today). No personal providers or keys.
 7. A member's model pick (top bar) is saved as **their** preference and applied to **their** conversations only: each conversation runs on the picked profile's provider and key (a per-session router built from the shared profile — the pool already supports a per-session router override) instead of rewriting the global `SovrantConfig` / `MutableAuthProvider`. Signing in no longer copies anyone's choice into the global config; the global config is only the install default for work outside a conversation.
-8. The picker offers only models allowed on the member's current workspace; switching workspace re-checks the pick (falls back to the workspace default if the old one isn't allowed there). Personal workspaces allow the admin's **default model set** (one admin setting, applied to every personal workspace); team workspaces use their own enablement.
+8. The picker offers only models allowed on the member's current workspace; switching workspace re-checks the pick (falls back to the workspace default if the old one isn't allowed there). Personal workspaces allow the admin's **default model set**: one admin setting, editable at any time, applied to every personal workspace. Adding a model makes it available in every personal workspace the next time the picker opens; removing one moves members who had picked it to the workspace default on their next message (conversations are kept). Team workspaces use their own enablement and aren't affected.
 9. Phase 144 env seeding becomes one shared, admin-owned profile for `LLM_API_KEY`, placed in the default set, instead of a provider profile per user.
 10. Background work (workflows, swarms, teams, scheduler) runs on its owner's pick for that workspace.
 
@@ -13217,7 +13217,7 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 - [ ] No process-wide user state left in Web (`Program.SovrantUserId` gone; per-user services are scoped)
 - [ ] Sign-in cookie: HttpOnly, Secure on HTTPS; 1 h idle (renewed by activity, also across the SignalR circuit), 12 h absolute, 30-day "Keep me signed in"; all three env-settable and documented; sign-out and admin revoke work
 - [ ] A member's model pick (from the workspace's admin-configured models) applies only to their own chats, including background work; picking never changes anyone else's model; no personal providers or keys
-- [ ] Admin default model set applies to every personal workspace (including new users'); env `LLM_API_KEY` seeds one shared profile in it
+- [ ] Admin default model set applies to every personal workspace (including new users'); changing it takes effect for everyone without a restart (removed models fall back to the workspace default); env `LLM_API_KEY` seeds one shared profile in it
 - [ ] Headless mode: each Web user is their own Server user; no shared token needed
 - [ ] Per-conversation Bash working directory
 - [ ] Multi-user tests and a load test of several hundred circuits; sizing guidance published
