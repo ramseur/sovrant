@@ -428,6 +428,17 @@ Sign-in moves from one per server to one per browser, so the UI needs to show ho
 
 **Verified:** rendered in headless Edge, both mocks: login with the Revoked warning and the Remember-me box; Users with the account menu open in both lifetimes. First pass found the sign-ins table too wide for the detail pane; IP and sign-in time moved under the browser name and it fits. Parity diff still 49 chrome-only lines.
 
+## Shared models: the personal default set (2026-10-07, design-only, Phase 145 Part B)
+
+Members have no providers, keys or models of their own: admins configure them, and a member picks any model allowed on the workspace they're in (the pick applies to them only). Admin → Workspaces is where "allowed" is set, identical on both mocks (`#workspaces`; toggle *Default set* / *Team workspace*, or `#teamws`):
+
+- **"All personal workspaces"** is the first row, badged *Default set*: the providers (and their models) every personal workspace gets, including new users', and its **Default model**. It's one admin setting, editable any time; an info note says what a change does (added models appear in everyone's picker; anyone on a removed model moves to the default on their next message, conversations kept).
+- **Team workspaces** show the same toggles and default model for that workspace only, with a note that members' personal workspaces use the default set instead.
+
+The member's model picker (top bar) is unchanged; it lists only what the current workspace allows.
+
+**Verified:** rendered in headless Edge, both mocks, both toggles. The first render was blank (an extra bracket in the new detail function); fixed. Parity diff still 49 chrome-only lines.
+
 ## Open decisions
 
 - **Login theme on a fresh machine — resolved.** `App.razor` hardcodes `data-theme="dark"` on the `<html>` tag before any JS runs; an explicit `data-theme` stamp always wins over `prefers-color-scheme` in CSS, so a first-time visitor never sees their actual OS preference regardless of what it is. The mock already does this correctly — `web.html`/`desktop.html` never stamp `data-theme` until the viewer explicitly picks Light/Dark, so `@media (prefers-color-scheme)` decides on first paint. **Decision: match the mock — stop hardcoding `data-theme="dark"` in `App.razor`; leave it unset until `localStorage` has a stored choice.** Not implemented yet (design-only pass); real fix is a one-line removal in `App.razor` plus the equivalent JS-sets-before-first-paint check already in place for the stored-preference case.

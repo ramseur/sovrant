@@ -795,9 +795,12 @@ const S = {
            {n:'priya@example.com',mono:1,b:['Member','Not signed in'],tag:null},
            {n:'jordan@example.com',mono:1,b:['Member','Awaiting approval'],tag:['Pending','b-warn']}],
     note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side.'},
-  workspaces:{g:'admin',p:'Browse',t:'Workspaces',url:'/admin/workspaces',sub:'1 workspace',
-    items:[{n:'Personal',b:['ws-personal-ramseur-anant.us'],tag:['Personal','b-mut']}],
-    note:'Provider enablement per workspace lives in this detail pane — the setting that hid OpenRouter.'},
+  workspaces:{g:'admin',p:'Browse',t:'Workspaces',url:'/admin/workspaces',sub:'2 team workspaces · personal workspaces for 14 people',
+    acts:[['New workspace',1]],
+    items:[{n:'All personal workspaces',b:['Applies to every member\'s personal workspace','14 people'],tag:['Default set','b-brand']},
+           {n:'Engineering',b:['Team','12 members'],tag:['Team','b-mut']},
+           {n:'Marketing',b:['Team','5 members'],tag:['Team','b-mut']}],
+    note:'Provider enablement per workspace lives in this detail pane — the setting that hid OpenRouter. Phase 145 Part B — members only use admin-configured models and pick any model allowed on the workspace they\'re in; the pick applies to them only. The first row is the default set: one admin setting, editable any time, that every personal workspace gets (including new users\'). Team workspaces keep their own enablement. Toggle Default set / Team workspace.'},
   providers:{g:'admin',p:'Browse',t:'Providers',url:'/admin/providers',sub:'2 configured',
     acts:[['Add provider',1]],
     items:[{n:'OpenAI',b:['api.openai.com'],tag:['Enabled','b-ok']},{n:'OpenRouter',b:['openrouter.ai'],tag:['Key expired','b-warn']}],
@@ -856,6 +859,9 @@ function toggleMcpMenu(){ mcpMenu=!mcpMenu; render(); }
 function setLoginState(v){ loginState=v; render(); }
 /* Phase 145 — account menu (rail footer) and Admin → Users sign-ins. */
 let acctMenu=false, acctRemember=false;
+/* Phase 145 Part B — which Workspaces row is open: the personal default set, or a team workspace. */
+let wsSel='personal';
+function setWsSel(v){ wsSel=v; render(); }
 function toggleAcct(){ acctMenu=!acctMenu; render(); }
 function setAcctRemember(v){ acctRemember=v; acctMenu=true; render(); }
 function setWelcomeRole(v){ welcomeRole=v; render(); }
@@ -924,6 +930,24 @@ function phHTML(s){
   return `<div class="ph"><div><h2>${s.t}</h2>${s.sub?`<div class="sub">${s.sub}</div>`:''}</div><div class="acts">${acts}</div></div>`;
 }
 
+/* Phase 145 Part B — which admin-configured models a workspace allows. Members pick any of these in
+   the top bar, and the pick applies to them only. The personal default set is one setting for every
+   personal workspace. */
+function workspaceModelsHTML(sel){
+  const personal = sel.n==='All personal workspaces';
+  const intro = personal
+    ? `<div class="linfo" style="margin:14px 0 4px"><b>Everyone gets these in their personal workspace</b>, including people who join later. Change it any time: added models appear in everyone's model picker; anyone using a removed model moves to the default model on their next message (their conversations are kept).</div>`
+    : `<div class="lhint" style="margin:14px 0 4px">Members of ${sel.n} can pick any of these. Their personal workspace uses the default set instead.</div>`;
+  const rows = personal
+    ? [['OpenAI','gpt-4o, gpt-4o-mini, o4-mini','sw:1'],['OpenRouter','42 models, including free ones','sw:1'],['Ollama (this server)','llama3.1:8b, qwen2.5-coder','sw:0']]
+    : [['OpenAI','gpt-4o, gpt-4o-mini, o4-mini','sw:1'],['OpenRouter','42 models, including free ones','sw:0'],['Anthropic','claude models','sw:1'],['Ollama (this server)','llama3.1:8b, qwen2.5-coder','sw:0']];
+  return `<div class="dhead"><div style="flex:1"><h3>${sel.n}</h3><div class="dsub">${(sel.b||[]).join(' · ')}</div></div>
+      ${sel.tag?`<span class="badge ${sel.tag[1]}" style="margin:0">${sel.tag[0]}</span>`:''}</div>
+    ${intro}
+    ${fsecHTML([['Allowed providers and their models', rows], ['', [['Default model','Used until a member picks another, and when their pick isn\'t allowed here.', personal?'sel:openai/gpt-4o-mini':'sel:anthropic/claude-sonnet']]]])}
+    ${personal?'':'<div style="display:flex;gap:8px;margin-top:16px"><button class="btn">Members</button><button class="btn">Rename</button></div>'}`;
+}
+
 /* Phase 145 — the account menu: who you are, how long this browser stays signed in, sign out here
    or everywhere. Opens from the rail footer on every screen. */
 function acctMenuHTML(){
@@ -961,13 +985,14 @@ function usersDetailHTML(sel){
 
 function browseHTML(s){
   if(s.t==='Platform Integrations') s=mcpScreen(s);
+  const selIdx = s.t==='Workspaces' && wsSel==='team' ? 1 : 0;
   const items=(s.items||[]).map((it,i)=>
-    `<div class="item${i===0&&!s.empty?' on':''}"><div class="r1"><span class="nm${it.mono?' mono':''}">${it.n}</span>${it.tag?`<span class="badge ${it.tag[1]}">${it.tag[0]}</span>`:''}</div>
+    `<div class="item${i===selIdx&&!s.empty?' on':''}"><div class="r1"><span class="nm${it.mono?' mono':''}">${it.n}</span>${it.tag?`<span class="badge ${it.tag[1]}">${it.tag[0]}</span>`:''}</div>
      <div class="meta">${(it.b||[]).map(b=>`<span>${b}</span>`).join('')}</div></div>`).join('');
   const listBody = s.empty
     ? `<div class="empty" style="padding:40px 20px">${sv(I.box,1.6)}<div class="h">Nothing here yet</div><div class="p">Create the first one to get started.</div></div>`
     : items;
-  const sel=(s.items||[])[0];
+  const sel=(s.items||[])[selIdx];
   let detail;
   if(s.t==='Orchestration'){
     detail = orchView==='defaults' ? orchDefaultsHTML() : orchTeamDetailHTML(sel);
@@ -975,6 +1000,8 @@ function browseHTML(s){
     detail = mcpDetailHTML();
   } else if(s.t==='Users'){
     detail = usersDetailHTML(sel);
+  } else if(s.t==='Workspaces'){
+    detail = workspaceModelsHTML(sel);
   } else if(s.t==='Workflows'){
     detail = !sel ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick a workflow from the list to see its plan and journal.</div></div>` : workflowDetailHTML(sel);
   } else {
@@ -1391,6 +1418,9 @@ function render(){
   } else if(cur==='login'){
     ct.style.display='flex';
     ct.innerHTML=[['signin','Sign in'],['firstrun','First run'],['approval','Approval'],['working','Working'],['expired','Timed out'],['revoked','Revoked']].map(([k,t])=>`<button class="cbtn${loginState===k?' on':''}" onclick="setLoginState('${k}')">${t}</button>`).join('');
+  } else if(cur==='workspaces'){
+    ct.style.display='flex';
+    ct.innerHTML=[['personal','Default set'],['team','Team workspace']].map(([k,t])=>`<button class="cbtn${wsSel===k?' on':''}" onclick="setWsSel('${k}')">${t}</button>`).join('');
   } else if(cur==='users'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${acctMenu?' on':''}" onclick="toggleAcct()">Account menu</button>`
@@ -1470,6 +1500,8 @@ function buildIconRef(){
   if(h.has('activity')) homeTab='activity';
   for(const st of ['first','returning','allset','dismissed']) if(h.has(st)) homeState=st;
   if(h.has('users')) cur='users';
+  if(h.has('workspaces')) cur='workspaces';
+  if(h.has('teamws')) { cur='workspaces'; wsSel='team'; }
   if(h.has('login')) cur='login';
   if(h.has('acct')) acctMenu=true;
   if(h.has('kept')) { acctMenu=true; acctRemember=true; }
