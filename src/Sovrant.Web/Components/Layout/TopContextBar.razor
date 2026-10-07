@@ -305,6 +305,9 @@
         ActiveContext.SetModel(_currentModel, _currentProvider);
         ActiveContext.OnChanged += OnActiveContextChanged;
         ActiveContext.OnDataChanged += OnDataChanged;
+        // Recheck which workspaces you're in on every page change — cheap, and it picks up a workspace
+        // someone else added you to (the picker is disabled with only one, so it can't refresh on click).
+        NavManager.LocationChanged += OnLocationChanged;
     }
 
     private async Task LoadMcpServersAsync()
@@ -757,6 +760,15 @@
         });
     }
 
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(async () =>
+        {
+            var before = string.Join(',', _workspaces.Select(w => w.Id + w.Name));
+            await LoadWorkspacesAsync();
+            if (before != string.Join(',', _workspaces.Select(w => w.Id + w.Name)))
+                StateHasChanged();
+        });
+
     private void OnActiveContextChanged()
     {
         InvokeAsync(async () =>
@@ -773,6 +785,7 @@
         McpStatus.Changed -= OnMcpStatusChanged;
         ActiveContext.OnChanged -= OnActiveContextChanged;
         ActiveContext.OnDataChanged -= OnDataChanged;
+        NavManager.LocationChanged -= OnLocationChanged;
         if (_dismissBindingId != 0)
         {
             try { _ = JS.InvokeVoidAsync("sovrantInterop.unbindLightDismiss", _dismissBindingId); }
@@ -847,6 +860,12 @@
             _workspaces = list.Select(w => new WorkspaceItem(w.WorkspaceId, w.Name, w.Type.ToString())).ToList();
             Console.WriteLine($"[TopContextBar] Loaded {_workspaces.Count} workspace(s).");
             var personal = _workspaces.FirstOrDefault(w => w.Type.Equals("Personal", StringComparison.OrdinalIgnoreCase));
+            // The selected workspace was deleted (or you were removed from it): back to your personal one.
+            if (!string.IsNullOrEmpty(_selectedWorkspaceId) && _workspaces.All(w => w.Id != _selectedWorkspaceId))
+            {
+                _selectedWorkspaceId = string.Empty;
+                _selectedProjectId = string.Empty;
+            }
             if (personal is not null && string.IsNullOrEmpty(_selectedWorkspaceId))
             {
                 _selectedWorkspaceId = personal.Id;

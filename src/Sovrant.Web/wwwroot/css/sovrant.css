@@ -1,5 +1,8 @@
 /* ===== Theme tokens ===== */
 :root, :root[data-theme="dark"] {
+    /* Native controls (select lists, scrollbars, date pickers) follow the theme; without this the
+       open list of a <select> was drawn light with the dark theme's light text on it. */
+    color-scheme: dark;
     --brand-primary: #6D52C6;
     --surface-background: #1A1A1A;
     --sidebar-background: #141414;
@@ -21,6 +24,7 @@
 }
 
 :root[data-theme="light"] {
+    color-scheme: light;
     --surface-background: #F5F5F5;
     --sidebar-background: #EBEBEB;
     --surface-card: #FFFFFF;
@@ -198,6 +202,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     background-repeat: no-repeat;
     background-position: right 2px center;
     padding-right: 16px;
+}
+/* The open option list of every <select>: themed surface and text, not the browser's default. */
+select option, select optgroup {
+    background-color: var(--surface-card);
+    color: var(--text-primary);
 }
 .top-context-bar .tcb-field select:disabled {
     cursor: default;

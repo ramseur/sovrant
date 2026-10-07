@@ -324,6 +324,7 @@
             _newWsName = string.Empty;
             _status = $"Workspace '{name}' created.";
             await LoadWorkspacesAsync();
+            ActiveContext.NotifyDataChanged(); // the top bar's workspace list
         }
         catch (Exception ex) { _error = $"Failed: {ex.Message}"; }
     }
@@ -338,6 +339,7 @@
             await WorkspaceService.DeleteAsync(w.WorkspaceId).ConfigureAwait(false);
             _status = $"'{w.Name}' deleted.";
             await LoadWorkspacesAsync();
+            ActiveContext.NotifyDataChanged(); // the top bar's workspace list
         }
         catch (Exception ex) { _error = $"Cannot delete: {ex.Message}"; }
         StateHasChanged();

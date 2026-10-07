@@ -7,9 +7,9 @@ Versions correspond to tags on the `main` branch.
 
 ---
 
-## [Unreleased]
+## [2.1.0] — Unreleased
 
-> **Pre-release notice: Sovrant.Web is single-user per server.** One Web server holds one signed-in user for every browser, so people sharing a Web server see each other's data and act as each other. Use Web for one person at a time, or Sovrant.Server for teams. Per-browser sign-in for teams of 10–1000 is Phase 145 (GitHub #32). The two stopgaps below reduce the risk until then.
+> **Multi-user Web (Phase 145, GitHub #32).** Embedded Web now signs in each browser separately, so a team can share one Web server: everyone sees only their own conversations, approvals and permission mode, and picks from the models their admins configured. File and shell tools are off on hosted servers by default. Load-tested with 1,000 people on one 4-core server ([docs/web-sizing.md](docs/web-sizing.md)). Web in front of Sovrant.Server (remote mode) is still single-user — Phase 146.
 
 ### Added
 
@@ -34,6 +34,8 @@ Versions correspond to tags on the `main` branch.
 
 ### Fixed
 
+- **Web: a new workspace didn't appear in the top bar until you signed in again.** Creating or deleting a workspace under Admin → Workspaces didn't tell the top bar. It does now, and the top bar also rechecks your workspaces on every page change — so one someone else adds you to shows up too. If the workspace you're in is deleted, you're moved back to your personal workspace.
+- **Web: dropdown lists looked broken in the dark theme.** The page never told the browser it was dark, so open lists were drawn in the browser's light style with light text. Native controls now follow the theme, and option lists use the theme's colours.
 - **Everyone was labelled "owner" in the bottom left.** It showed the role in the current workspace, and everyone owns their own personal workspace. It now shows the account role — **Admin** or **Member** — on Web and Desktop.
 - **Server: admin-only routes answered members with a 500 instead of a 403.** Auth settings, config, engine and eval routes used a response that needs an authentication service Server doesn't have; members were still refused, but with "Internal Server Error". They now get 403 Forbidden.
 - **A sign-in rush could use gigabytes of memory.** Each password check uses Argon2id with 64 MB, and 20 people signing in at once needed 64 MB each at the same time (a 300-person test peaked at 3 GB). At most one check per CPU core (up to 8) now runs at once; the rest wait their turn. Password strength is unchanged.
