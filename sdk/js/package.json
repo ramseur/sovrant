@@ -44,7 +44,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ramseur/sovrant-engine.git",
+    "url": "https://github.com/ramseur/sovrant.git",
     "directory": "sdk/js"
   },
   "keywords": [

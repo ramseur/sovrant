@@ -63,6 +63,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Internal
 
+- **No personal data in the repository** (Phase 148): the maintainer's name and email in avatar tests, a code comment, both design mocks and doc examples are replaced with a neutral example person (Alex Morgan, alex.morgan@example.com). The JS SDK's repository link and the model-metadata request header now point at `github.com/ramseur/sovrant` instead of the old `sovrant-engine` name.
 - **`Sovrant.Ui.Tests` sometimes hung forever.** The headless Avalonia render tests share one UI thread and occasionally deadlocked when run in parallel (3 of 15 runs). The project now runs its tests one at a time (a few seconds in total); 20 of 20 runs clean.
 - `ConcurrentUsersTests`: 50 people take turns at the same moment on one runtime; each request keeps that person's model, identity, conversation and tool list, and members never get an admin's file tools.
 - New `Sovrant.Web.Tests` project: multi-user tests that run the real Web app in-process on a throwaway database (one cookie jar per simulated browser).

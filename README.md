@@ -217,7 +217,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 curl -X POST http://localhost:5200/v1/chat/completions \
   -H "Authorization: Bearer $SVT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"My name is Eric"}],"session_id":"user-123"}'
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"My name is Alex"}],"session_id":"user-123"}'
 ```
 
 > **Auth model:** All requests require a `svt_*` bearer token. Log in via `POST /v1/auth/login` to get a token. Additional long-lived tokens can be issued via `POST /v1/users/me/tokens` (self-service) or `POST /v1/users/{id}/tokens` (admin). Tokens carry an optional expiry and can be revoked at any time. Non-admin callers see only their own data. See [Multi-User & Workspaces](#multi-user--workspaces).

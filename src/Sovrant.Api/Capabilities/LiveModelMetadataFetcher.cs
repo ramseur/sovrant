@@ -56,7 +56,7 @@ public sealed partial class LiveModelMetadataFetcher
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, OpenRouterModelsUrl);
-            request.Headers.Add("HTTP-Referer", "https://github.com/ramseur/sovrant-engine");
+            request.Headers.Add("HTTP-Referer", "https://github.com/ramseur/sovrant");
 
             using var response = await _httpClient.SendAsync(request, ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)

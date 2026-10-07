@@ -2169,7 +2169,7 @@ Both the CLI and the server share the same `IStorageProvider` singleton from `So
 
 ```sql
 SELECT key, value FROM config
-WHERE scope IN ('global', 'team:engineering', 'user:eric')
+WHERE scope IN ('global', 'team:engineering', 'user:alex')
 ORDER BY priority DESC  -- user > team > global
 ```
 
@@ -2248,13 +2248,13 @@ The `users` table is an anchor row — created on first seen, referenced everywh
 
 ```sql
 -- Every table references user_id for scoping
-SELECT * FROM session_index WHERE user_id = 'eric';
-SELECT * FROM config WHERE scope = 'user:eric';
-SELECT SUM(output_tokens) FROM token_usage WHERE user_id = 'eric' AND timestamp > '2026-04-01';
+SELECT * FROM session_index WHERE user_id = 'alex';
+SELECT * FROM config WHERE scope = 'user:alex';
+SELECT SUM(output_tokens) FROM token_usage WHERE user_id = 'alex' AND timestamp > '2026-04-01';
 
 -- Memory: per-user, per-project, typed, searchable
-SELECT * FROM memory_entries WHERE user_id = 'eric' AND project = 'sovrant' AND type = 'feedback';
-SELECT * FROM memory_entries WHERE user_id = 'eric' AND content LIKE '%testing%' AND is_stale = 0;
+SELECT * FROM memory_entries WHERE user_id = 'alex' AND project = 'sovrant' AND type = 'feedback';
+SELECT * FROM memory_entries WHERE user_id = 'alex' AND content LIKE '%testing%' AND is_stale = 0;
 ```
 
 #### Architecture
@@ -2628,12 +2628,12 @@ All endpoints are protected by the existing `SOVRANT_TOKEN` bearer auth (same as
 **`POST /v1/users`**
 ```json
 // Request
-{ "display_name": "Eric", "role": "user", "team": "engineering" }
+{ "display_name": "Alex", "role": "user", "team": "engineering" }
 
 // Response (201 Created)
 {
   "user_id": "usr_a1b2c3d4",
-  "display_name": "Eric",
+  "display_name": "Alex",
   "role": "user",
   "team": "engineering",
   "status": "active",
@@ -2647,7 +2647,7 @@ All endpoints are protected by the existing `SOVRANT_TOKEN` bearer auth (same as
   "users": [
     {
       "user_id": "usr_a1b2c3d4",
-      "display_name": "Eric",
+      "display_name": "Alex",
       "role": "user",
       "team": "engineering",
       "status": "active",
@@ -8659,7 +8659,7 @@ Concrete dogfood evidence from the 2026-05-02 sessions:
   via Artifact — then the assistant gave up. User had to repeat "thats
   only two files" three times.
 - **Workspace split:** `~/.sovrant/artifacts/` contains both `personal/`
-  and `ws-personal-eramseur/`. The first comes from
+  and `ws-personal-alex/`. The first comes from
   `ArtifactScope.DefaultWorkspaceId = "personal"` (the literal fallback
   in tool calls); the second from `SqliteWorkspaceStore.CreatePersonalWorkspaceAsync`
   which mints `ws-personal-{userId}`. Same user, two homes.
@@ -12704,7 +12704,7 @@ Rahul Singh's fork (PR #31, his issue #28 "Claude-like UX refresh") attempted th
   - Composer: a `Border.composer` capped at `MaxWidth=760`, holding a borderless `TextBox.composer-input` and the `composer-send` Send/Stop pair. `ChatViewModel.InputWatermark` switches to "Generating a reply…" while sending.
   - The focus ring comes from the `Border.composer` style, because a locally set `BorderBrush` would override `:focus-within`.
 - **Esc to stop:** Web's Esc handler already existed but couldn't fire, because the textarea was `disabled` while sending, so it lost focus. It's now `readonly`. Desktop's handler already worked.
-- **Shared:** `Sovrant.Api.Ui.AvatarText.Initials` gives both surfaces the same up-to-two initials ("eric.ramseur@x" → "ER", "nav-test" → "NT"). Covered by 10 cases in `Sovrant.Ui.Tests` (now 30 tests). Full suite: 2,379 passed, 3 skipped.
+- **Shared:** `Sovrant.Api.Ui.AvatarText.Initials` gives both surfaces the same up-to-two initials ("alex.morgan@x" → "AM", "nav-test" → "NT"). Covered by 10 cases in `Sovrant.Ui.Tests` (now 30 tests). Full suite: 2,379 passed, 3 skipped.
 - **Found while verifying (pre-existing, not fixed here):**
   1. **Reply text doesn't stream live.** `ConversationRuntime.AttemptCollectAsync` collects a model call's `TextChunk` events into a `List` and returns them only once the provider stream ends. So text appears all at once per model call, on both surfaces, and the streaming caret is barely visible. Candidate follow-up.
   2. **A local profile goes to Ollama** (`localhost:11434`) even when it is LM Studio (`localhost:1234`). Phase 138 found the cause: it is the provider pin, not the model name. Any profile whose base URL is `localhost` is pinned to the always-registered `OllamaProvider`, whose URL is fixed. Planned as **Phase 138**.
@@ -13377,5 +13377,5 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 - [ ] `SystemPromptBuilder` gone (or merged)
 - [ ] Debt table up to date
 - [ ] README numbers current
-- [ ] No personal name or email in tests, mocks or docs (repository URL and company contact excepted)
+- [x] No personal name or email in tests, mocks or docs (repository URL and company contact excepted) — done 2026-10-07
 - [ ] Final UAT on `development`, then the 2.1.0 release

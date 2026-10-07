@@ -788,7 +788,7 @@ const S = {
   users:{g:'admin',p:'Browse',t:'Users',url:'/admin',sub:'4 users',
     acts:[['Invite',1]],
     items:[{n:'sam@example.com',mono:1,b:['Member','Signed in on 2 browsers'],tag:['Active','b-ok']},
-           {n:'ramseur@anant.us',mono:1,b:['Admin','Signed in on 1 browser'],tag:['Owner','b-brand']},
+           {n:'alex.morgan@example.com',mono:1,b:['Admin','Signed in on 1 browser'],tag:['Owner','b-brand']},
            {n:'priya@example.com',mono:1,b:['Member','Not signed in'],tag:null},
            {n:'jordan@example.com',mono:1,b:['Member','Awaiting approval'],tag:['Pending','b-warn']}],
     note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side. A7: the Registration & sign-in tab holds how people get in and how long they stay in — admins can turn "Keep me signed in" off and set its length (default 14 days), the inactivity limit and the maximum; changes reach existing sign-ins at their next check, and longer limits never extend an existing one.'},
@@ -909,7 +909,7 @@ function railHTML(s){
     ${convo}</div>
     ${fly}
     ${railOpen&&acctMenu?acctMenuHTML():''}
-    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">ER</div><div><div class="fn">ramseur</div><div class="fs">Admin</div></div></div></div>`:''}
+    ${railOpen?`<div class="foot"><div class="frow${acctMenu?' open':''}" onclick="toggleAcct()" title="Account" aria-haspopup="menu" aria-expanded="${acctMenu}"><div class="av">AM</div><div><div class="fn">Alex Morgan</div><div class="fs">Admin</div></div></div></div>`:''}
   </div>`;
 }
 
@@ -962,7 +962,7 @@ function acctMenuHTML(){
     ? `<b>Kept signed in for 14 days</b> on this browser (until 21 Oct). You chose "Keep me signed in".`
     : `<b>Signed out after 1 hour idle</b>, renewed while you're active (12 hours at most). Signed in today at 09:12.`;
   return `<div class="acct" role="menu">
-    <div class="ah"><div class="av">ER</div><div><div class="an">ramseur</div><div class="ae">ramseur@anant.us · Admin</div></div></div>
+    <div class="ah"><div class="av">AM</div><div><div class="an">Alex Morgan</div><div class="ae">alex.morgan@example.com · Admin</div></div></div>
     <div class="ab">${life}<br>Signed in on 1 browser.</div>
     <button class="ai" role="menuitem">Sign out</button>
     <button class="ai" role="menuitem">Sign out of all browsers</button>
@@ -975,10 +975,10 @@ function usersDetailHTML(sel){
   const signins = sel.n==='sam@example.com'
     ? [['Chrome on Windows','10.0.4.21','today 08:47','2 min ago','1 h idle',0],
        ['Safari on iPhone','198.51.100.7','2 Oct','Yesterday','5 Nov',1]]
-    : sel.n==='ramseur@anant.us'
+    : sel.n==='alex.morgan@example.com'
     ? [['Edge on Windows','127.0.0.1','today 09:12','Just now','1 h idle',0]]
     : [];
-  const rows = signins.map(([d,ip,si,la,ex,rem],i)=>`<tr><td class="dev"><div class="sidev">${d}${sel.n==='ramseur@anant.us'&&i===0?'<span class="sithis">This browser</span>':''}</div><div class="simeta">${ip} · signed in ${si}${rem?' · kept 30 days':''}</div></td><td>${la}</td><td>${ex}</td><td style="text-align:right"><button class="btn">Revoke</button></td></tr>`).join('');
+  const rows = signins.map(([d,ip,si,la,ex,rem],i)=>`<tr><td class="dev"><div class="sidev">${d}${sel.n==='alex.morgan@example.com'&&i===0?'<span class="sithis">This browser</span>':''}</div><div class="simeta">${ip} · signed in ${si}${rem?' · kept 30 days':''}</div></td><td>${la}</td><td>${ex}</td><td style="text-align:right"><button class="btn">Revoke</button></td></tr>`).join('');
   const table = signins.length
     ? `<div class="tablewrap" style="margin:0"><table class="sitbl"><thead><tr><th>Browser</th><th>Last active</th><th>Expires</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
     : `<div class="lhint" style="margin:0">${sel.n==='jordan@example.com'?'Waiting for approval — no sign-ins yet.':'Not signed in anywhere.'}</div>`;
@@ -1016,7 +1016,7 @@ function browseHTML(s){
       ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick an item from the list to see its details.</div></div>`
       : `<div class="dhead"><div style="flex:1"><h3>${sel.n}</h3><div class="dsub">${(sel.b||[]).join(' · ')}</div></div>
           ${sel.tag?`<span class="badge ${sel.tag[1]}" style="margin:0">${sel.tag[0]}</span>`:''}</div>
-         <dl class="kv"><dt>Identifier</dt><dd>${sel.n}</dd><dt>Workspace</dt><dd>ws-personal-ramseur</dd><dt>Updated</dt><dd>2026-08-27 14:02</dd></dl>
+         <dl class="kv"><dt>Identifier</dt><dd>${sel.n}</dd><dt>Workspace</dt><dd>ws-personal-alex.morgan-example.com</dd><dt>Updated</dt><dd>2026-08-27 14:02</dd></dl>
          <div style="display:flex;gap:8px;margin-top:16px">${(s.actsDetail||[['Open',1],['Delete',0]]).map(([t,p])=>`<button class="btn${p?' pri':''}">${t}</button>`).join('')}</div>`;
   }
   return `${phHTML(s)}
@@ -1030,7 +1030,7 @@ function overviewHTML(s){
   const rows=[['session','Fix OpenRouter 401 fallback bug','Recent','4h ago'],['agent-run','adhoc-template · architect','succeeded','Jun 10'],['session','Draft v1.5.0 changelog','Recent','1d ago'],['session','Workspace provider visibility','Recent','2d ago']]
     .map(([k,t,st,when])=>`<tr><td><span class="badge b-mut" style="margin:0">${k}</span></td>
       <td><span class="ttl"><span style="display:flex;color:var(--t3)">${sv(I.lock,2.2)}</span>${t}</span></td>
-      <td class="mut">${st}</td><td class="mut">ramseur@anant.us</td><td class="num">${when}</td><td class="mut">—</td></tr>`).join('');
+      <td class="mut">${st}</td><td class="mut">alex.morgan@example.com</td><td class="num">${when}</td><td class="mut">—</td></tr>`).join('');
   return `${phHTML(s)}<div class="stats">${stats}</div>
     <div class="tablewrap"><table><thead><tr><th>Kind</th><th>Title</th><th>Status</th><th>Owner</th><th>Last activity</th><th>Cost</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
@@ -1229,13 +1229,13 @@ function chatHTML(s){
   </div>`;
   return `<div class="convo" style="position:relative">${chatHeadHTML()}
     <div class="msgs">
-      <div class="msg u"><div class="who">ER</div><div class="bub">Why are OpenRouter chats failing?</div></div>
+      <div class="msg u"><div class="who">AM</div><div class="bub">Why are OpenRouter chats failing?</div></div>
       <div class="msg a"><div class="who">${sv(I.chat,2)}</div><div>
         <div class="strip"><span style="display:flex;color:var(--t3)">${sv(I.chev,2.4)}</span><span class="cnt">4 actions</span><span>· Read ×2 · Grep · Bash · 2.4s</span></div>
         <div class="bub">Your OpenRouter key is expired — the API returns <code>401 API key expired</code> on every request. Two other things surfaced in the log: Ollama is being called although it isn't configured, and a request was rejected for sending 144 tools against a 128 limit.</div>
         <div class="ameta"><span>gemma-4-31b-it</span><span>·</span><span>6.2s</span><span>·</span><span class="act" title="Copy reply">Copy</span></div>
       </div></div>
-      ${chatState==='stream' ? `<div class="msg u"><div class="who">ER</div><div class="bub">Rotate the key and confirm chats work again.</div></div>
+      ${chatState==='stream' ? `<div class="msg u"><div class="who">AM</div><div class="bub">Rotate the key and confirm chats work again.</div></div>
       <div class="msg a"><div class="who">${sv(I.chat,2)}</div><div>
         <div class="strip run"><span style="display:flex;color:var(--t3)">${sv(I.chev,2.4)}</span><span class="cnt">Running</span><span>· Bash · 1.1s</span></div>
         <div class="bub">I'll open the provider settings, swap in the new key, and send a test message through OpenRouter<span class="caret"></span></div>

@@ -338,13 +338,13 @@ curl -s -X POST http://localhost:5200/v1/chat/completions \
 curl -s -X POST http://localhost:5200/v1/chat/completions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"My name is Eric"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
+  -d '{"messages":[{"role":"user","content":"My name is Alex"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
 
 curl -s -X POST http://localhost:5200/v1/chat/completions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"What is my name?"}],"model":"gpt-4o-mini","session_id":"test-session-1"}'
-# expected: second response references "Eric"
+# expected: second response references "Alex"
 
 # 5. Status endpoint
 curl -s -H "Authorization: Bearer $TOKEN" http://localhost:5200/v1/status
