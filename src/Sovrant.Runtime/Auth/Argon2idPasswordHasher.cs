@@ -9,6 +9,10 @@ namespace Sovrant.Runtime.Auth;
 /// memory=65536 KiB, iterations=3, parallelism=1.
 ///
 /// Hash format: base64(salt)|base64(hash) — both are 32 bytes.
+///
+/// Each hash needs 64 MB for a moment, so a sign-in rush (a team arriving at 9 a.m.) would need
+/// 64 MB × everyone at once — a 300-user load test peaked at 3 GB. At most
+/// <see cref="MaxConcurrentHashes"/> run at the same time; the rest wait their turn (Phase 145 Part E).
 /// </summary>
 public sealed class Argon2idPasswordHasher : IPasswordHasher
 {
@@ -17,6 +21,10 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
     private const int Iterations = 3;
     private const int MemorySize = 65536; // KiB
     private const int DegreeOfParallelism = 1;
+
+    /// <summary>One per CPU core (hashing is CPU-bound anyway), at most 8: caps the memory at 512 MB.</summary>
+    public static readonly int MaxConcurrentHashes = Math.Clamp(Environment.ProcessorCount, 2, 8);
+    private static readonly SemaphoreSlim s_hashGate = new(MaxConcurrentHashes, MaxConcurrentHashes);
 
     public string Hash(string password)
     {
@@ -53,6 +61,19 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
     }
 
     private static byte[] ComputeHash(byte[] password, byte[] salt)
+    {
+        s_hashGate.Wait();
+        try
+        {
+            return ComputeHashCore(password, salt);
+        }
+        finally
+        {
+            s_hashGate.Release();
+        }
+    }
+
+    private static byte[] ComputeHashCore(byte[] password, byte[] salt)
     {
         using var argon2 = new Argon2id(password)
         {

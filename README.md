@@ -117,7 +117,7 @@ On first launch, the setup wizard guides you through provider configuration (API
 
 Browser-based UI on port 5100 with the full runtime embedded.
 
-> **Pre-release — multi-user Web is new in 2.1.0.** Embedded Web (the default) now signs in each browser separately, so a team can share one Web server: everyone sees only their own conversations and approvals and picks from the models their admins configured ([Phase 145](docs/roadmap.md), GitHub #32). It's still being proven at scale (load test pending). **Remote mode** (Web in front of Sovrant.Server, `SOVRANT_RUNTIME_MODE=remote`) is still single-user — [Phase 146](docs/roadmap.md). See [Running Web for a team](#running-web-for-a-team).
+> **Pre-release — multi-user Web is new in 2.1.0.** Embedded Web (the default) now signs in each browser separately, so a team can share one Web server: everyone sees only their own conversations and approvals and picks from the models their admins configured ([Phase 145](docs/roadmap.md), GitHub #32). Load-tested with 1,000 people connected to one 4-core server — see [Sizing Sovrant.Web](docs/web-sizing.md). **Remote mode** (Web in front of Sovrant.Server, `SOVRANT_RUNTIME_MODE=remote`) is still single-user — [Phase 146](docs/roadmap.md). See [Running Web for a team](#running-web-for-a-team).
 
 ```bash
 dotnet run --project src/Sovrant.Web
@@ -868,6 +868,24 @@ Embedded Web (the default) is multi-user as of 2.1.0:
 - **Models come from admins** — see *Shared models* under [Multi-User & Workspaces](#multi-user--workspaces). Members don't add providers or keys.
 - **File and shell tools are off** (Bash, PowerShell, Read/Write/Edit, Glob/Grep, background tasks, code tools). On a hosted server they would run on the server itself, as its account, so an agent could reach other people's files, the database and the server's settings. They're also hidden from the model, which saves files with the Artifact tool instead (documents, code, reports all still work and are downloadable). For a server used by one trusted team, an admin can turn them on under Governance → **Allow file and shell tools on this server** (`SOVRANT_GOVERNANCE_HOST_FILE_TOOLS`), and separately **Let members use file and shell tools**. Running code safely for hosted users is [Phase 147](docs/roadmap.md) (sandboxes). Desktop and the CLI run on your own machine and keep these tools.
 - Put it behind HTTPS (a reverse proxy is fine — forwarded headers are supported) before anyone signs in from another machine.
+- **How big a server:** about 0.5–1 MB per connected person plus ~110 MB; 1,000 people ran on 4 cores within a 2 GB memory limit. Set a memory limit — see [Sizing Sovrant.Web](docs/web-sizing.md).
+
+**Load test** (`tools/Sovrant.LoadTest`, 4-core laptop, 16 GB; each person signs in, keeps a live connection and changes page every 15–20 s):
+
+```mermaid
+xychart-beta
+    title "Sovrant.Web memory with everyone connected (MB, after a full GC)"
+    x-axis "People connected" [0, 300, 1000]
+    y-axis "Memory (MB)" 0 --> 1000
+    bar [110, 534, 668]
+```
+
+| People connected | Memory limit | Errors | Page change (p95) | Sign-in (p50) | Memory once settled |
+|---|---|---|---|---|---|
+| 300 | 1 GB | 0 | 34 ms | 1.4 s | 534 MB |
+| 1,000 | 2 GB | 0 | 33 ms | 2.4 s | 668 MB |
+
+Chat replies aren't included — they're generated at your model provider.
 
 ---
 

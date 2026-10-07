@@ -13,6 +13,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Added
 
+- **Web load test and sizing guide (Phase 145, part E).** `tools/Sovrant.LoadTest` starts a real Web server, signs people in through the real form, opens a real Blazor connection for each and clicks between pages, measuring memory after a full garbage collection. Results: 1,000 people on one 4-core laptop within a 2 GB memory limit — no errors, page changes 33 ms (p95), about 0.5–1 MB per connected person. [docs/web-sizing.md](docs/web-sizing.md) gives server sizes by team size and how to set a memory limit.
 - **Web: each browser signs in separately (Phase 145, part A).** Sign-in sets an HttpOnly cookie for that browser, so two people on one Web server are two different users, each with their own workspace, model, conversations and Home. Signed out after **1 hour** without activity (renewed by activity) and after **12 hours** regardless; **"Keep me signed in on this browser for 30 days"** on the sign-in page. All three are env-settable: `SOVRANT_WEB_IDLE_MINUTES`, `SOVRANT_WEB_MAX_SESSION_HOURS`, `SOVRANT_WEB_REMEMBER_DAYS` (`0` hides the checkbox). Sign out (this browser) and Sign out of all browsers are on Settings. If you're signed out by the timeout or by an admin, the sign-in page says why. Remote mode (Web in front of Server) still uses one sign-in until part C.
 - **Web: tool approvals and permission mode are per person (Phase 145, part A).** An approval prompt goes only to the person whose work asked for it — the tab showing that conversation, else another of their tabs — and is never shown to anyone else (no tab open: denied, as before). Your permission mode (Settings) is saved for you and applies to your conversations only; Plan mode entered in one chat no longer switches everyone's.
 - **Web: the sign-in timeout works inside an open tab, plus an account menu and admin control of sign-ins (Phase 145, part A).** Typing or clicking renews your sign-in (a light ping at most once a minute); an open tab checks every minute and goes to Sign in, saying why, when its sign-in ends (an hour idle, the 12-hour limit, revoked, or signed out in another tab), and the server stops acting as you even if the page ignores that. The avatar at the bottom of the sidebar opens your account menu: how long this browser stays signed in, how many browsers you're on, Settings, Sign out, and Sign out of all browsers. **Admin → Users** shows where each person is signed in, with **Revoke** per browser and **Sign out everywhere**, on Web and Desktop.
@@ -29,6 +30,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Fixed
 
+- **A sign-in rush could use gigabytes of memory.** Each password check uses Argon2id with 64 MB, and 20 people signing in at once needed 64 MB each at the same time (a 300-person test peaked at 3 GB). At most one check per CPU core (up to 8) now runs at once; the rest wait their turn. Password strength is unchanged.
 - **Leaving a running chat and coming back broke the reply.** Three causes, on Web and Desktop:
   - **Long replies lost their middle:** the buffer that rebuilds a reply you navigated away from stopped at 500 events, and a long reply streams thousands of text pieces. Text pieces are now merged, so the whole reply comes back.
   - **Web:** the rest of the reply was attached to your *previous* answer instead of its own message.
@@ -44,6 +46,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Internal
 
+- `ConcurrentUsersTests`: 50 people take turns at the same moment on one runtime; each request keeps that person's model, identity, conversation and tool list, and members never get an admin's file tools.
 - New `Sovrant.Web.Tests` project: multi-user tests that run the real Web app in-process on a throwaway database (one cookie jar per simulated browser).
 - **Desktop:** all 72 `TextBox.Watermark` uses renamed to `PlaceholderText` (Avalonia 12 marks `Watermark` obsolete). The Desktop build is free of AVLN5001 warnings.
 - **New `Sovrant.Hosting` project:** ASP.NET Core hosting helpers shared by Web and Server only, so Desktop and the CLI don't pull in ASP.NET Core. `ForwardedHeadersSetup` now lives there once instead of being copied into both apps.
