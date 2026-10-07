@@ -50,6 +50,7 @@ What we are actively working on and shipping next, in priority order.
 | **2.1.0 — in progress** | Phase 134 | Postgres / Supabase — every known Postgres and Supabase issue in one phase: privacy flag missing from Postgres conversation lists (admins see private titles in Command Center), migrator copies only conversations + credentials, no Postgres test run, split SQLite/Postgres backend, Supabase RLS (was Phase 127) |
 | **2.1.0 — built** | Stopgaps | Web: no automatic sign-in after a restart; Web and Server: file and shell tools off for members by default (admins can turn them on); README warns that Web is single-user until Phase 145 |
 | **2.1.0 — next** | Phase 145 | Multi-user Web — teams of 10–1000 on one Web server: per-browser sign-in (cookie), per-tab state, each member picks from the workspace's admin-configured models, headless mode signs each user in to Server, safe tools on a shared server (GitHub #32) |
+| **Next — after 145** | Phase 146 | Web in front of Server for enterprise — each Web user signs in to Server as themselves (per-browser cookie on Web, their own Server token, one SignalR connection per tab); end-to-end tests of the headless setup; audit and fix what it finds (was Phase 145 Part C) |
 | **v1.5 — pending UAT** | Phase 126 | Chat conversation UX — collapsed work strips replace per-tool boxes; two-level expand (strip → tool list → full detail); live "doing X" in-progress indicator; agent answer prominent, tool work subordinate; Web + Desktop parity — implemented, awaiting live UAT pass ✅(code) |
 | **v1.5 — in progress** | Phase 129 | Missions → Workflows — full-stack rename (DB/API/CLI/tool/UI/SDK, clean cutover, no alias) ✅; `WorkflowSchedulerService` autonomous background execution ✅; dedicated Workflows page (Web + Desktop) ✅; chat-session status message on terminal/AwaitingHuman transitions ✅; plan generation (LLM decomposition) + human review/edit before running, with a fix so `RunAsync` reuses a reviewed plan instead of silently re-planning over edits ✅ (2026-09-05); real per-step output text + artifact count surfaced in the journal (previously only lifecycle labels, so a Completed workflow gave no signal whether real work happened), plus a concurrency fix for a live-reproduced bug where a stale UI click could race two full runs on the same workflow ✅ (2026-09-09); live auto-refresh on the detail view (4s polling while Planning/Running) ✅; Plan/Journal split into tabs, every workflow now gets a real chat session by default, Journal tab links straight to it instead of reproducing a chat UI ✅ (2026-09-09); still unplanned: positioning callout (AI workflows vs n8n/Zapier automation), team-picker/run-mode launch form, dual-path execution (Claude Agent SDK dynamic orchestration when a qualifying Claude tier is active, else Sovrant's own workflow engine — model/tier gate TBD), and originating a workflow directly from an in-progress chat (design not finalized — open question is how user input is handled while a linked workflow runs) |
 
@@ -13187,9 +13188,8 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 9. Phase 144 env seeding becomes one shared, admin-owned profile for `LLM_API_KEY`, placed in the default set, instead of a provider profile per user.
 10. Background work (workflows, swarms, teams, scheduler) runs on its owner's pick for that workspace.
 
-**Part C — Headless mode (Web in front of Server)**
-9. Web's login form signs in against Server (`/v1/auth/login`); each circuit gets its own API client with that user's token. No shared token in the Web process.
-10. Audit Server for process-wide per-user state (its `SovrantConfig`) and fix the same way as Part B.
+**Part C — Headless mode (Web in front of Server) → moved to Phase 146 (2026-10-07)**
+9–10. Moved to **Phase 146 — Web in front of Server for enterprise**, which also tests that setup end to end and fixes what it finds. Order here is now D, then E: embedded Web is what we use internally, so it's made solid and measured first.
 
 **Part D — Tools on a shared server**
 11. Per-conversation Bash working directory (`ShellSessionState` per session).
@@ -13231,3 +13231,39 @@ Sovrant.Server already authenticates every request (`HttpContextPrincipalAccesso
 - **Phase 134** (Postgres / Supabase) — Part B there is needed for multi-instance hosting.
 - **Phase 40C** (Supabase) — SSO comes from Supabase Auth later.
 - **Phase 143 Part B** (SDK & API) — headless mode leans on Server's auth endpoints.
+
+---
+
+## Phase 146 — Web in front of Server for enterprise
+
+**Status:** Planned (2026-10-07). Split out of Phase 145 (its Part C). Long term, enterprises should run **Sovrant.Web as the front end to Sovrant.Server**; embedded Web (Phase 145) is what we use internally and is made solid first.
+
+### Why
+
+Remote mode (`SOVRANT_RUNTIME_MODE=remote`) works for one person but is still single-user and has had little end-to-end testing:
+
+- **One Server token for the whole Web process:** `SovrantRemoteOptions.ApiToken` is read by the shared `SovrantApiDelegatingHandler`, so every Web user acts as the same Server user.
+- **One SignalR connection:** `SignalRStreamingClient` (streaming chat, tool approvals) is a singleton, as are `RemoteRuntimeSessionPool` and `RemoteToolConfirmationHandler`.
+- Remote mode still uses the process-wide `WebSessionService`, the old in-page Login flow and the old global model pick (Phase 145 kept them unchanged so they wouldn't break).
+- Six remote services (`RemoteSessionStore`, `RemoteSessionFolderStore`, `RemoteToolRegistry`, `RemoteArtifactStore`, `RemoteIdentityService`, link resolver) are singletons.
+- Server itself: model/provider were process-wide until Phase 145 Part B fixed the runtime to use each conversation's model; Server's own per-user selection and default-set handling still need checking.
+
+### What ships
+
+1. **Per-browser sign-in through Server:** remote mode uses the same cookie sign-in as embedded Web; the password is checked by Server (`/v1/auth/login`) and that person's Server token is kept encrypted in Web's local store, tied to the browser's sign-in. Signing out or an admin revoke on Web also revokes the Server token.
+2. **Per-tab remote client:** the remote services and the SignalR connection are per circuit, each carrying its own person's token. No shared token in the Web process; `SOVRANT_API_TOKEN` becomes service-use only.
+3. **Server parity with embedded Web:** member model picks from workspace-allowed models (Phase 145 Part B) through Server's API; the personal default set; per-person approvals and permission mode over SignalR.
+4. **End-to-end test target:** an automated test that runs Server and Web together (two browsers as two users, chat, approvals, sign-out/revoke), and a manual UAT checklist.
+5. **Audit and fix:** walk every Web page in remote mode, list what's broken or missing compared with embedded Web, and fix or roadmap each item.
+
+### Acceptance criteria
+- [ ] Two browsers on one remote-mode Web are two different Server users (identity, conversations, approvals, model)
+- [ ] No shared Server token in the Web process; sign-out / revoke also revokes the Server token
+- [ ] Automated Web + Server end-to-end test in CI
+- [ ] Remote-mode audit done; every gap fixed or on the roadmap
+- [ ] Docs: deployment guide for Web in front of Server (ports, proxies, TLS, tokens)
+
+### Relationship to other phases
+- **Phase 145** — embedded multi-user Web; this phase brings the same guarantees to Web in front of Server.
+- **Phase 143 Part B** — SDK & API parity; the headless setup relies on Server's API.
+- **Phase 134 Part B** — split backend; multi-instance Server needs it.
