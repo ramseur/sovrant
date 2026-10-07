@@ -50,7 +50,7 @@ internal static class ConfigRoutes
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(req);
-        if (!ctx.IsAdmin()) return Results.Forbid();
+        if (!ctx.IsAdmin()) return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
 
         if (req.Model is not null)
         {

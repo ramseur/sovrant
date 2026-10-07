@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Sovrant.Runtime.Evals;
+using Sovrant.Server.Auth;
 
 namespace Sovrant.Server.Routes;
 
@@ -36,10 +37,14 @@ internal static class EvalRoutes
 
         // POST /v1/evals/run — run a named suite and return the report
         app.MapPost("/v1/evals/run", async (
+            HttpContext ctx,
             EvalRunRequest request,
             IEvalRunner runner,
             CancellationToken ct) =>
         {
+            // Code graders run commands from suite files on the server: admins only.
+            if (!ctx.IsAdmin()) return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
+
             var searchPaths = GetSearchPaths();
             var suites = EvalLoader.LoadAll(searchPaths);
             var suite = suites.FirstOrDefault(s =>

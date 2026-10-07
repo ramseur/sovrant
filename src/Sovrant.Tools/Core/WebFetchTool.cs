@@ -40,8 +40,10 @@ public sealed class WebFetchTool : ITool
             try { uri = new Uri(url); }
             catch (UriFormatException ex) { return $"Error: invalid URL: {ex.Message}"; }
 
-            if (IsBlockedUri(uri))
-                return $"Error: URL is blocked — requests to private/local addresses and non-HTTP(S) schemes are not allowed.";
+            // Friendly early refusal; the connection itself is also checked (OutboundAddressGuard),
+            // which covers hostnames, redirects and DNS rebinding.
+            if (OutboundAddressGuard.IsBlockedUri(uri))
+                return OutboundAddressGuard.BlockedMessage;
 
             using var client = _httpClientFactory.CreateClient("WebFetch");
             client.DefaultRequestHeaders.UserAgent.ParseAdd("Sovrant/1.0");
@@ -83,44 +85,6 @@ public sealed class WebFetchTool : ITool
             return "Error: request timed out.";
         }
     }
-
-    private static bool IsBlockedUri(Uri uri)
-    {
-        if (!uri.Scheme.Equals("http", StringComparison.OrdinalIgnoreCase) &&
-            !uri.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        var host = uri.Host;
-        if (host.Equals("localhost", StringComparison.OrdinalIgnoreCase))
-            return true;
-
-        if (IPAddress.TryParse(host, out var ip))
-        {
-            if (IPAddress.IsLoopback(ip)) return true;
-
-            var bytes = ip.GetAddressBytes();
-            if (bytes.Length == 4)
-            {
-                // RFC-1918 private ranges
-                if (bytes[0] == 10) return true;
-                if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return true;
-                if (bytes[0] == 192 && bytes[1] == 168) return true;
-                // Link-local
-                if (bytes[0] == 169 && bytes[1] == 254) return true;
-            }
-            else if (bytes.Length == 16)
-            {
-                // IPv6 link-local: fe80::/10
-                if (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80) return true;
-                // IPv6 unique local: fc00::/7
-                if ((bytes[0] & 0xfe) == 0xfc) return true;
-            }
-        }
-
-        return false;
-    }
-
-
 
     private static JsonElement CreateSchema() => JsonDocument.Parse("""
         {

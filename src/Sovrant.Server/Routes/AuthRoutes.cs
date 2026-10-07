@@ -127,7 +127,7 @@ internal static class AuthRoutes
     private static async Task<IResult> OpenRegistrationAsync(HttpContext ctx, IIdentityService identity)
     {
         if (!ctx.IsAdmin())
-            return Results.Forbid();
+            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
 
         await identity.SetRegistrationOpenAsync(true, ctx.RequestAborted).ConfigureAwait(false);
         return Results.Ok(new { registration_open = true });
@@ -136,7 +136,7 @@ internal static class AuthRoutes
     private static async Task<IResult> CloseRegistrationAsync(HttpContext ctx, IIdentityService identity)
     {
         if (!ctx.IsAdmin())
-            return Results.Forbid();
+            return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
 
         await identity.SetRegistrationOpenAsync(false, ctx.RequestAborted).ConfigureAwait(false);
         return Results.Ok(new { registration_open = false });
@@ -150,21 +150,21 @@ internal static class AuthRoutes
 
     private static async Task<IResult> GetApprovalStatusAsync(HttpContext ctx, IIdentityService identity)
     {
-        if (!ctx.IsAdmin()) return Results.Forbid();
+        if (!ctx.IsAdmin()) return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
         var required = await identity.IsApprovalRequiredAsync(ctx.RequestAborted).ConfigureAwait(false);
         return Results.Ok(new { approval_required = required });
     }
 
     private static async Task<IResult> EnableApprovalAsync(HttpContext ctx, IIdentityService identity)
     {
-        if (!ctx.IsAdmin()) return Results.Forbid();
+        if (!ctx.IsAdmin()) return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
         await identity.SetApprovalRequiredAsync(true, ctx.RequestAborted).ConfigureAwait(false);
         return Results.Ok(new { approval_required = true });
     }
 
     private static async Task<IResult> DisableApprovalAsync(HttpContext ctx, IIdentityService identity)
     {
-        if (!ctx.IsAdmin()) return Results.Forbid();
+        if (!ctx.IsAdmin()) return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
         await identity.SetApprovalRequiredAsync(false, ctx.RequestAborted).ConfigureAwait(false);
         return Results.Ok(new { approval_required = false });
     }

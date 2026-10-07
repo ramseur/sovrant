@@ -583,6 +583,8 @@
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task;
+            // Run as the signed-in person, so admin-only commands are refused for members.
+            using var _asUser = string.IsNullOrEmpty(Me) ? null : Sovrant.Runtime.Auth.AmbientPrincipal.Push(Me, Session.Role);
             var result = await CommandDispatcher.TryDispatchAsync(text, Session.UserId);
 
             if (result is null)

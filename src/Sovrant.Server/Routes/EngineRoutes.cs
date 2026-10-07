@@ -61,7 +61,7 @@ internal static class EngineRoutes
             HttpContext ctx,
             CancellationToken ct) =>
         {
-            if (!ctx.IsAdmin()) return Results.Forbid();
+            if (!ctx.IsAdmin()) return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
             var recovered = await recovery.RecoverAsync(ct);
             return Results.Json(new { recovered }, s_jsonOptions);
         });
@@ -73,7 +73,7 @@ internal static class EngineRoutes
             HttpContext ctx,
             CancellationToken ct) =>
         {
-            if (!ctx.IsAdmin()) return Results.Forbid();
+            if (!ctx.IsAdmin()) return Results.Json(new { error = "Forbidden." }, statusCode: StatusCodes.Status403Forbidden);
             if (string.IsNullOrWhiteSpace(runtimeRunId))
                 return Results.BadRequest(new { error = "runtimeRunId is required." });
 

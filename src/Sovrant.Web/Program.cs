@@ -174,6 +174,9 @@ public static class Program
             // The caller is the ambient principal: set per request (below) and per chat turn.
             // Phase 145 Part D: file/shell tools are off on a hosted server unless an admin allows them,
             // and blocked tools are hidden from the model.
+            // Slash commands that change things for everyone or use the server's files are admin-only.
+            builder.Services.AddSingleton<Sovrant.Commands.ISlashCommandPolicy>(
+                new Sovrant.Commands.SharedServerCommandPolicy(AmbientPrincipal.Accessor));
             Sovrant.Runtime.Tools.HostToolPolicyExtensions.AddHostToolPolicy(builder.Services, sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
                 AmbientPrincipal.Accessor, sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
             builder.Services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
