@@ -13369,7 +13369,7 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 9. **No personal data in tests, mocks or docs** — replace the maintainer's name and email in `AvatarTextTests`, `AvatarText` comments, both design mocks and the roadmap with a neutral example person (Alex Morgan, alex@example.com). Keep the repository URL (`github.com/ramseur/sovrant`) and the company security contact. Also correct the old repository name (`ramseur/sovrant-engine`) in `sdk/js/package.json` and the model-metadata request header.
 
 ### Acceptance criteria
-- [ ] Full test suite clean on several consecutive runs
+- [x] Full test suite clean on several consecutive runs — done 2026-10-07: 5 clean full runs in a row after fixing temp-file cleanup (51 classes), MCP retry waits, coordinator timer races, the Server test host's background scheduler, and a real Web page-load bug the repeats exposed
 - [ ] Every way of stopping a workflow leaves it Cancelled (or Failed) with the reason
 - [ ] Each env-backed admin setting either follows the admin's choice or says it's set by the environment
 - [ ] Compaction: window-relative trigger, pinned essentials, fast-tier summary, originals kept

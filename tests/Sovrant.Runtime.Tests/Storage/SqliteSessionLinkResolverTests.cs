@@ -29,7 +29,7 @@ public sealed class SqliteSessionLinkResolverTests : IAsyncDisposable
     {
         await _provider.DisposeAsync();
         if (File.Exists(_dbPath))
-            File.Delete(_dbPath);
+            try { File.Delete(_dbPath); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* temp file still held (SQLite pool, indexer, antivirus) */ }
     }
 
     private static SessionListItem Item(string id, string? agent = null) =>

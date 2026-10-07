@@ -39,6 +39,8 @@ Versions correspond to tags on the `main` branch.
 
 ### Fixed
 
+- **Web: a page load could fail now and then on a busy server.** The new waiting-approvals banner looked up a service while the page was being torn down after prerendering, when the request's services were already gone; the error aborted the response. It now looks the service up once when the layout starts.
+- **A cancelled agent task could be reported as "timed out".** When the caller cancelled and the coordinator's own timeout had also fired by the time the cancellation was handled (a busy server), the caller's cancellation now wins — it happened first.
 - **Web: a dark box around the page heading after a refresh.** The heading is focused on load so screen readers announce the page; the browser drew its focus outline around it. The outline is now hidden for headings (they aren't controls), and the focus move stays.
 - **Work outside a chat ran on the install default model.** Workflow runs (Workflows page, API, scheduler), webhooks and swarms started through the API now use their owner's model pick from the models allowed in their workspace — the same choice as their chats. A workflow started from a chat keeps that conversation's model.
 - **Admin Home said "Invite your team" even after people had joined.** The step only counted members of team workspaces, but people join by registering into their own personal workspace, and Web has no invites yet. It's now "Add your team" (open registration, then set roles) and ticks once anyone else has an account.
@@ -63,6 +65,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Internal
 
+- **Flaky tests fixed** (Phase 148): test cleanup in 51 classes no longer fails when Windows still holds a temporary database file (SQLite pool, indexer, antivirus) — the cause of `GroupMailboxTests`' intermittent failures; `McpToolRegistrarRetryTests` waits for the settled retry state instead of a fixed pause or an instant check, and allows a busy run up to 15 s. `OrchestrationCoordinatorTests` use agents that never finish on their own and a coordinator whose timeout can't fire during a stalled run (timer callbacks can queue for seconds on a busy machine), and the Server test host no longer runs the background workflow scheduler (its ticks could change a workflow mid-test). Repeated full-suite runs also caught the Web page-load bug above.
 - **No personal data in the repository** (Phase 148): the maintainer's name and email in avatar tests, a code comment, both design mocks and doc examples are replaced with a neutral example person (Alex Morgan, alex.morgan@example.com). The JS SDK's repository link and the model-metadata request header now point at `github.com/ramseur/sovrant` instead of the old `sovrant-engine` name.
 - **`Sovrant.Ui.Tests` sometimes hung forever.** The headless Avalonia render tests share one UI thread and occasionally deadlocked when run in parallel (3 of 15 runs). The project now runs its tests one at a time (a few seconds in total); 20 of 20 runs clean.
 - `ConcurrentUsersTests`: 50 people take turns at the same moment on one runtime; each request keeps that person's model, identity, conversation and tool list, and members never get an admin's file tools.

@@ -98,8 +98,10 @@ public sealed partial class OrchestrationCoordinator : IDisposable
         }
         catch (OperationCanceledException)
         {
+            // The caller's cancellation wins: under load both may have fired by the time this runs,
+            // and the caller cancelled first (it was reported as "timed out").
             return AgentResult.Fail(task.Id,
-                timeoutCts.IsCancellationRequested
+                timeoutCts.IsCancellationRequested && !ct.IsCancellationRequested
                     ? "Task timed out."
                     : "Task was cancelled.");
         }

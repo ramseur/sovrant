@@ -70,7 +70,9 @@ public sealed class OrchestrationCoordinatorTests : IDisposable
         var config = new AgentSystemConfig { TaskTimeoutSeconds = 1 };
         using var coordinator = new OrchestrationCoordinator(LiveSettings.Static(config), NullLogger<OrchestrationCoordinator>.Instance);
 
-        var slowAgent = new SlowAgent("slow", delay: TimeSpan.FromSeconds(10));
+        // Never finishes on its own (only the timeout can end it): with a 10 s agent, a run whose timer
+        // callbacks stalled past 10 s let the agent "succeed" before the 1 s timeout was handled.
+        var slowAgent = new SlowAgent("slow", delay: Timeout.InfiniteTimeSpan);
         coordinator.AddAgent(slowAgent);
 
         var task = AgentTask.Create("wait forever", "slow");
@@ -83,12 +85,17 @@ public sealed class OrchestrationCoordinatorTests : IDisposable
     [Fact]
     public async Task DispatchAsync_Cancellation_Returns_Fail()
     {
-        var slowAgent = new SlowAgent("slow", delay: TimeSpan.FromSeconds(60));
-        _coordinator.AddAgent(slowAgent);
+        // Its own coordinator with a timeout far beyond any stall: on a badly overloaded run timer
+        // callbacks can queue for seconds, and the 5 s timeout's could run before the caller's.
+        using var coordinator = new OrchestrationCoordinator(
+            LiveSettings.Static(new AgentSystemConfig { MaxConcurrentAgents = 2, TaskTimeoutSeconds = 600 }),
+            NullLogger<OrchestrationCoordinator>.Instance);
+        var slowAgent = new SlowAgent("slow", delay: Timeout.InfiniteTimeSpan);
+        coordinator.AddAgent(slowAgent);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
         var task = AgentTask.Create("wait", "slow");
-        var result = await _coordinator.DispatchAsync(task, cts.Token);
+        var result = await coordinator.DispatchAsync(task, cts.Token);
 
         Assert.False(result.Success);
         Assert.Contains("cancelled", result.Error, StringComparison.OrdinalIgnoreCase);
@@ -97,7 +104,7 @@ public sealed class OrchestrationCoordinatorTests : IDisposable
     [Fact]
     public async Task Cancel_Cancels_InFlight_Task()
     {
-        var slowAgent = new SlowAgent("slow", delay: TimeSpan.FromSeconds(60));
+        var slowAgent = new SlowAgent("slow", delay: Timeout.InfiniteTimeSpan);
         _coordinator.AddAgent(slowAgent);
 
         var task = AgentTask.Create("wait", "slow");

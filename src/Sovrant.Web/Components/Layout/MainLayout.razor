@@ -118,7 +118,10 @@
             Nav.NavigateTo(Session.SignedOutReason is { } why ? $"/login?reason={why}" : "/login", forceLoad: false);
         Nav.LocationChanged += OnLocationChanged;
         MarkKnowledgeVisited(Nav.Uri);
-        if (Approvals is { } approvals)
+        // Resolve once: at Dispose the request's service provider may already be disposed (prerender),
+        // and looking it up then threw and aborted the page.
+        _approvals = Services.GetService<Sovrant.Web.Adapters.BlazorConfirmationHandler>();
+        if (_approvals is { } approvals)
         {
             approvals.PendingChanged += OnPendingApprovalsChanged;
             ActiveContext.OnChanged += OnActiveContextChangedForBanner;
@@ -126,15 +129,14 @@
     }
 
     // ── Phase 145 A8.2: waiting approvals banner ────────────────────────────
-    private Sovrant.Web.Adapters.BlazorConfirmationHandler? Approvals =>
-        Services.GetService<Sovrant.Web.Adapters.BlazorConfirmationHandler>();
+    private Sovrant.Web.Adapters.BlazorConfirmationHandler? _approvals;
 
     /// <summary>The first approval waiting for this person that isn't already on screen.</summary>
     private Sovrant.Web.Adapters.ConfirmationRequest? WaitingApproval
     {
         get
         {
-            if (Approvals is not { } approvals || Session.UserId is null) return null;
+            if (_approvals is not { } approvals || Session.UserId is null) return null;
             var onChat = Nav.ToBaseRelativePath(Nav.Uri) is var path
                 && (path.Length == 0 || path.StartsWith("chat", StringComparison.OrdinalIgnoreCase) || path.StartsWith('?'));
             return approvals.PendingFor(Session.UserId)
@@ -231,7 +233,7 @@
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChanged;
-        if (Approvals is { } approvals)
+        if (_approvals is { } approvals)
         {
             approvals.PendingChanged -= OnPendingApprovalsChanged;
             ActiveContext.OnChanged -= OnActiveContextChangedForBanner;

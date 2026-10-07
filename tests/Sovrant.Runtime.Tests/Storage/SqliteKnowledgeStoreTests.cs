@@ -26,7 +26,7 @@ public sealed class SqliteKnowledgeStoreTests : IAsyncDisposable
     {
         await _provider.DisposeAsync();
         if (File.Exists(_dbPath))
-            File.Delete(_dbPath);
+            try { File.Delete(_dbPath); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* temp file still held (SQLite pool, indexer, antivirus) */ }
     }
 
     // A synthetic kind that the V035 seed never populates, so overlay tests start empty.

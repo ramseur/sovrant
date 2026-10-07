@@ -27,7 +27,7 @@ public sealed class SessionEndMemoryHandlerTests : IAsyncDisposable
     {
         await _provider.DisposeAsync();
         if (File.Exists(_dbPath))
-            File.Delete(_dbPath);
+            try { File.Delete(_dbPath); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* temp file still held (SQLite pool, indexer, antivirus) */ }
     }
 
     [Fact]
