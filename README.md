@@ -117,7 +117,7 @@ On first launch, the setup wizard guides you through provider configuration (API
 
 Browser-based UI on port 5100 with the full runtime embedded.
 
-> **⚠ Pre-release: Sovrant.Web is single-user for now.** One Web server holds one signed-in user for every browser, so two people using the same Web server see each other's conversations and act as each other. Use Web for one person at a time, or run **Sovrant.Server** (each request is authenticated separately) for teams. Per-browser sign-in for teams of 10–1000 is [Phase 145](docs/roadmap.md) (GitHub #32). Until then, Web signs everyone out on restart, and members can't use file and shell tools (on Web or Server) unless an admin allows it under Governance.
+> **Pre-release — multi-user Web is new in 2.1.0.** Embedded Web (the default) now signs in each browser separately, so a team can share one Web server: everyone sees only their own conversations and approvals and picks from the models their admins configured ([Phase 145](docs/roadmap.md), GitHub #32). It's still being proven at scale (load test pending). **Remote mode** (Web in front of Sovrant.Server, `SOVRANT_RUNTIME_MODE=remote`) is still single-user — [Phase 146](docs/roadmap.md). See [Running Web for a team](#running-web-for-a-team).
 
 ```bash
 dotnet run --project src/Sovrant.Web
@@ -356,7 +356,7 @@ Every conversation is stored in a SQLite database with full-text search via FTS5
 
 ### Multi-User & Workspaces
 
-Sovrant ships as a proper multi-user system, not a single-admin tool. Sovrant.Server enforces it per request today; **Sovrant.Web is still single-user per server** until Phase 145 (see the warning under [Web App](#web-app)).
+Sovrant ships as a proper multi-user system, not a single-admin tool. Sovrant.Server enforces it per request, and embedded Sovrant.Web per browser sign-in (2.1.0; see [Running Web for a team](#running-web-for-a-team)). Web in remote mode is still single-user until Phase 146.
 
 - **Login + registration on Web and Desktop.** First-run goes through registration, not a blank config screen. Username + password (hashed in SQLite via V026). Admins can flip **open registration** and **require admin approval** flags from the Admin UI.
 - **Per-user API tokens.** Users issue `svt_*` bearer tokens via `POST /v1/users/me/tokens` (or admins via `POST /v1/users/{id}/tokens`); the plaintext is returned once and never recoverable. Tokens carry an optional expiry, a sliding `last_used_at` for inactivity TTL, and can be revoked at any time.
@@ -364,7 +364,7 @@ Sovrant ships as a proper multi-user system, not a single-admin tool. Sovrant.Se
 - **Admin role.** `users.role = 'admin'` grants cross-user visibility and `/v1/users/{id}/*` management. Admin-issued password reset tokens (`password_reset_tokens` table, 24-hour TTL, one-time use) cover lost-password flows.
 - **Personal workspace per user.** Every user gets an auto-created `ws-personal-{user_id}` workspace on signup, idempotent and undeletable. Team workspaces are created via the API with 7-day invite tokens and owner/editor/viewer roles. Accept invites via `POST /v1/workspaces/invites/accept`.
 - **Projects nest inside workspaces** with their own member lists and 3-tier config inheritance (project → workspace → global).
-- **Workspace-scoped provider profiles.** Admins add a provider key once at workspace level and every member sees it in the provider dropdown (marked with a "Workspace" badge) without ever seeing the plaintext key. Per-user profiles work the same way at personal-workspace scope. All API keys flow through the encrypted keystore — `provider_profiles.credential_id` references the encrypted store, never the raw value.
+- **Shared models, configured by admins.** Admins add providers and keys; members never see a key. On Web, each member picks any model allowed for the workspace they're in (each conversation remembers its own model), and personal workspaces use a **default model set** an admin chooses (Workspaces → All personal workspaces) and can change at any time. All API keys flow through the encrypted keystore — `provider_profiles.credential_id` references the encrypted store, never the raw value.
 - **Per-workspace provider gating (opt-in).** Globally configured providers are hidden from all workspaces by default. Admins explicitly enable each provider per workspace from the Workspaces admin page — members only see providers their workspace has been granted access to. When adding a provider on the Providers page, a workspace picker lets the admin opt in one or more workspaces immediately. The model picker refreshes on every open, so access changes take effect for connected clients without requiring re-login.
 - **Per-record privacy toggles.** Any session or agent run can be marked private from the chat header or Agents UI. Private records are visible only to the owner — on the Command Center they appear as masked rows (title/content hidden); on the User Dashboard they are excluded from all other users' views entirely. Server-side enforcement via `is_private` column (V030 migration).
 
@@ -506,6 +506,8 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 ## Tools
 
 60 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+
+> On Web and Server, file and shell tools (File, Shell, `TaskCreate`, code and LSP tools) are off unless an admin allows them — see [Running Web for a team](#running-web-for-a-team). Desktop and the CLI have them all.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -855,7 +857,17 @@ dotnet run --project src/Sovrant.Web
 # Open http://localhost:5100
 ```
 
-**Dual-mode design:** Components depend on runtime interfaces (`IConversationRuntime`, `ISessionStore`, `IToolRegistry`, etc.). In embedded mode (default), these are real implementations via `AddSovrantRuntime()`. In remote mode (`SOVRANT_RUNTIME_MODE=remote`), they are replaced by HTTP/SignalR client wrappers that call `Sovrant.Server` via `AddSovrantClient()` — components never change. Set `SOVRANT_SERVER_URL` and `SOVRANT_API_TOKEN` to connect to a remote server.
+**Dual-mode design:** Components depend on runtime interfaces (`IConversationRuntime`, `ISessionStore`, `IToolRegistry`, etc.). In embedded mode (default), these are real implementations via `AddSovrantRuntime()`. In remote mode (`SOVRANT_RUNTIME_MODE=remote`), they are replaced by HTTP/SignalR client wrappers that call `Sovrant.Server` via `AddSovrantClient()` — components never change. Set `SOVRANT_SERVER_URL` and `SOVRANT_API_TOKEN` to connect to a remote server. Remote mode is single-user for now (one token for the whole Web process) — per-person sign-in through Server is [Phase 146](docs/roadmap.md).
+
+### Running Web for a team
+
+Embedded Web (the default) is multi-user as of 2.1.0:
+
+- **Each browser signs in separately** (an HttpOnly cookie). Signed out after **1 hour** without activity, after **12 hours** regardless, or after **30 days** with "Keep me signed in" — set with `SOVRANT_WEB_IDLE_MINUTES`, `SOVRANT_WEB_MAX_SESSION_HOURS`, `SOVRANT_WEB_REMEMBER_DAYS`. Admins see every browser signed in (Admin → Signed in on Web) and can sign any of them out; anyone can sign out everywhere from Settings.
+- **Everyone sees only their own** conversations, approvals and permission mode. Each conversation keeps the model it was started with.
+- **Models come from admins** — see *Shared models* under [Multi-User & Workspaces](#multi-user--workspaces). Members don't add providers or keys.
+- **File and shell tools are off** (Bash, PowerShell, Read/Write/Edit, Glob/Grep, background tasks, code tools). On a hosted server they would run on the server itself, as its account, so an agent could reach other people's files, the database and the server's settings. They're also hidden from the model, which saves files with the Artifact tool instead (documents, code, reports all still work and are downloadable). For a server used by one trusted team, an admin can turn them on under Governance → **Allow file and shell tools on this server** (`SOVRANT_GOVERNANCE_HOST_FILE_TOOLS`), and separately **Let members use file and shell tools**. Running code safely for hosted users is [Phase 147](docs/roadmap.md) (sandboxes). Desktop and the CLI run on your own machine and keep these tools.
+- Put it behind HTTPS (a reverse proxy is fine — forwarded headers are supported) before anyone signs in from another machine.
 
 ---
 

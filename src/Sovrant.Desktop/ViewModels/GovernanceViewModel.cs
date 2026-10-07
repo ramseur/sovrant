@@ -18,6 +18,10 @@ public partial class GovernanceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _memberFileToolsEnabled;
 
+    /// <summary>Phase 145 Part D: file and shell tools may run on a hosted server (Web, Server) at all.</summary>
+    [ObservableProperty]
+    private bool _hostFileToolsEnabled;
+
     [ObservableProperty]
     private string _newBlockedCommand = string.Empty;
 
@@ -106,6 +110,13 @@ public partial class GovernanceViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private void ToggleHostFileTools()
+    {
+        HostFileToolsEnabled = !HostFileToolsEnabled;
+        SaveConfig();
+    }
+
+    [RelayCommand]
     private void ToggleMemberFileTools()
     {
         MemberFileToolsEnabled = !MemberFileToolsEnabled;
@@ -119,6 +130,7 @@ public partial class GovernanceViewModel : ViewModelBase
         GovernanceLevel = config.Level.ToString();
         AuditLogEnabled = config.AuditLog;
         MemberFileToolsEnabled = config.MemberFileTools;
+        HostFileToolsEnabled = config.HostFileTools;
 
         BlockedCommands.Clear();
         foreach (var cmd in config.BlockedCommands)
@@ -151,6 +163,7 @@ public partial class GovernanceViewModel : ViewModelBase
                     : "standard",
                 AuditLog = AuditLogEnabled,
                 MemberFileTools = MemberFileToolsEnabled,
+                HostFileTools = HostFileToolsEnabled,
             };
 
             foreach (var cmd in BlockedCommands)

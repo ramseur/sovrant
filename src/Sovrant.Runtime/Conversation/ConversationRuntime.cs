@@ -1114,6 +1114,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         return longest;
     }
 
+    private bool HostToolsAvailable()
+    {
+        var defs = _toolRegistry.GetDefinitions();
+        for (var i = 0; i < defs.Count; i++)
+            if (defs[i].Name is "Read" or "Bash" or "PowerShell") return true;
+        return false;
+    }
+
     private bool ArtifactToolRegistered()
     {
         var defs = _toolRegistry.GetDefinitions();
@@ -1349,23 +1357,35 @@ public sealed partial class ConversationRuntime : IConversationRuntime
           .Append("  workspace_id='").Append(workspaceId).Append("'\n")
           .Append("  project_id='").Append(projectId).Append("'\n")
           .Append("  run_id='").Append(_sessionId).Append("'\n")
-          .Append("Choose a descriptive relative path (e.g. 'plan.md', 'report.md', 'output/data.json').\n")
-          .Append("The Write tool is ONLY for editing existing source code files at absolute paths. ")
-          .Append("Never use Write to create new documents or save generated content.");
+          .Append("Choose a descriptive relative path (e.g. 'plan.md', 'report.md', 'output/data.json').\n");
 
-        // Global memory: ~/.sovrant/memory.md
-        var globalMemory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "memory.md");
-        AppendMemoryFile(sb, globalMemory, "Global memory");
+        // On a hosted server (Web, Server) file and shell tools may be off for this person — they'd run
+        // on the server itself (Phase 145 Part D). Then don't describe them, and don't put the server's
+        // own memory files or git state into the prompt: they belong to whoever runs the server.
+        if (HostToolsAvailable())
+        {
+            sb.Append("The Write tool is ONLY for editing existing source code files at absolute paths. ")
+              .Append("Never use Write to create new documents or save generated content.");
 
-        // Project memory: .sovrant/memory.md in the working directory
-        var projectMemory = Path.Combine(
-            Directory.GetCurrentDirectory(), ".sovrant", "memory.md");
-        AppendMemoryFile(sb, projectMemory, "Project memory");
+            // Global memory: ~/.sovrant/memory.md
+            var globalMemory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".sovrant", "memory.md");
+            AppendMemoryFile(sb, globalMemory, "Global memory");
 
-        // Git context: branch, status, recent commits
-        AppendGitContext(sb, Directory.GetCurrentDirectory());
+            // Project memory: .sovrant/memory.md in the working directory
+            var projectMemory = Path.Combine(
+                Directory.GetCurrentDirectory(), ".sovrant", "memory.md");
+            AppendMemoryFile(sb, projectMemory, "Project memory");
+
+            // Git context: branch, status, recent commits
+            AppendGitContext(sb, Directory.GetCurrentDirectory());
+        }
+        else
+        {
+            sb.Append("File and shell tools (reading or writing files on disk, running commands) aren't available here. ")
+              .Append("Save anything you create with the Artifact tool; if the user asks for something that needs them, say so plainly.");
+        }
 
         if (catalog is not null)
         {

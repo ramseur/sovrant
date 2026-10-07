@@ -38,12 +38,25 @@ public sealed class AmbientPrincipalTests
     [Fact]
     public void Server_Policy_Blocks_Members_And_Unknown_Callers_But_Not_Admins()
     {
-        var policy = new MemberHostToolPolicy(AmbientPrincipal.Accessor, settings: null);
+        // With file and shell tools allowed on the server, the ambient caller decides (Phase 145 Part D
+        // turns them off for everyone by default).
+        var policy = new MemberHostToolPolicy(AmbientPrincipal.Accessor, new HostToolsAllowed());
 
         Assert.NotNull(policy.GetBlockReason("Bash")); // no principal at all
         using (AmbientPrincipal.Push("sam@example.com", "user"))
             Assert.NotNull(policy.GetBlockReason("Bash"));
         using (AmbientPrincipal.Push("admin@example.com", "admin"))
             Assert.Null(policy.GetBlockReason("Bash"));
+    }
+
+    private sealed class HostToolsAllowed : Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore
+    {
+        public Task<string?> GetGlobalAsync(string key, CancellationToken ct = default) =>
+            Task.FromResult<string?>(key == Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceHostFileTools ? "true" : null);
+        public Task<string?> GetAsync(string workspaceId, string key, CancellationToken ct = default) => GetGlobalAsync(key, ct);
+        public Task SetAsync(string workspaceId, string key, string value, CancellationToken ct = default) => Task.CompletedTask;
+        public Task DeleteAsync(string workspaceId, string key, CancellationToken ct = default) => Task.CompletedTask;
+        public Task<IReadOnlyDictionary<string, string>> GetAllAsync(string workspaceId, CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyDictionary<string, string>>(new Dictionary<string, string>());
     }
 }

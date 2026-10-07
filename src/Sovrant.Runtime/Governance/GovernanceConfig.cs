@@ -40,6 +40,13 @@ public sealed class GovernanceConfig
     [JsonPropertyName("member_file_tools")]
     public bool MemberFileTools { get; set; }
 
+    /// <summary>
+    /// Whether file and shell tools may run on a hosted server (Web, Server) at all — admins included.
+    /// Off by default: they would run on the server itself, as its account. Phase 145 Part D.
+    /// </summary>
+    [JsonPropertyName("host_file_tools")]
+    public bool HostFileTools { get; set; }
+
     /// <summary>Parses the configured governance level.</summary>
     [JsonIgnore]
     public GovernanceLevel Level =>
@@ -63,6 +70,10 @@ public sealed class GovernanceConfig
         config.AuditLog = WorkspaceSettingsResolver.ResolveBool(
             settings, WorkspaceSettingsKeys.GovernanceAuditLog,
             "SOVRANT_GOVERNANCE_AUDIT_LOG", fallback: config.AuditLog);
+
+        config.HostFileTools = WorkspaceSettingsResolver.ResolveBool(
+            settings, WorkspaceSettingsKeys.GovernanceHostFileTools,
+            "SOVRANT_GOVERNANCE_HOST_FILE_TOOLS", fallback: config.HostFileTools);
 
         config.MemberFileTools = WorkspaceSettingsResolver.ResolveBool(
             settings, WorkspaceSettingsKeys.GovernanceMemberFileTools,
@@ -98,6 +109,8 @@ public sealed class GovernanceConfig
             AuditLog ? "true" : "false", ct).ConfigureAwait(false);
         await store.SetAsync(ws, WorkspaceSettingsKeys.GovernanceMemberFileTools,
             MemberFileTools ? "true" : "false", ct).ConfigureAwait(false);
+        await store.SetAsync(ws, WorkspaceSettingsKeys.GovernanceHostFileTools,
+            HostFileTools ? "true" : "false", ct).ConfigureAwait(false);
         await store.SetAsync(ws, WorkspaceSettingsKeys.GovernanceBlockedCommands,
             JsonSerializer.Serialize(BlockedCommands), ct).ConfigureAwait(false);
         await store.SetAsync(ws, WorkspaceSettingsKeys.GovernanceProtectedFiles,

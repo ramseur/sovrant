@@ -172,7 +172,9 @@ public static class Program
             // Phase 145 stopgap: Web is shared, so members can't use file/shell tools unless an
             // admin allows it (Governance). Desktop and the CLI don't register this.
             // The caller is the ambient principal: set per request (below) and per chat turn.
-            builder.Services.AddSingleton<Sovrant.Runtime.Tools.IHostToolPolicy>(sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
+            // Phase 145 Part D: file/shell tools are off on a hosted server unless an admin allows them,
+            // and blocked tools are hidden from the model.
+            Sovrant.Runtime.Tools.HostToolPolicyExtensions.AddHostToolPolicy(builder.Services, sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
                 AmbientPrincipal.Accessor, sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
             builder.Services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
             builder.Services.AddSingleton(config);

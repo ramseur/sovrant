@@ -10,23 +10,25 @@ using Sovrant.Runtime.Workspaces;
 namespace Sovrant.Runtime.Tests.Tools;
 
 /// <summary>
-/// Phase 145 stopgap: on a shared Web server, members can't use tools that reach the server's disk
-/// or shell unless an admin turns them on. Admins are never blocked; other tools are unaffected.
+/// Phase 145 Part D: on a hosted server (Web, Server), tools that reach the server's disk or shell are
+/// off for everyone — admins included — until an admin allows them; members then also need the member
+/// switch. Blocked tools are hidden from the model. Other tools are unaffected.
 /// </summary>
 public sealed class MemberHostToolPolicyTests
 {
     private static JsonElement EmptyInput => JsonDocument.Parse("{}").RootElement;
 
     [Theory]
-    [InlineData("Bash")]
-    [InlineData("Read")]
-    [InlineData("Write")]
-    [InlineData("Grep")]
-    [InlineData("PowerShell")]
-    public void Members_Are_Blocked_From_Host_Tools_By_Default(string tool)
+    [InlineData("Bash", false)]
+    [InlineData("Read", false)]
+    [InlineData("Write", true)]
+    [InlineData("Grep", true)]
+    [InlineData("PowerShell", false)]
+    [InlineData("TaskCreate", true)]
+    public void Everyone_Is_Blocked_From_Host_Tools_By_Default(string tool, bool isAdmin)
     {
-        var policy = new MemberHostToolPolicy(new Principal(isAdmin: false), new Settings());
-        Assert.Equal(HostToolAccess.MemberBlockedMessage, policy.GetBlockReason(tool));
+        var policy = new MemberHostToolPolicy(new Principal(isAdmin), new Settings());
+        Assert.Equal(HostToolAccess.HostBlockedMessage, policy.GetBlockReason(tool));
     }
 
     [Theory]
@@ -38,19 +40,56 @@ public sealed class MemberHostToolPolicyTests
         Assert.Null(new MemberHostToolPolicy(new Principal(isAdmin: false), new Settings()).GetBlockReason(tool));
 
     [Fact]
-    public void Admins_Are_Never_Blocked() =>
-        Assert.Null(new MemberHostToolPolicy(new Principal(isAdmin: true), new Settings()).GetBlockReason("Bash"));
+    public async Task With_The_Server_Switch_On_Admins_Can_Use_Them_And_Members_Still_Cannot()
+    {
+        var settings = await SettingsWith(host: true, members: false);
+        Assert.Null(new MemberHostToolPolicy(new Principal(isAdmin: true), settings).GetBlockReason("Bash"));
+        Assert.Equal(HostToolAccess.MemberBlockedMessage,
+            new MemberHostToolPolicy(new Principal(isAdmin: false), settings).GetBlockReason("Bash"));
+    }
 
     [Fact]
-    public async Task An_Admin_Can_Turn_Member_Access_On()
+    public async Task Members_Need_Both_Switches()
+    {
+        Assert.Null(new MemberHostToolPolicy(new Principal(isAdmin: false), await SettingsWith(host: true, members: true))
+            .GetBlockReason("Bash"));
+        // The member switch alone does nothing while the server switch is off.
+        Assert.Equal(HostToolAccess.HostBlockedMessage,
+            new MemberHostToolPolicy(new Principal(isAdmin: false), await SettingsWith(host: false, members: true))
+                .GetBlockReason("Bash"));
+    }
+
+    [Fact]
+    public void Both_Switches_Are_Off_By_Default()
+    {
+        var config = GovernanceConfig.Load(new Settings());
+        Assert.False(config.HostFileTools);
+        Assert.False(config.MemberFileTools);
+    }
+
+    [Fact]
+    public async Task Blocked_Tools_Are_Hidden_From_The_Model()
+    {
+        var registry = new InMemoryToolRegistry();
+        foreach (var name in new[] { "Bash", "Read", "WebSearch", "Artifact" })
+            registry.Register(new ToolDefinition(name, EmptyInput), (_, _) => Task.FromResult("ok"));
+
+        var hidden = new HostPolicyToolRegistry(registry, new MemberHostToolPolicy(new Principal(isAdmin: true), new Settings()));
+        Assert.Equal(["Artifact", "WebSearch"], hidden.GetDefinitions().Select(d => d.Name).Order());
+
+        var allowed = new HostPolicyToolRegistry(registry,
+            new MemberHostToolPolicy(new Principal(isAdmin: true), await SettingsWith(host: true, members: false)));
+        Assert.Equal(["Artifact", "Bash", "Read", "WebSearch"], allowed.GetDefinitions().Select(d => d.Name).Order());
+    }
+
+    private static async Task<Settings> SettingsWith(bool host, bool members)
     {
         var settings = new Settings();
         var config = GovernanceConfig.Load(settings);
-        Assert.False(config.MemberFileTools); // off by default
-        config.MemberFileTools = true;
+        config.HostFileTools = host;
+        config.MemberFileTools = members;
         await config.SaveToStoreAsync(settings);
-
-        Assert.Null(new MemberHostToolPolicy(new Principal(isAdmin: false), settings).GetBlockReason("Bash"));
+        return settings;
     }
 
     [Fact]
@@ -66,7 +105,7 @@ public sealed class MemberHostToolPolicyTests
         var result = await executor.ExecuteAsync("Bash", EmptyInput);
 
         Assert.True(result.IsError);
-        Assert.Equal(HostToolAccess.MemberBlockedMessage, result.Output);
+        Assert.Equal(HostToolAccess.HostBlockedMessage, result.Output);
         Assert.False(ran);
     }
 

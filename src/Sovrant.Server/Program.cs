@@ -125,9 +125,10 @@ builder.Services.AddSingleton<RequestLoggingMiddleware>();
 
 // IPrincipalAccessor — reads the authenticated caller from HttpContext.Items.
 builder.Services.AddHttpContextAccessor();
-// Phase 145 stopgap: Server is multi-user, so members can't use file/shell tools unless an admin
-// allows it (Governance). The caller comes from the ambient principal set per request / per job.
-builder.Services.AddSingleton<Sovrant.Runtime.Tools.IHostToolPolicy>(sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
+// Phase 145 Part D: Server is hosted and multi-user, so file/shell tools are off for everyone unless an
+// admin allows them (Governance), members also need the member switch, and blocked tools are hidden from
+// the model. The caller comes from the ambient principal set per request / per job.
+Sovrant.Runtime.Tools.HostToolPolicyExtensions.AddHostToolPolicy(builder.Services, sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
     Sovrant.Runtime.Auth.AmbientPrincipal.Accessor,
     sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
 builder.Services.AddScoped<Sovrant.Runtime.Auth.IPrincipalAccessor, Sovrant.Server.Auth.HttpContextPrincipalAccessor>();

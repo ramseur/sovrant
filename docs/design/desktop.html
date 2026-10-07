@@ -803,8 +803,8 @@ const S = {
     items:[{n:'OpenAI',b:['api.openai.com'],tag:['Enabled','b-ok']},{n:'OpenRouter',b:['openrouter.ai'],tag:['Key expired','b-warn']}],
     note:'Health belongs on the row. An expired key was invisible for a whole session — the badge is the fix.'},
   governance:{g:'admin',p:'Settings',t:'Governance',url:'/governance',
-    secs:[['Permissions',[['Permission mode','How tool calls are approved.','sel:Ask each time'],['Allow file writes','Let agents modify files on disk.','sw:1']]],['Audit',[['Retain audit log','Keep a record of every tool call.','sw:1']]]],
-    note:'Settings pattern. Each row is one control plus the sentence explaining what it does.'},
+    secs:[['Permissions',[['Permission mode','How tool calls are approved.','sel:Ask each time'],['Allow file writes','Let agents modify files on disk.','sw:1']]],['File and shell tools',[['Allow file and shell tools on this server',"For everyone, admins included. They run as the server's own account, so an agent could reach other people's files, the database and the server's settings. Leave off unless one trusted team uses this server.",'sw:0'],['Let members use file and shell tools','Only applies when the switch above is on. Off: only admins can use them.','sw:0']]],['Audit',[['Retain audit log','Keep a record of every tool call.','sw:1']]]],
+    note:'Settings pattern. Each row is one control plus the sentence explaining what it does. File and shell tools are off on a hosted server by default (Phase 145 Part D) and hidden from the model; Desktop and the CLI keep them.'},
   trust:{g:'admin',p:'Settings',t:'Trust Boundary',url:'/trust-boundary',
     secs:[['Prompt sanitisation',[['Sanitise untrusted content','Strip instructions found in tool output.','sw:1'],['Intent gate','Classify intent before exposing tools.','sw:1']]],['Ethics',[['Refuse destructive actions','Block irreversible operations.','sw:1']]]],
     note:'Phase 58+ framing: Sovrant is the safety layer, not the model. The screen should read that way.'},
@@ -1498,6 +1498,7 @@ function buildIconRef(){
   for(const st of ['first','returning','allset','dismissed']) if(h.has(st)) homeState=st;
   if(h.has('users')) cur='users';
   if(h.has('workspaces')) cur='workspaces';
+  if(h.has('governance')) cur='governance';
   if(h.has('teamws')) { cur='workspaces'; wsSel='team'; }
   if(h.has('login')) cur='login';
   if(h.has('acct')) acctMenu=true;

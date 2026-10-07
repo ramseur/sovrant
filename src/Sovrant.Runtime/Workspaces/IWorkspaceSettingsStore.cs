@@ -84,6 +84,13 @@ public static class WorkspaceSettingsKeys
     /// </summary>
     public const string GovernanceMemberFileTools = "governance.member_file_tools";
 
+    /// <summary>
+    /// Whether file and shell tools may run on a hosted server (Web, Server) at all (bool). Default
+    /// false — they'd run on the server itself. Phase 145 Part D; members also need
+    /// <see cref="GovernanceMemberFileTools"/>.
+    /// </summary>
+    public const string GovernanceHostFileTools = "governance.host_file_tools";
+
     /// <summary>Master switch for the trust boundary pipeline (bool). Default false (opt-in).</summary>
     public const string TrustBoundaryEnabled = "trustboundary.enabled";
 

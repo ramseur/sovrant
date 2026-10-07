@@ -41,11 +41,21 @@
 
         <div class="toggle-card toggle-card-bare">
             <div>
-                <div class="toggle-title">Let members use file and shell tools</div>
-                <div class="toggle-desc">Read, write, search and run commands on this server. These tools run as the server's account with no folder limits, so a member's agent could reach other people's files. Admins can always use them.</div>
+                <div class="toggle-title">Allow file and shell tools on this server</div>
+                <div class="toggle-desc">Read, write, search and run commands on this server — for everyone, admins included. These tools run as the server's own account with no folder limits, so an agent could reach other people's files, the database and the server's settings. Leave off unless this server is used by one trusted team.</div>
             </div>
             <label class="switch">
-                <input type="checkbox" @bind="_memberFileTools" />
+                <input type="checkbox" @bind="_hostFileTools" />
+                <span class="slider"></span>
+            </label>
+        </div>
+        <div class="toggle-card toggle-card-bare">
+            <div>
+                <div class="toggle-title">Let members use file and shell tools</div>
+                <div class="toggle-desc">Only applies when file and shell tools are allowed on this server. Off: only admins can use them.</div>
+            </div>
+            <label class="switch">
+                <input type="checkbox" @bind="_memberFileTools" disabled="@(!_hostFileTools)" />
                 <span class="slider"></span>
             </label>
         </div>
@@ -113,6 +123,7 @@
     private string _level = "standard";
     private bool _auditLog = true;
     private bool _memberFileTools;
+    private bool _hostFileTools;
     private List<string> _blockedCommands = [];
     private List<string> _protectedFiles = [];
     private List<string> _secretPatterns = [];
@@ -128,6 +139,7 @@
         _level = config.GovernanceLevelName;
         _auditLog = config.AuditLog;
         _memberFileTools = config.MemberFileTools;
+        _hostFileTools = config.HostFileTools;
         _blockedCommands = [.. config.BlockedCommands];
         _protectedFiles = [.. config.ProtectedFiles];
         _secretPatterns = [.. config.SecretPatterns];
@@ -164,7 +176,7 @@
     {
         try
         {
-            var config = new GovernanceConfig { GovernanceLevelName = _level, AuditLog = _auditLog, MemberFileTools = _memberFileTools };
+            var config = new GovernanceConfig { GovernanceLevelName = _level, AuditLog = _auditLog, MemberFileTools = _memberFileTools, HostFileTools = _hostFileTools };
             foreach (var c in _blockedCommands) config.BlockedCommands.Add(c);
             foreach (var f in _protectedFiles) config.ProtectedFiles.Add(f);
             foreach (var p in _secretPatterns) config.SecretPatterns.Add(p);
