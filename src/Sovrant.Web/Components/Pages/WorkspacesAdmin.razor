@@ -18,7 +18,7 @@
 <div class="settings-page">
     <div class="diag-header">
         <h1>Workspaces</h1>
-        <span class="item-count">@_workspaces.Count workspaces</span>
+        <span class="item-count">@TeamWorkspaces.Count() team · @PersonalWorkspaces.Count() personal</span>
     </div>
 
     @if (!string.IsNullOrEmpty(_status))
@@ -48,11 +48,11 @@
             <div class="memory-card">
                 <div class="memory-content">
                     <div class="memory-text">
-                        <strong>All personal workspaces</strong>
+                        <strong>Personal workspaces — @PersonalWorkspaces.Count() @(PersonalWorkspaces.Count() == 1 ? "person" : "people")</strong>
                         <span class="outcome-badge info">Default set</span>
                     </div>
                     <div class="memory-meta">
-                        <span class="text-muted text-sm">Applies to every member's personal workspace, including people who join later</span>
+                        <span class="text-muted text-sm">One default set for everyone's personal workspace, including people who join later</span>
                     </div>
                 </div>
                 <div class="memory-actions">
@@ -106,6 +106,26 @@
                     </div>
                     <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveDefaultSetAsync">Save default set</button>
                 }
+
+                @* Phase 148 — one row per person, instead of a list of identical "Personal" workspaces. *@
+                <h5 style="margin-top:18px">People with a personal workspace</h5>
+                <div class="signin-table">
+                    <table>
+                        <thead><tr><th>Email</th><th>Role</th><th>Created</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var w in PersonalWorkspaces.OrderBy(w => OwnerEmail(w), StringComparer.OrdinalIgnoreCase))
+                            {
+                                <tr>
+                                    <td>@OwnerEmail(w)</td>
+                                    <td class="text-muted">@(_owners.TryGetValue(w.OwnerId, out var u) ? u.Role : "")</td>
+                                    <td class="text-muted">@w.CreatedAt.LocalDateTime.ToString("d")</td>
+                                    <td style="text-align:right"><button class="btn btn-sm" @onclick="() => ToggleConfigureWorkspace(w)">Manage</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-muted text-sm" style="margin-top:6px">Manage opens that one person's workspace — for the rare exception. Everyone else uses the default set above.</p>
             </div>
         }
 
@@ -113,14 +133,14 @@
         {
             <p class="loading-row">Loading workspaces…</p>
         }
-        else if (_workspaces.Count == 0)
+        else if (!TeamWorkspaces.Any())
         {
-            <p class="text-secondary">No workspaces found.</p>
+            <p class="text-secondary">No team workspaces yet. Create one above to share models and conversations with a group.</p>
         }
         else
         {
             <div class="memory-list">
-                @foreach (var w in _workspaces)
+                @foreach (var w in TeamWorkspaces)
                 {
                     <div class="memory-card">
                         <div class="memory-content">
@@ -305,10 +325,21 @@
         await LoadWorkspacesAsync();
     }
 
+    // Phase 148: team workspaces are listed; personal ones are one row (the default set) with a grid by person.
+    private IEnumerable<Workspace> TeamWorkspaces => _workspaces.Where(w => w.Type != WorkspaceType.Personal);
+    private IEnumerable<Workspace> PersonalWorkspaces => _workspaces.Where(w => w.Type == WorkspaceType.Personal);
+    private Dictionary<string, Sovrant.Runtime.Users.User> _owners = new(StringComparer.Ordinal);
+    private string OwnerEmail(Workspace w) =>
+        _owners.TryGetValue(w.OwnerId, out var u) && !string.IsNullOrEmpty(u.Email) ? u.Email : w.OwnerId;
+
     private async Task LoadWorkspacesAsync()
     {
         _wsLoading = true;
-        try { _workspaces = (await WorkspaceService.ListAllAsync().ConfigureAwait(false)).ToList(); }
+        try
+        {
+            _workspaces = (await WorkspaceService.ListAllAsync().ConfigureAwait(false)).ToList();
+            _owners = (await UserService.ListAsync().ConfigureAwait(false)).ToDictionary(u => u.UserId, StringComparer.Ordinal);
+        }
         catch (Exception ex) { _error = $"Failed to load workspaces: {ex.Message}"; }
         finally { _wsLoading = false; }
     }

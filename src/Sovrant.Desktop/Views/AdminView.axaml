@@ -396,7 +396,36 @@
             <!-- ═══════════════════════════════════════════════ -->
             <StackPanel Spacing="12" IsVisible="{Binding IsWorkspacesSection}">
 
-                <TextBlock Text="No projects found." FontSize="13"
+                <!-- Phase 148: personal workspaces as one grid by person; their models come from the default set -->
+                <TextBlock Text="{Binding PersonalWorkspacesTitle}" FontSize="15" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Their models come from the default set (Workspaces → All personal workspaces). Manage one person's workspace only for an exception."
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
+                <Border CornerRadius="10" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Background="{DynamicResource SurfaceMuted}" Padding="12,6">
+                    <ItemsControl ItemsSource="{Binding PersonalWorkspaceRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:PersonalWorkspaceRow">
+                                <Grid ColumnDefinitions="*,90,90,Auto" Margin="0,4">
+                                    <TextBlock Grid.Column="0" Text="{Binding Email}" FontSize="13" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Role}" FontSize="12" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Created}" FontSize="12" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <Button Grid.Column="3" Content="Manage"
+                                            Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).ConfigureWorkspaceCommand}"
+                                            CommandParameter="{Binding Workspace}"
+                                            Padding="10,4" CornerRadius="6" FontSize="12" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+                <TextBlock Text="Team workspaces" FontSize="15" FontWeight="SemiBold" Margin="0,8,0,0"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="No team workspaces yet." FontSize="13"
                            Foreground="{DynamicResource TextSecondary}"
                            IsVisible="{Binding !AdminWorkspaces.Count}" />
 

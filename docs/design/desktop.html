@@ -797,7 +797,7 @@ const S = {
     note:'Since V043 the user id is the email, so the row leads with it. Phase 145 — each row says where the person is signed in; the detail lists every browser they\'re signed in on (device, where, when, Remember me) with Revoke per browser and Sign out everywhere. Revoking ends that browser\'s session at once: its next click lands on Sign in with "An administrator signed you out". Toggle the Account menu to see the same thing from the user\'s side. A7: the Registration & sign-in tab holds how people get in and how long they stay in — admins can turn "Keep me signed in" off and set its length (default 14 days), the inactivity limit and the maximum; changes reach existing sign-ins at their next check, and longer limits never extend an existing one.'},
   workspaces:{g:'admin',p:'Browse',t:'Workspaces',url:'/admin/workspaces',sub:'2 team workspaces · personal workspaces for 14 people',
     acts:[['New workspace',1]],
-    items:[{n:'All personal workspaces',b:['Applies to every member\'s personal workspace','14 people'],tag:['Default set','b-brand']},
+    items:[{n:'All personal workspaces',b:['Personal workspaces — 14 people','one default set for everyone'],tag:['Default set','b-brand']},
            {n:'Engineering',b:['Team','12 members'],tag:['Team','b-mut']},
            {n:'Marketing',b:['Team','5 members'],tag:['Team','b-mut']}],
     note:'Provider enablement per workspace lives in this detail pane — the setting that hid OpenRouter. Phase 145 Part B — members only use admin-configured models and pick any model allowed on the workspace they\'re in; the pick applies to them only. The first row is the default set: one admin setting, editable any time, that every personal workspace gets (including new users\'). Team workspaces keep their own enablement. Toggle Default set / Team workspace.'},
@@ -858,7 +858,7 @@ function setMcpState(v){ mcpState=v; render(); }
 function toggleMcpMenu(){ mcpMenu=!mcpMenu; render(); }
 function setLoginState(v){ loginState=v; render(); }
 /* Phase 145 — account menu (rail footer) and Admin → Users sign-ins. */
-let acctMenu=false, acctRemember=false, usersTab='people', envOverride=false;
+let acctMenu=false, acctRemember=false, usersTab='people', envOverride=false, provAdd=false;
 /* Phase 145 Part B — which Workspaces row is open: the personal default set, or a team workspace. */
 let wsSel='personal';
 function setWsSel(v){ wsSel=v; render(); }
@@ -866,6 +866,7 @@ function toggleAcct(){ acctMenu=!acctMenu; render(); }
 function setAcctRemember(v){ acctRemember=v; acctMenu=true; render(); }
 function setUsersTab(k){ usersTab=k; render(); }
 function toggleEnvOverride(){ envOverride=!envOverride; render(); }
+function toggleProvAdd(){ provAdd=!provAdd; render(); }
 /* Phase 148: with SOVRANT_ENV_OVERRIDE on, these Governance rows come from the environment. */
 const GOV_ENV_LOCKS={'Retain audit log':'SOVRANT_GOVERNANCE_AUDIT_LOG','Allow file and shell tools on this server':'SOVRANT_GOVERNANCE_HOST_FILE_TOOLS'};
 /* Phase 145 A7 — Users → "Registration & sign-in": how people get in, and how long they stay in. */
@@ -958,7 +959,28 @@ function workspaceModelsHTML(sel){
       ${sel.tag?`<span class="badge ${sel.tag[1]}" style="margin:0">${sel.tag[0]}</span>`:''}</div>
     ${intro}
     ${fsecHTML([['Allowed providers and their models', rows], ['', [['Default model','Used until a member picks another, and when their pick isn\'t allowed here.', personal?'sel:openai/gpt-4o-mini':'sel:anthropic/claude-sonnet']]]])}
-    ${personal?'':'<div style="display:flex;gap:8px;margin-top:16px"><button class="btn">Members</button><button class="btn">Rename</button></div>'}`;
+    ${personal?personalPeopleHTML():'<div style="display:flex;gap:8px;margin-top:16px"><button class="btn">Members</button><button class="btn">Rename</button></div>'}`;
+}
+
+/* Phase 148 item 10 — one row per person instead of a wall of identical "Personal" rows. */
+function personalPeopleHTML(){
+  const people=[['alex.morgan@example.com','Alex Morgan','Jun 2'],['sam@example.com','Sam Lee','Jun 9'],['priya@example.com','Priya Shah','Aug 14'],['jordan@example.com','Jordan Diaz','Oct 7']];
+  return `<h4 style="margin:22px 0 8px;font-size:13px">People with a personal workspace</h4>
+    <div class="tablewrap"><table><thead><tr><th>Email</th><th>Name</th><th>Created</th><th></th></tr></thead><tbody>
+    ${people.map(([e,n,c])=>`<tr><td class="mono">${e}</td><td>${n}</td><td class="mut">${c}</td><td style="text-align:right"><button class="btn">Manage</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <div class="lhint" style="margin-top:8px">Manage opens that one person's workspace — for the rare exception. Everyone else just uses the default set above.</div>`;
+}
+
+/* Phase 148 item 10 — Add provider: team workspaces plus one "Personal workspaces" option, unticked. */
+function addProviderHTML(){
+  const ws=[['Engineering','Team · 12 members',false],['Marketing','Team · 5 members',false],['Personal workspaces (default set)','Adds it to the default set every personal workspace uses — 14 people',false]];
+  return `<div class="dhead"><div style="flex:1"><h3>Add provider</h3><div class="dsub">Members never see the key</div></div></div>
+    ${fsecHTML([['', [['Provider','','sel:OpenRouter'],['Name','','sel:OpenRouter (team)'],['API key','Stored encrypted.','sel:sk-or-••••••••']]]])}
+    <h4 style="margin:18px 0 8px;font-size:13px">Available in</h4>
+    <div class="fsec">${ws.map(([n,d,on])=>`<div class="frowi"><div class="fl"><div class="ft">${n}</div><div class="fd">${d}</div></div><div class="sw${on?' on':''}"></div></div>`).join('')}</div>
+    <div class="lhint" style="margin-top:8px">Nothing is ticked by default: choose who gets a new provider (it can cost money). You can change this any time under Workspaces.</div>
+    <div style="display:flex;gap:8px;margin-top:16px"><button class="btn pri">Add provider</button><button class="btn">Cancel</button></div>`;
 }
 
 /* Phase 145 — the account menu: who you are, how long this browser stays signed in, sign out here
@@ -1015,6 +1037,8 @@ function browseHTML(s){
     detail = usersDetailHTML(sel);
   } else if(s.t==='Workspaces'){
     detail = workspaceModelsHTML(sel);
+  } else if(s.t==='Providers' && provAdd){
+    detail = addProviderHTML();
   } else if(s.t==='Workflows'){
     detail = !sel ? `<div class="empty">${sv(I.box,1.6)}<div class="h">Nothing selected</div><div class="p">Pick a workflow from the list to see its plan and journal.</div></div>` : workflowDetailHTML(sel);
   } else {
@@ -1439,6 +1463,9 @@ function render(){
   } else if(cur==='workspaces'){
     ct.style.display='flex';
     ct.innerHTML=[['personal','Default set'],['team','Team workspace']].map(([k,t])=>`<button class="cbtn${wsSel===k?' on':''}" onclick="setWsSel('${k}')">${t}</button>`).join('');
+  } else if(cur==='providers'){
+    ct.style.display='flex';
+    ct.innerHTML=`<button class="cbtn${provAdd?' on':''}" onclick="toggleProvAdd()">Add provider form</button>`;
   } else if(cur==='governance'){
     ct.style.display='flex';
     ct.innerHTML=`<button class="cbtn${envOverride?' on':''}" onclick="toggleEnvOverride()">SOVRANT_ENV_OVERRIDE on</button>`;
@@ -1531,6 +1558,7 @@ function buildIconRef(){
   if(h.has('workspaces')) cur='workspaces';
   if(h.has('governance')) cur='governance';
   if(h.has('envlock')) { cur='governance'; envOverride=true; }
+  if(h.has('provadd')) { cur='providers'; provAdd=true; }
   if(h.has('teamws')) { cur='workspaces'; wsSel='team'; }
   if(h.has('login')) cur='login';
   if(h.has('acct')) acctMenu=true;

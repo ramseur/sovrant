@@ -111,6 +111,7 @@ public partial class SettingsViewModel : ViewModelBase
     public ObservableCollection<string> AvailableModels { get; } = [];
     public ObservableCollection<ProviderProfile> SavedProfiles { get; } = [];
     public ObservableCollection<WorkspaceSelectItem> WorkspaceItems { get; } = [];
+    private const string PersonalDefaultSetId = "__personal_default_set__";
 
     public SettingsViewModel(SovrantConfig config, IPermissionModeAccessor permissionModeAccessor,
         SidebarViewModel sidebar, MutableAuthProvider authProvider, IHttpClientFactory httpFactory,
@@ -200,12 +201,11 @@ public partial class SettingsViewModel : ViewModelBase
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
                     WorkspaceItems.Clear();
-                    foreach (var ws in workspaces)
-                    {
-                        // Personal workspace is pre-selected; all others are opt-in.
-                        var isPersonal = ws.Type == Runtime.Workspaces.WorkspaceType.Personal;
-                        WorkspaceItems.Add(new WorkspaceSelectItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name, IsSelected = isPersonal });
-                    }
+                    // Phase 148: team workspaces plus one entry for every personal workspace (the default
+                    // set), not one per person. Nothing pre-selected: a new provider can cost money.
+                    foreach (var ws in workspaces.Where(w => w.Type != Runtime.Workspaces.WorkspaceType.Personal))
+                        WorkspaceItems.Add(new WorkspaceSelectItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name, IsSelected = false });
+                    WorkspaceItems.Add(new WorkspaceSelectItem { WorkspaceId = PersonalDefaultSetId, Name = "Personal workspaces (default set)", IsSelected = false });
                 });
             }
             catch { /* workspaces unavailable — omit the picker */ }
@@ -536,6 +536,16 @@ public partial class SettingsViewModel : ViewModelBase
         {
             foreach (var item in WorkspaceItems.Where(w => w.IsSelected))
             {
+                if (item.WorkspaceId == PersonalDefaultSetId)
+                {
+                    // Every personal workspace, through the admin's default set.
+                    var setRaw = await _wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds);
+                    var set = new HashSet<string>(string.IsNullOrEmpty(setRaw)
+                        ? []
+                        : setRaw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal) { profileId };
+                    await _wsSettings.SetAsync(WorkspaceSettingsKeys.GlobalWorkspaceId, WorkspaceSettingsKeys.PersonalDefaultProfileIds, string.Join(',', set));
+                    continue;
+                }
                 var existingRaw = await _wsSettings.GetAsync(item.WorkspaceId, WorkspaceSettingsKeys.EnabledProviderProfileIds);
                 var ids = new HashSet<string>(string.IsNullOrEmpty(existingRaw)
                     ? []

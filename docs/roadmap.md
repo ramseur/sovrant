@@ -13372,6 +13372,10 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 8. **README numbers** — tools, endpoints, tests and similar counts refreshed for the release.
 9. **No personal data in tests, mocks or docs** — replace the maintainer's name and email in `AvatarTextTests`, `AvatarText` comments, both design mocks and the roadmap with a neutral example person (Alex Morgan, alex@example.com). Keep the repository URL (`github.com/ramseur/sovrant`) and the company security contact. Also correct the old repository name (`ramseur/sovrant-engine`) in `sdk/js/package.json` and the model-metadata request header.
 
+10. **Personal workspaces flood Workspaces and Providers** (reported 2026-10-07) — every member's personal workspace is listed as another "Personal" row on Admin → Workspaces and as another checkbox when adding a provider, though personal workspaces get their models from the default set. Fix (Web and Desktop):
+    - **Workspaces:** list team workspaces plus one **"Personal workspaces — N people"** row (the default-set panel, as the mock already shows); inside it, a **grid by person** — email, name, created — with Manage, for the rare case of one person's workspace.
+    - **Add provider:** workspace choices are the team workspaces plus one **"Personal workspaces (default set)"** option that adds the provider to the default set; **unticked by default** (an admin chooses who gets a new provider — it can cost money). Individual personal workspaces aren't listed.
+
 ### Acceptance criteria
 - [x] Full test suite clean on several consecutive runs — done 2026-10-07: 5 clean full runs in a row after fixing temp-file cleanup (51 classes), MCP retry waits, coordinator timer races, the Server test host's background scheduler, and a real Web page-load bug the repeats exposed
 - [x] Every way of stopping a workflow leaves it Cancelled (or Failed) with the reason — done 2026-10-07: cancel stops the run (`WorkflowRuns`), the store keeps cancelled cancelled, `/workflow cancel` uses the shared cancel
@@ -13382,4 +13386,5 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 - [ ] Debt table up to date
 - [ ] README numbers current
 - [x] No personal name or email in tests, mocks or docs (repository URL and company contact excepted) — done 2026-10-07
+- [x] Workspaces and Add provider list team workspaces plus one "Personal workspaces" entry (grid by person; default-set option unticked) — done 2026-10-07 on Web and Desktop. Follow-up: Integrations (MCP servers per workspace) still lists each personal workspace — there's no default set for MCP servers yet
 - [ ] Final UAT on `development`, then the 2.1.0 release

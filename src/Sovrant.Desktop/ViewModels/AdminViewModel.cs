@@ -76,6 +76,12 @@ public partial class AdminViewModel : ViewModelBase
     [ObservableProperty] private Workspace? _selectedWorkspace;
     public ObservableCollection<Workspace> AdminWorkspaces { get; } = [];
 
+    /// <summary>Phase 148: one row per person with a personal workspace.</summary>
+    public ObservableCollection<PersonalWorkspaceRow> PersonalWorkspaceRows { get; } = [];
+
+    [ObservableProperty]
+    private string _personalWorkspacesTitle = "Personal workspaces";
+
     // ── Per-workspace configuration panel ────────────────────────────────────
 
     // Which workspace is currently being configured (null = panel hidden)
@@ -134,10 +140,20 @@ public partial class AdminViewModel : ViewModelBase
             ApprovalRequired = await _identity.IsApprovalRequiredAsync().ConfigureAwait(true);
             await LoadWebSignInsAsync().ConfigureAwait(true);
 
+            // Phase 148: team workspaces are listed; personal ones are a grid by person (their models
+            // come from the default set), not a list of identical "Personal" rows.
             AdminWorkspaces.Clear();
+            PersonalWorkspaceRows.Clear();
             var allWs = await _workspaces.ListAllAsync().ConfigureAwait(true);
-            foreach (var ws in allWs.OrderBy(w => w.Type).ThenBy(w => w.Name))
+            foreach (var ws in allWs.Where(w => w.Type != WorkspaceType.Personal).OrderBy(w => w.Name, StringComparer.OrdinalIgnoreCase))
                 AdminWorkspaces.Add(ws);
+            var owners = _allUsers.ToDictionary(u => u.UserId, StringComparer.Ordinal);
+            foreach (var ws in allWs.Where(w => w.Type == WorkspaceType.Personal)
+                         .Select(w => (w, u: owners.GetValueOrDefault(w.OwnerId)))
+                         .OrderBy(x => x.u?.Email ?? x.w.OwnerId, StringComparer.OrdinalIgnoreCase))
+                PersonalWorkspaceRows.Add(new PersonalWorkspaceRow(ws.w, ws.u?.Email ?? ws.w.OwnerId, ws.u?.Role ?? string.Empty,
+                    ws.w.CreatedAt.LocalDateTime.ToString("d", System.Globalization.CultureInfo.CurrentCulture)));
+            PersonalWorkspacesTitle = $"Personal workspaces — {PersonalWorkspaceRows.Count} {(PersonalWorkspaceRows.Count == 1 ? "person" : "people")}";
         }
         catch (Exception ex) { Error = $"Load failed: {ex.Message}"; }
         finally { IsLoading = false; }
@@ -532,6 +548,9 @@ public partial class AdminViewModel : ViewModelBase
 public sealed record WorkspaceProviderProfile(string ProfileId, string Name, string ProviderKind, string BaseUrl, string CredentialId);
 
 public sealed record ConfigWorkspaceMemberRow(string UserId, string DisplayName, string Email, WorkspaceRole Role);
+
+/// <summary>Phase 148 — one person's personal workspace, for Admin → Workspaces.</summary>
+public sealed record PersonalWorkspaceRow(Workspace Workspace, string Email, string Role, string Created);
 
 /// <summary>Phase 145 A7 — one choice in a sign-in limit picker.</summary>
 public sealed record SignInChoice(int Value, string Label)
