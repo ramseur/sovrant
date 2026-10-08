@@ -74,7 +74,7 @@
 | ~~Token counts always show `0↑ 0↓`~~ | ✅ Fixed — `OpenAiCompatProvider` captures trailing OpenAI usage chunk; runtime reads `InputTokens` from `MessageDelta`. |
 | ~~SmartRouter crashes when all providers fail startup ping~~ | ✅ Fixed — falls back to configured providers when all fail ping; `ConversationRuntime` catches routing exception and emits `RuntimeError` instead of crashing. |
 | `AskUserQuestion` blocked in server mode | Returns a fixed "question blocked" message — by design; interactive prompts not possible in HTTP server context. |
-| `launchSettings.json` / port conflict on rapid server restart | `src/Sovrant.Server/Properties/launchSettings.json` declares port `5091` that Kestrel overrides with `5200`. Rapid restart causes `SocketException (10048)`. **Mitigation:** always `pkill -f Sovrant.Server` first. **Fix (Phase 9):** align `launchSettings.json` port with `SOVRANT_PORT` and add `--urls` override for CI. |
+| ~~`launchSettings.json` / port conflict~~ — resolved (2.1.0) | The launch profile now uses `5200`, the same port Kestrel listens on (`SOVRANT_PORT`). A second instance still needs its own `SOVRANT_PORT`. |
 | ~~`EnterPlanMode` / `ExitPlanMode` are global in server mode~~ | ✅ Fixed — `SessionConfig` overlay makes plan mode per-session via `AsyncLocal`. `PUT /v1/sessions/{id}/config` for explicit overrides. |
 | ~~No provider retry on 429 / 5xx~~ | ✅ Fixed — 3 attempts with 1s/2s/4s backoff on retryable errors in `ConversationRuntime`. |
 | ~~`AgentTool` has no recursion depth limit~~ | ✅ Fixed — `AsyncLocal<int>` counter; rejects at depth ≥ 5. |

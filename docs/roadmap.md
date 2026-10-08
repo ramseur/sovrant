@@ -5639,9 +5639,6 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 | Issue | Priority | Notes |
 |---|---|---|
 | `AskUserQuestion` blocked in server mode | Low | By design — no interactive console available over HTTP. Could be solved via a webhook/callback URL pattern. |
-| No request-level timeout on agentic loop | Medium | A runaway tool loop can occupy a session indefinitely; add per-turn wall-clock timeout. |
-| CORS origins hardcoded | Low | Should be configurable via `SOVRANT_CORS_ORIGINS` env var. |
-| `launchSettings.json` port conflicts with `SOVRANT_PORT` default | Low | `launchSettings.json` declares `5091`; Kestrel overrides to `5200`. Rapid restart or parallel test runs cause `SocketException (10048)`. Fix: align `launchSettings.json` with `SOVRANT_PORT`; add `--urls` CLI override for CI. |
 | Team tools not yet smoke-tested with live LLM | Medium | `TeamCreate`/`TeamDelete`/`TeamStatus`/`TeamDelegate` have 58 unit tests but no end-to-end smoke test with a real provider. |
 | Context compaction is brittle in four specific ways | Medium | `MaybeCompactHistoryAsync` in `ConversationRuntime` works but: (1) trigger is a fixed token count, not a percentage of the active model's real context window — fires too early on 200K models, never on 32K models; (2) keeps a hardcoded last-4 messages with no way to pin acceptance criteria, the latest tool error, or unresolved blockers; (3) summarises through `_config.Model` (pays top-tier price for a mechanical job that should route to the `fast` tier); (4) destructive in-memory — original messages are dropped from `_history` and cannot be re-read by a later turn. **Near-term tactical fix** (independent of Phase 51): make the threshold a percentage of the model's real window with the env var as an override; add a small `PinnedMessageSet` honoured by the keep-tail logic; route the summary call through the Phase 22 `fast` tier. The reversible/durable version of the trace lands as part of Phase 51's `IContextCompactor` + `runtime_traces` work. |
 
@@ -5654,6 +5651,10 @@ Chat.razor doesn't change — it already consumes `IAsyncEnumerable<RuntimeEvent
 | Provider has no retry on 429/5xx | ✅ Phase 5 — 3 attempts with 1s/2s/4s backoff |
 | `EnterPlanMode`/`ExitPlanMode` are global in server mode | ✅ Phase 10 — session-scoped `SessionConfig` overlay |
 | `Sovrant.Agents` not wired into CLI or Server | ✅ Phase 19+20 — `AddOrchestrationSystem()` called in both hosts |
+| No request-level timeout on agentic loop | ✅ Per-reply timeout (`SOVRANT_TURN_TIMEOUT_SECONDS`, 5 min, not counting time waiting for an approval) and the run time limit for any run (Phase 145 A8, 2 h by default, set by admins) |
+| CORS origins hardcoded | ✅ Configurable with `SOVRANT_CORS_ORIGINS` (comma-separated); localhost defaults otherwise |
+| Selected model not saved across a Desktop/Web reload | ✅ Both apps save the pick to the user's preferences (`UserPreferenceKeys.Model` / active provider); Web per person since Phase 145 Part B |
+| `launchSettings.json` port conflicts with `SOVRANT_PORT` default | ✅ Phase 148 (2.1.0) — the launch profile uses `5200`, like Kestrel; the unused `https` profile (7275) is gone |
 
 ---
 
@@ -13387,10 +13388,10 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 - [x] Every way of stopping a workflow leaves it Cancelled (or Failed) with the reason — done 2026-10-07: cancel stops the run (`WorkflowRuns`), the store keeps cancelled cancelled, `/workflow cancel` uses the shared cancel
 - [x] One switch (`SOVRANT_ENV_OVERRIDE`): off — env seeds settings and keys once, the app's values win; on — env wins and the app disables those controls with a note (settings and keys) — done 2026-10-07 (`EnvOverride`, `EnvBackedSettings`, `EnvLockedSettingsStore`, `EnvLock`; Web Governance/Trust Boundary/Users, Desktop the same plus the API key field)
 - [ ] Compaction: window-relative trigger, pinned essentials, fast-tier summary, originals kept
-- [ ] Server launch profile and runtime port agree
-- [ ] `SystemPromptBuilder` gone (or merged)
-- [ ] Debt table up to date
-- [ ] README numbers current
+- [x] Server launch profile and runtime port agree — done 2026-10-08
+- [x] `SystemPromptBuilder` gone (or merged) — done 2026-10-08: removed; its Phase 43 shell hint (PowerShell vs bash syntax) never reached the model because the class was unused — now in `ConversationRuntime`, when shell tools are available. Its content-creation section was already covered by the runtime's Output and Artifact Rules
+- [x] Debt table up to date — done 2026-10-08 (timeout, CORS and saved-model entries closed; AskUserQuestion on Server, team-tool smoke test and compaction remain)
+- [x] README numbers current — done 2026-10-08: 60 tools, 25 agent templates, 32 skills (unchanged, verified); 138 HTTP endpoints across 30 route groups (was "146", counted differently — now counted as `.Map{Get,Post,Put,Delete,Patch}(` calls in Sovrant.Server); 2,619 tests across 12 projects
 - [x] No personal name or email in tests, mocks or docs (repository URL and company contact excepted) — done 2026-10-07
 - [x] Workspaces and Add provider list team workspaces plus one "Personal workspaces" entry (grid by person; default-set option unticked) — done 2026-10-07 on Web and Desktop (Integrations followed in item 11)
 - [x] MCP servers have a default set for personal workspaces (additive), set from Workspaces and Integrations on Web and Desktop — done 2026-10-08

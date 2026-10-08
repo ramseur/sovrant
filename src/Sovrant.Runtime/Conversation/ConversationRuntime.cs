@@ -1375,6 +1375,17 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             sb.Append("The Write tool is ONLY for editing existing source code files at absolute paths. ")
               .Append("Never use Write to create new documents or save generated content.");
 
+            // Phase 43 (moved here from the unused SystemPromptBuilder in Phase 148): tell the model which
+            // shell runs its commands, so it doesn't write bash one-liners PowerShell can't parse.
+            sb.Append("\n\n").Append(OperatingSystem.IsWindows()
+                ? "The Bash tool on this system runs commands through PowerShell (pwsh 7+ if available, otherwise " +
+                  "Windows PowerShell 5.1). Write PowerShell, not bash: chain commands with `;` (not `&&`, which " +
+                  "Windows PowerShell 5.1 doesn't support), and use Get-ChildItem, Remove-Item, Copy-Item, Get-Content " +
+                  "and Set-Location when you need more than the basic aliases. Forward slashes in paths work. The " +
+                  "working directory persists across Bash calls."
+                : "The Bash tool on this system runs commands through /bin/bash with standard POSIX syntax. The " +
+                  "working directory persists across Bash calls.");
+
             // Global memory: ~/.sovrant/memory.md
             var globalMemory = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),

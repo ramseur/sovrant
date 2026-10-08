@@ -27,6 +27,7 @@ public sealed class HostedPromptTests
         Assert.DoesNotContain("The Write tool is ONLY", system, StringComparison.Ordinal);
         Assert.DoesNotContain("Recent commits", system, StringComparison.Ordinal);
         Assert.DoesNotContain("Project memory", system, StringComparison.Ordinal);
+        Assert.DoesNotContain("The Bash tool on this system runs commands through", system, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -36,6 +37,9 @@ public sealed class HostedPromptTests
 
         Assert.Contains("The Write tool is ONLY", system, StringComparison.Ordinal);
         Assert.DoesNotContain("aren't available here", system, StringComparison.Ordinal);
+        // Phase 43's shell hint (moved from the unused SystemPromptBuilder): which shell runs Bash here.
+        Assert.Contains(OperatingSystem.IsWindows() ? "runs commands through PowerShell" : "runs commands through /bin/bash",
+            system, StringComparison.Ordinal);
     }
 
     private static async Task<string> SystemPromptWith(params string[] tools)
