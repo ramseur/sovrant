@@ -1425,6 +1425,15 @@ select option, select optgroup {
     margin-left: 4px;
 }
 
+/* Phase 148 — older messages were summarised to fit the model */
+.msg-compacted {
+    font-size: 12px;
+    color: var(--text-muted);
+    border-left: 2px solid var(--surface-border);
+    padding-left: 8px;
+    margin-bottom: 6px;
+}
+
 .intent-narration {
     font-size: 12px;
     font-style: italic;

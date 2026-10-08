@@ -527,6 +527,13 @@
                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
                                             </Border>
                                             <StackPanel Grid.Column="1" Spacing="6">
+                                            <!-- Phase 148: older messages were summarised to fit the model -->
+                                            <Border BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="2,0,0,0"
+                                                    Padding="8,0,0,0" IsVisible="{Binding HistoryCompacted}">
+                                                <TextBlock Text="{x:Static vm:MessageViewModel.HistoryCompactedNote}"
+                                                           FontSize="12" TextWrapping="Wrap"
+                                                           Foreground="{DynamicResource TextMuted}" />
+                                            </Border>
                                             <!-- Intent narration — what the system thinks the user wants -->
                                             <TextBlock Text="{Binding IntentNarration}"
                                                        FontSize="12" FontStyle="Italic"

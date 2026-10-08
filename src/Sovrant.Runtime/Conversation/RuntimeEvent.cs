@@ -104,4 +104,10 @@ public abstract partial record RuntimeEvent
         int Total,
         string Intent,
         string Status) : RuntimeEvent;
+
+    /// <summary>
+    /// Phase 148 — older messages were summarised so the conversation fits the model's context
+    /// window. Chats show a short note; the full messages stay in the saved conversation.
+    /// </summary>
+    public sealed record HistoryCompacted(int SummarisedMessages) : RuntimeEvent;
 }

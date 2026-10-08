@@ -79,6 +79,9 @@ public sealed class ChatMessageModel
     /// <summary>What the system thinks the user wants, e.g. "I'll create a PDF report for you". Set when IntentNarrated fires.</summary>
     public string? IntentNarration { get; set; }
 
+    /// <summary>Phase 148 — older messages were summarised during this reply to fit the model's context window.</summary>
+    public bool HistoryCompacted { get; set; }
+
     /// <summary>Summary of what was actually done, derived from ToolUses after completion.</summary>
     public string? ActionSummary { get; set; }
 

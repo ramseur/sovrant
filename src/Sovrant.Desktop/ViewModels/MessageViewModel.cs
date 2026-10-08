@@ -66,6 +66,13 @@ public partial class MessageViewModel : ViewModelBase
     [ObservableProperty]
     private string? _intentNarration;
 
+    /// <summary>Phase 148 — older messages were summarised during this reply to fit the model's context window.</summary>
+    [ObservableProperty]
+    private bool _historyCompacted;
+
+    /// <summary>Phase 148 — the note shown when <see cref="HistoryCompacted"/> is set.</summary>
+    public static string HistoryCompactedNote => Sovrant.Runtime.Conversation.ConversationCompaction.ChatNote;
+
     /// <summary>Phase 59d — summary of what was actually done, derived from tool uses after completion.</summary>
     [ObservableProperty]
     private string? _actionSummary;

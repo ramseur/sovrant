@@ -380,8 +380,15 @@
         {
             await Sovrant.Web.Program.RuntimeReady.Task;
             var entries = await SessionStore.LoadAsync(sessionId, ownerUserId: Me);
+            var compactedPending = false;
             foreach (var entry in entries)
             {
+                // Phase 148: note the reply during which older messages were summarised.
+                if (entry.Role == Sovrant.Runtime.Conversation.ConversationCompaction.EntryRole)
+                {
+                    compactedPending = true;
+                    continue;
+                }
                 if (entry.Role is "user" or "assistant")
                 {
                     _messages.Add(new ChatMessageModel
@@ -392,9 +399,13 @@
                         UserDisplayName = entry.Role == "user" ? _userDisplayName : null,
                         ModelName = entry.Role == "assistant" ? entry.Model : null,
                         ProviderName = entry.Role == "assistant" ? entry.Provider : null,
+                        HistoryCompacted = compactedPending && entry.Role == "assistant",
                     });
+                    if (entry.Role == "assistant") compactedPending = false;
                 }
             }
+            if (compactedPending && _messages.LastOrDefault(m => !m.IsUser) is { } lastReply)
+                lastReply.HistoryCompacted = true;
             var storedPrivacy = await SessionStore.GetIsPrivateAsync(sessionId);
             _isPrivate = storedPrivacy ?? true;
             var storedAgent = await SessionStore.GetAgentNameAsync(sessionId);
@@ -869,6 +880,10 @@
             case RuntimeEvent.IntentNarrated { Narration: var narration }:
                 msg.IntentNarration = narration;
                 msg.ThinkingText = narration;
+                break;
+
+            case RuntimeEvent.HistoryCompacted:
+                msg.HistoryCompacted = true;
                 break;
 
             case RuntimeEvent.ClarificationNeeded { Question: var question }:

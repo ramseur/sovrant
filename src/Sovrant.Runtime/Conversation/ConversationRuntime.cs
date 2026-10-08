@@ -54,6 +54,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly Prompt.IKnowledgeRouter? _knowledgeRouter;
     private readonly Knowledge.IKnowledgeAttributionStore? _attributionStore;
     private readonly List<InputMessage> _history = [];
+
+    // Phase 148: items kept word for word across compactions (restored from the saved summary).
+    private CompactionPins _compactionPins = CompactionPins.None;
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
     private bool _sessionHasUsedTools;
@@ -197,6 +200,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     break;
                 case "assistant" when !string.IsNullOrEmpty(entry.Content):
                     _history.Add(InputMessage.AssistantText(entry.Content));
+                    break;
+                case ConversationCompaction.EntryRole when ConversationCompaction.Parse(entry.Content) is { } compaction:
+                    // Phase 148: send the saved summary plus the messages it kept, not the full history.
+                    var kept = _history.GetRange(Math.Max(0, _history.Count - compaction.Kept), Math.Min(compaction.Kept, _history.Count));
+                    var rebuilt = ConversationCompaction.Rebuild(compaction.Summary, kept);
+                    _history.Clear();
+                    _history.AddRange(rebuilt);
+                    _compactionPins = compaction.Pins ?? CompactionPins.None;
                     break;
             }
         }
@@ -388,6 +399,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             // Routed items are injected as an extra text block prepended to the
             // current user message. _history is NOT mutated; the addendum only
             // travels to the LLM for this turn and is never stored in session_entries.
+            // Phase 148: compact before sending when the request is already past the threshold
+            // (a long tool result can put it there between replies).
+            if (await MaybeCompactHistoryAsync(ConversationCompaction.EstimateTokens(_history, _systemPrompt), ct).ConfigureAwait(false) is { } preSend)
+                yield return preSend;
+
             IReadOnlyList<InputMessage> messagesForRequest = _history;
             if (round == 0 && _knowledgeRouter is not null)
             {
@@ -545,8 +561,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 : [new InputContentBlock.TextBlock(string.Empty)]));
 
             // Compact history if approaching token limit
-            if (accumulated.InputTokens > 0)
-                await MaybeCompactHistoryAsync(accumulated.InputTokens, ct).ConfigureAwait(false);
+            if (accumulated.InputTokens > 0
+                && await MaybeCompactHistoryAsync(accumulated.InputTokens, ct).ConfigureAwait(false) is { } compacted)
+                yield return compacted;
 
             // Process tool use blocks
             var toolUseBlocks = accumulated.Blocks.OfType<OutputContentBlock.ToolUseBlock>().ToList();
@@ -957,15 +974,26 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     }
 
     /// <summary>
-    /// Summarises the oldest portion of <see cref="_history"/> using the LLM when the input
-    /// token count approaches the resolved compact threshold (env &gt; workspace_settings &gt;
-    /// <see cref="SovrantConfig.CompactThreshold"/>).
+    /// Phase 148 — summarises the older part of <see cref="_history"/> once a request reaches
+    /// 75% of the model's context window (or the configured threshold; see
+    /// <see cref="ConversationCompaction.Threshold"/>). The newest messages stay word for word,
+    /// tool calls are never separated from their results, and the first request, the request being
+    /// worked on, an approved plan and the latest tool error are kept word for word in the summary.
+    /// The summary is saved so a reopened conversation sends it instead of the full history.
+    /// The summary uses the conversation's own model: another model could be one this person isn't
+    /// allowed to use, or cost money they didn't choose to spend.
+    /// Returns the event to show in the chat, or null when nothing was compacted.
     /// </summary>
-    private async Task MaybeCompactHistoryAsync(int inputTokens, CancellationToken ct)
+    private async Task<RuntimeEvent.HistoryCompacted?> MaybeCompactHistoryAsync(int inputTokens, CancellationToken ct)
     {
-        var threshold = _compaction.Current.Threshold;
-        if (threshold <= 0 || inputTokens < threshold) return;
-        if (_history.Count < 6) return;
+        var threshold = ConversationCompaction.Threshold(
+            _compaction.Current.Threshold,
+            _capabilityRegistry?.GetCapabilities(Model).MaxContext,
+            Config.EnvBackedSettings.LockedBy(WorkspaceSettingsKeys.CompactThreshold) is not null);
+        if (threshold <= 0 || inputTokens < threshold) return null;
+
+        var cutPoint = ConversationCompaction.ChooseCut(_history, threshold);
+        if (cutPoint < 2) return null;
 
         // Allow hooks to save state before context is lost.
         await _hookRunner.RunAsync(
@@ -973,23 +1001,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             new HookContext(HookEvent.PreCompact, SessionId, InputTokens: inputTokens),
             ct).ConfigureAwait(false);
 
-        // Keep the last 4 messages intact; summarise everything before that
-        const int KeepTail = 4;
-        var cutPoint = _history.Count - KeepTail;
-        if (cutPoint <= 0) return;
-
-        // Build summary text via a single forward pass; copy the tail with
-        // GetRange so we can clear _history without losing it.
-        var historyBuilder = new StringBuilder();
-        for (var i = 0; i < cutPoint; i++)
-        {
-            if (i > 0) historyBuilder.Append("\n\n");
-            var m = _history[i];
-            historyBuilder.Append(m.Role.ToUpperInvariant()).Append(": ").Append(ExtractText(m));
-        }
-        var historyText = historyBuilder.ToString();
-        var toKeep = _history.GetRange(cutPoint, KeepTail);
-        var summarizedCount = cutPoint;
+        var summarised = _history.GetRange(0, cutPoint);
+        var toKeep = _history.GetRange(cutPoint, _history.Count - cutPoint);
 
         var summaryRequest = new MessagesRequest(
             Model,
@@ -997,7 +1010,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             [InputMessage.UserText(
                 "Summarise the following conversation history in 3-5 concise paragraphs. " +
                 "Preserve all key facts, file paths, decisions, and technical context:\n\n" +
-                historyText)])
+                ConversationCompaction.Describe(summarised))])
         {
             System = "You are a concise technical summariser. Preserve important details.",
             Stream = true,
@@ -1011,27 +1024,30 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             var summaryText = string.Join(string.Empty,
                 accumulated.Blocks.OfType<OutputContentBlock.TextBlock>().Select(b => b.Text)).Trim();
 
-            if (string.IsNullOrEmpty(summaryText)) return;
+            if (!accumulated.Success || string.IsNullOrEmpty(summaryText)) return null;
 
+            var pins = ConversationCompaction.Pin(summarised, toKeep, _compactionPins);
+            var summaryMessage = ConversationCompaction.SummaryMessage(summaryText, pins);
+            var rebuilt = ConversationCompaction.Rebuild(summaryMessage, toKeep);
             _history.Clear();
-            _history.Add(InputMessage.UserText($"[Conversation history summary — auto-compacted at {inputTokens} tokens]\n\n{summaryText}"));
-            _history.Add(InputMessage.AssistantText("Understood. I have the context from the conversation summary."));
-            _history.AddRange(toKeep);
+            _history.AddRange(rebuilt);
+            _compactionPins = pins;
 
-            LogCompacted(_logger, SessionId, summarizedCount, inputTokens);
+            LogCompacted(_logger, SessionId, cutPoint, inputTokens);
 
-            await AppendSessionEntryAsync("compaction",
-                $"History compacted: {summarizedCount} messages summarised at {inputTokens} input tokens.",
+            await AppendSessionEntryAsync(ConversationCompaction.EntryRole,
+                ConversationCompaction.Serialize(new CompactionRecord(
+                    summaryMessage, ConversationCompaction.SavedEntryCount(toKeep), cutPoint, inputTokens, pins)),
                 ct).ConfigureAwait(false);
+
+            return new RuntimeEvent.HistoryCompacted(cutPoint);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogRequestFailed(_logger, $"Compaction failed (non-fatal): {ex.Message}");
+            return null;
         }
     }
-
-    private static string ExtractText(InputMessage m) =>
-        string.Join(" ", m.Content.OfType<InputContentBlock.TextBlock>().Select(b => b.Text));
 
     private static readonly HashSet<string> s_scopeAwareTools = new(StringComparer.OrdinalIgnoreCase)
     {

@@ -151,8 +151,15 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
         _activeContext.ActiveAgentName = storedAgent;
 
         var entries = await _sessionStore.LoadAsync(sessionId, ownerUserId: App.SovrantUserId, ct: ct);
+        var compactedPending = false;
         foreach (var entry in entries)
         {
+            // Phase 148: note the reply during which older messages were summarised.
+            if (entry.Role == Sovrant.Runtime.Conversation.ConversationCompaction.EntryRole)
+            {
+                compactedPending = true;
+                continue;
+            }
             if (entry.Role is "user" or "assistant")
             {
                 Messages.Add(new MessageViewModel
@@ -163,9 +170,13 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
                     ModelName = entry.Role == "assistant" ? entry.Model : null,
                     ProviderName = entry.Role == "assistant" ? entry.Provider : null,
                     UserDisplayName = entry.Role == "user" ? _activeContext.UserDisplayName : null,
+                    HistoryCompacted = compactedPending && entry.Role == "assistant",
                 });
+                if (entry.Role == "assistant") compactedPending = false;
             }
         }
+        if (compactedPending && Messages.LastOrDefault(m => !m.IsUser) is { } lastReply)
+            lastReply.HistoryCompacted = true;
 
         HasMessages = Messages.Count > 0;
     }
@@ -687,6 +698,10 @@ public partial class ChatViewModel : ViewModelBase, IDisposable
             case RuntimeEvent.IntentNarrated { Narration: var narration }:
                 msg.IntentNarration = narration;
                 msg.ThinkingText = narration;
+                break;
+
+            case RuntimeEvent.HistoryCompacted:
+                msg.HistoryCompacted = true;
                 break;
 
             case RuntimeEvent.ClarificationNeeded { Question: var question }:
