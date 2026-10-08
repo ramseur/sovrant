@@ -13376,6 +13376,12 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
     - **Workspaces:** list team workspaces plus one **"Personal workspaces — N people"** row (the default-set panel, as the mock already shows); inside it, a **grid by person** — email, name, created — with Manage, for the rare case of one person's workspace.
     - **Add provider:** workspace choices are the team workspaces plus one **"Personal workspaces (default set)"** option that adds the provider to the default set; **unticked by default** (an admin chooses who gets a new provider — it can cost money). Individual personal workspaces aren't listed.
 
+11. **Default set of MCP servers for personal workspaces** (decided 2026-10-07) — Integrations listed every personal workspace because MCP servers had no default set. Like models, but **additive**: each personal workspace gets **the default set plus anything enabled just for that person** (Workspaces → Personal workspaces → Manage), so one person can still get an extra server.
+    - Global setting `mcp.personal_default_server_ids`; resolved in `McpServerStoreExtensions.GetEnabledEntriesAsync`.
+    - Workspaces → Personal workspaces panel gets an **Integrations (MCP servers)** section beside the models.
+    - Integrations → enabling a server offers the team workspaces plus one **"Personal workspaces (default set)"** option, unticked; individual personal workspaces aren't listed.
+    - Later, for the user to decide: make the **model** default set additive the same way (today it replaces each personal workspace's own list, so Manage can't add a model for one person).
+
 ### Acceptance criteria
 - [x] Full test suite clean on several consecutive runs — done 2026-10-07: 5 clean full runs in a row after fixing temp-file cleanup (51 classes), MCP retry waits, coordinator timer races, the Server test host's background scheduler, and a real Web page-load bug the repeats exposed
 - [x] Every way of stopping a workflow leaves it Cancelled (or Failed) with the reason — done 2026-10-07: cancel stops the run (`WorkflowRuns`), the store keeps cancelled cancelled, `/workflow cancel` uses the shared cancel
@@ -13386,5 +13392,6 @@ Agents generate documents (DocumentGenerate, templates, packages) as PDFs, Word 
 - [ ] Debt table up to date
 - [ ] README numbers current
 - [x] No personal name or email in tests, mocks or docs (repository URL and company contact excepted) — done 2026-10-07
-- [x] Workspaces and Add provider list team workspaces plus one "Personal workspaces" entry (grid by person; default-set option unticked) — done 2026-10-07 on Web and Desktop. Follow-up: Integrations (MCP servers per workspace) still lists each personal workspace — there's no default set for MCP servers yet
+- [x] Workspaces and Add provider list team workspaces plus one "Personal workspaces" entry (grid by person; default-set option unticked) — done 2026-10-07 on Web and Desktop (Integrations followed in item 11)
+- [x] MCP servers have a default set for personal workspaces (additive), set from Workspaces and Integrations on Web and Desktop — done 2026-10-08
 - [ ] Final UAT on `development`, then the 2.1.0 release

@@ -13,6 +13,7 @@ Versions correspond to tags on the `main` branch.
 
 ### Added
 
+- **A default set of MCP servers for personal workspaces** (Phase 148). Workspaces → Personal workspaces has an **Integrations (MCP servers)** section beside the models: everyone gets those servers in their personal workspace, plus any enabled just for them under Manage (additive, unlike the model default set). Adding a server on Integrations offers the team workspaces plus one **"Personal workspaces (default set)"** option, unticked — no longer one checkbox per person. Web and Desktop.
 - **Long-running work (Phase 145, A8).**
   - **Run time limit:** any run — a chat reply, a workflow run, a swarm, a scheduled job — stops after **2 hours** by default, keeping what it finished, and says so ("Stopped after 2 hours — the time limit set by your admin"). Admins change it under Users → Registration & sign-in → **Stop runs after** (15 minutes to 8 hours; `SOVRANT_MAX_RUN_MINUTES` is the starting value). Workflows stopped this way are marked failed with the reason instead of looking as if they were still running.
   - **Work outlives signing out:** signing out or timing out doesn't stop your work; it runs as you and the result is in the conversation when you're back.

@@ -48,8 +48,10 @@ public partial class WorkspacesViewModel : ViewModelBase
 
     public WorkspacesViewModel(IWorkspaceService workspaceService, IUserService userService,
         ActiveContextViewModel activeContext, IPrincipalAccessor principal,
-        IProviderProfileStore profileStore, IWorkspaceSettingsStore wsSettings)
+        IProviderProfileStore profileStore, IWorkspaceSettingsStore wsSettings,
+        Sovrant.Runtime.Mcp.IMcpServerStore? mcpStore = null)
     {
+        _mcpStore = mcpStore;
         _workspaceService = workspaceService;
         _userService = userService;
         _activeContext = activeContext;
@@ -231,6 +233,37 @@ public partial class WorkspacesViewModel : ViewModelBase
         OnPropertyChanged(nameof(IsDefaultSetSelected));
         if (value is null) { Members.Clear(); ProviderToggles.Clear(); return; }
         DetailMarkdown = BuildWorkspaceMarkdown(value);
+        if (value.IsDefaultSet) _ = LoadDefaultMcpsAsync();
+    }
+
+    // ── Phase 148: MCP servers every personal workspace gets (additive to per-person ones) ──────
+    private readonly Sovrant.Runtime.Mcp.IMcpServerStore? _mcpStore;
+    public ObservableCollection<WorkspaceMcpToggleViewModel> DefaultMcpToggles { get; } = [];
+
+    private async Task LoadDefaultMcpsAsync()
+    {
+        if (_mcpStore is null) return;
+        try
+        {
+            var entries = await _mcpStore.GetAllEntriesAsync();
+            var raw = await _wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultMcpServerIds);
+            var enabled = new HashSet<string>((raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
+            await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                DefaultMcpToggles.Clear();
+                foreach (var e in entries.OrderBy(e => e.Name, StringComparer.Ordinal))
+                    DefaultMcpToggles.Add(new WorkspaceMcpToggleViewModel { ServerId = e.Id, Name = e.Name, IsEnabled = enabled.Contains(e.Id) });
+            });
+        }
+        catch (Exception ex) { StatusMessage = $"Could not load integrations: {ex.Message}"; }
+    }
+
+    [RelayCommand]
+    private async Task SaveDefaultMcpsAsync()
+    {
+        var ids = DefaultMcpToggles.Where(t => t.IsEnabled).Select(t => t.ServerId).ToList();
+        await _wsSettings.SetAsync(WorkspaceSettingsKeys.GlobalWorkspaceId, WorkspaceSettingsKeys.PersonalDefaultMcpServerIds, string.Join(',', ids));
+        StatusMessage = $"Integrations saved: {ids.Count} for every personal workspace.";
     }
 
     private async Task LoadAsync()

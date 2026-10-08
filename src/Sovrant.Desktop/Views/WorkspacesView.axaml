@@ -243,6 +243,28 @@
                                             Padding="12,6" CornerRadius="6"
                                             Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12"
                                             IsVisible="{Binding !ProvidersLoading}" />
+
+                                    <!-- Phase 148: MCP servers everyone gets in their personal workspace -->
+                                    <StackPanel Spacing="8" Margin="0,12,0,0" IsVisible="{Binding IsDefaultSetSelected}">
+                                        <TextBlock Text="Integrations (MCP servers)" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBlock Text="Everyone gets these in their personal workspace, plus any you enable for one person under Admin → Workspaces → Manage."
+                                                   FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
+                                        <TextBlock Text="No MCP servers configured yet." FontSize="12" Foreground="{DynamicResource TextMuted}"
+                                                   IsVisible="{Binding !DefaultMcpToggles.Count}" />
+                                        <ItemsControl ItemsSource="{Binding DefaultMcpToggles}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:WorkspaceMcpToggleViewModel">
+                                                    <CheckBox IsChecked="{Binding IsEnabled}" Content="{Binding Name}" Margin="0,2" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Content="Save integrations"
+                                                Command="{Binding SaveDefaultMcpsCommand}"
+                                                HorizontalAlignment="Left"
+                                                Padding="12,6" CornerRadius="6"
+                                                Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>

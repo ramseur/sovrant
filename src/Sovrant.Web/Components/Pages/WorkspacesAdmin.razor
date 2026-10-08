@@ -107,6 +107,29 @@
                     <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveDefaultSetAsync">Save default set</button>
                 }
 
+                @* Phase 148: MCP servers everyone gets, plus any enabled for one person under Manage. *@
+                <h5 style="margin-top:18px">Integrations (MCP servers)</h5>
+                <p class="text-sm text-muted" style="margin-bottom:8px">Everyone gets these in their personal workspace, plus any you enable for one person under Manage. <a href="/admin/integrations">Manage servers →</a></p>
+                @if (_allMcpEntries.Count == 0)
+                {
+                    <p class="text-secondary">No MCP servers configured yet.</p>
+                }
+                else
+                {
+                    @foreach (var entry in _allMcpEntries)
+                    {
+                        <div class="form-group toggle-row">
+                            <div><div class="toggle-title">@entry.Name</div></div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked="@_defaultMcpIds.Contains(entry.Id)"
+                                       @onchange="e => { if ((bool)(e.Value ?? false)) _defaultMcpIds.Add(entry.Id); else _defaultMcpIds.Remove(entry.Id); }" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    }
+                    <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveDefaultMcpsAsync">Save integrations</button>
+                }
+
                 @* Phase 148 — one row per person, instead of a list of identical "Personal" workspaces. *@
                 <h5 style="margin-top:18px">People with a personal workspace</h5>
                 <div class="signin-table">
@@ -469,6 +492,17 @@
         var raw = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds);
         _defaultSetIds = new HashSet<string>((raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
         _defaultSetDefault = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileId) ?? string.Empty;
+        _allMcpEntries = (await McpServerStore.GetAllEntriesAsync()).OrderBy(e => e.Name, StringComparer.Ordinal).ToList();
+        var mcpRaw = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultMcpServerIds);
+        _defaultMcpIds = new HashSet<string>((mcpRaw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
+    }
+
+    private HashSet<string> _defaultMcpIds = new(StringComparer.Ordinal);
+
+    private async Task SaveDefaultMcpsAsync()
+    {
+        await WsSettings.SetAsync(WorkspaceSettingsKeys.GlobalWorkspaceId, WorkspaceSettingsKeys.PersonalDefaultMcpServerIds, string.Join(',', _defaultMcpIds));
+        _status = $"Integrations saved: {_defaultMcpIds.Count} for every personal workspace.";
     }
 
     private void ToggleDefaultSet(string profileId, bool enabled)

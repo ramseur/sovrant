@@ -959,6 +959,7 @@ function workspaceModelsHTML(sel){
       ${sel.tag?`<span class="badge ${sel.tag[1]}" style="margin:0">${sel.tag[0]}</span>`:''}</div>
     ${intro}
     ${fsecHTML([['Allowed providers and their models', rows], ['', [['Default model','Used until a member picks another, and when their pick isn\'t allowed here.', personal?'sel:openai/gpt-4o-mini':'sel:anthropic/claude-sonnet']]]])}
+    ${personal?`<div class="lhint" style="margin:16px 0 6px">Integrations everyone gets in their personal workspace, plus any you enable for one person under Manage.</div>`+fsecHTML([['Integrations (MCP servers)',[['GitHub','Issues, pull requests, code search','sw:1'],['Slack','Read and post in channels','sw:0'],['Postgres (analytics)','Read-only queries','sw:0']]]]):''}
     ${personal?personalPeopleHTML():'<div style="display:flex;gap:8px;margin-top:16px"><button class="btn">Members</button><button class="btn">Rename</button></div>'}`;
 }
 

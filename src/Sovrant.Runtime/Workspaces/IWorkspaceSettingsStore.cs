@@ -167,6 +167,12 @@ public static class WorkspaceSettingsKeys
     /// </summary>
     public const string EnabledMcpServerIds = "mcp.enabled_server_ids";
 
+    /// <summary>
+    /// Phase 148 — MCP servers every personal workspace gets (global, comma-separated ids). Additive:
+    /// a personal workspace has these plus its own <see cref="EnabledMcpServerIds"/>.
+    /// </summary>
+    public const string PersonalDefaultMcpServerIds = "mcp.personal_default_server_ids";
+
     // ── General / LLM behaviour ──────────────────────────────────────────────
 
     /// <summary>Max tokens per LLM response, workspace-wide override (int). Overrides user preference.</summary>

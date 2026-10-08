@@ -476,12 +476,15 @@
                             @onclick='() => _addMode = "http"'>HTTP</button>
                 </div>
 
-                @if (_allWorkspaces.Count > 1)
+                @* Phase 148: team workspaces plus one option for every personal workspace (the default set),
+                   not one per person. Nothing ticked by default. *@
+                @if (_allWorkspaces.Count > 0)
                 {
                     <div class="form-field" style="margin-bottom:16px;">
-                        <label>Enable for workspaces (optional)</label>
-                        <p class="text-sm text-muted" style="margin-bottom:6px;">Check workspaces that should have access to this server.</p>
-                        @foreach (var ws in _allWorkspaces)
+                        <label>Available in (optional)</label>
+                        <p class="text-sm text-muted" style="margin-bottom:6px;">Choose who gets this server. You can change it later under Workspaces.</p>
+                        @foreach (var ws in _allWorkspaces.Where(w => w.Type != Sovrant.Runtime.Workspaces.WorkspaceType.Personal)
+                                     .Append(PersonalDefaultSetChoice))
                         {
                             <div class="form-group toggle-row">
                                 <div><div class="toggle-title">@ws.Name</div></div>
@@ -594,6 +597,16 @@
     // Workspace enablement picker for the Add form
     private List<Workspace> _allWorkspaces = [];
     private HashSet<string> _addWorkspaceIds = [];
+
+    /// <summary>The "Personal workspaces (default set)" choice — saved to the default set, not to one workspace.</summary>
+    private static readonly Workspace PersonalDefaultSetChoice = new()
+    {
+        WorkspaceId = "__personal_default_set__",
+        Type = Sovrant.Runtime.Workspaces.WorkspaceType.Team,
+        Name = "Personal workspaces (default set)",
+        Slug = "personal-default-set",
+        OwnerId = string.Empty,
+    };
 
     // Gallery state
     private CatalogEntry? _catalogEntry;
@@ -1128,6 +1141,16 @@
             if (entry is null) continue;
             foreach (var wsId in _addWorkspaceIds)
             {
+                if (wsId == PersonalDefaultSetChoice.WorkspaceId)
+                {
+                    // Every personal workspace, through the default set.
+                    var setRaw = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultMcpServerIds).ConfigureAwait(false);
+                    var set = new HashSet<string>(
+                        (setRaw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                        StringComparer.Ordinal) { entry.Id };
+                    await WsSettings.SetAsync(WorkspaceSettingsKeys.GlobalWorkspaceId, WorkspaceSettingsKeys.PersonalDefaultMcpServerIds, string.Join(',', set)).ConfigureAwait(false);
+                    continue;
+                }
                 var raw = await WsSettings.GetAsync(wsId, WorkspaceSettingsKeys.EnabledMcpServerIds).ConfigureAwait(false);
                 var ids = new HashSet<string>(
                     (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
