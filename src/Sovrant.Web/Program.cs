@@ -13,6 +13,7 @@ using Sovrant.Runtime.Storage;
 using Sovrant.Tools;
 using Sovrant.Tools.Extended;
 using Sovrant.Web.Adapters;
+using Sovrant.Web.Auth;
 using Sovrant.Web.Services;
 using Sovrant.Client.Remote;
 using Sovrant.Storage.Postgres;
@@ -26,8 +27,6 @@ public static class Program
     /// <summary>Signals when runtime initialization (DB, model metadata) is complete.</summary>
     public static TaskCompletionSource RuntimeReady { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-    /// <summary>The authenticated user's ID. Updated after login; falls back to SOVRANT_USER_ID or the OS identity until then.</summary>
-    public static string SovrantUserId { get; private set; } = Environment.UserName;
 
     /// <summary>True when running in remote mode (connecting to an external Sovrant.Server).</summary>
     public static bool IsRemoteMode { get; private set; }
@@ -36,7 +35,6 @@ public static class Program
     {
         // Phase 144: .env first, so every variable below (and in the runtime) honours it.
         BootstrapConfigLoader.EnsureDotEnvLoaded();
-        SovrantUserId = Environment.GetEnvironmentVariable("SOVRANT_USER_ID") ?? Environment.UserName;
         var runtimeMode = Environment.GetEnvironmentVariable("SOVRANT_RUNTIME_MODE") ?? "embedded";
         var isRemote = string.Equals(runtimeMode, "remote", StringComparison.OrdinalIgnoreCase);
 
@@ -92,15 +90,27 @@ public static class Program
             builder.Services.AddHttpsRedirection(o => o.HttpsPort = webHttpsPort);
 
         // Phase 144 (GitHub #33): behind a reverse proxy, trust X-Forwarded-* from known proxies.
-        Sovrant.Web.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
-            Environment.GetEnvironmentVariable(Sovrant.Web.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
+        Sovrant.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
+            Environment.GetEnvironmentVariable(Sovrant.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
 
-        // WebSessionService is a singleton used by all Blazor circuits.
-        // For embedded mode it is populated after session restore or login.
-        // For remote mode it is pre-populated with the env/OS identity.
-        var webSession = new WebSessionService();
-        builder.Services.AddSingleton(webSession);
-        builder.Services.AddSingleton<IPrincipalAccessor>(webSession);
+        // Who is signed in (Phase 145): embedded mode reads each browser's sign-in cookie, one
+        // WebSessionService per circuit/request. Remote mode keeps one process-wide user until
+        // Phase 145 Part C signs each Web user in to Server separately.
+        if (isRemote)
+        {
+            var webSession = new WebSessionService();
+            builder.Services.AddSingleton(webSession);
+            builder.Services.AddSingleton<IPrincipalAccessor>(webSession);
+        }
+        else
+        {
+            builder.Services.AddSovrantWebAuth();
+            builder.Services.AddHttpContextAccessor();
+            builder.Services.AddScoped(sp => new WebSessionService(
+                sp.GetService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                sp.GetService<IHttpContextAccessor>()));
+            builder.Services.AddScoped<IPrincipalAccessor>(sp => sp.GetRequiredService<WebSessionService>());
+        }
 
         if (isRemote)
         {
@@ -149,10 +159,26 @@ public static class Program
                 builder.Services.AddSovrantPostgresStorage(connStr, bootstrapConfig.LegacyKeystorePath);
             }
 
+            // Phase 145 Part B: each conversation can use its own shared provider profile (the member's
+            // pick); everything else goes to the install's default router.
+            Sovrant.Runtime.Conversation.SessionProviderRoutingExtensions.AddSessionProviderRouting(builder.Services);
+
             // Web-specific overrides
             var mutableAuth = new MutableAuthProvider(config.ApiKey ?? string.Empty, config.BaseUrl);
-            var permissionPolicy = new MutableCliPermissionPolicy(config.PermissionMode);
+            // Phase 145: each conversation is judged by its owner's mode (set per chat turn); config's mode
+            // is only the default for work outside a conversation.
+            var permissionPolicy = new SessionAwarePermissionPolicy(config.PermissionMode);
             builder.Services.AddSingleton<IPermissionPolicy>(permissionPolicy);
+            // Phase 145 stopgap: Web is shared, so members can't use file/shell tools unless an
+            // admin allows it (Governance). Desktop and the CLI don't register this.
+            // The caller is the ambient principal: set per request (below) and per chat turn.
+            // Phase 145 Part D: file/shell tools are off on a hosted server unless an admin allows them,
+            // and blocked tools are hidden from the model.
+            // Slash commands that change things for everyone or use the server's files are admin-only.
+            builder.Services.AddSingleton<Sovrant.Commands.ISlashCommandPolicy>(
+                new Sovrant.Commands.SharedServerCommandPolicy(AmbientPrincipal.Accessor));
+            Sovrant.Runtime.Tools.HostToolPolicyExtensions.AddHostToolPolicy(builder.Services, sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
+                AmbientPrincipal.Accessor, sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
             builder.Services.AddSingleton<IPermissionModeAccessor>(permissionPolicy);
             builder.Services.AddSingleton(config);
             var confirmationHandler = new BlazorConfirmationHandler();
@@ -161,7 +187,8 @@ public static class Program
             builder.Services.AddSingleton<IUserInputProvider, BlazorUserInputProvider>();
             builder.Services.AddSingleton<IAuthProvider>(mutableAuth);
             builder.Services.AddSingleton(mutableAuth);
-            builder.Services.AddSingleton<ActiveContextService>();
+            // Phase 145: workspace, project, model, MCP servers and current chat are per browser tab.
+            builder.Services.AddScoped<ActiveContextService>();
             builder.Services.AddScoped<ActiveSessionsService>();
             builder.Services.AddScoped<ChatSeedService>();
         }
@@ -177,9 +204,8 @@ public static class Program
             await app.Services.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
                 .InitializeAsync().ConfigureAwait(false);
 
-            // Restore a previously stored session token from the local credential store.
-            // Validates via GET /v1/auth/me on the remote server; redirects to /login if missing/invalid.
-            await TryRestoreWebRemoteSessionAsync(app.Services, webSession).ConfigureAwait(false);
+            // No sign-in survives a restart: everyone signs in again (see ForgetStoredWebSignInAsync).
+            await ForgetStoredWebSignInAsync(app.Services).ConfigureAwait(false);
         }
         else
         {
@@ -191,9 +217,8 @@ public static class Program
             await app.Services.GetRequiredService<Sovrant.Runtime.Storage.IStorageProvider>()
                 .InitializeAsync().ConfigureAwait(false);
 
-            // Attempt to restore a stored session token before serving any request.
-            // If valid, MainLayout will render normally; otherwise it redirects to /login.
-            await TryRestoreWebSessionAsync(app.Services, webSession).ConfigureAwait(false);
+            // No sign-in survives a restart: everyone signs in again (see ForgetStoredWebSignInAsync).
+            await ForgetStoredWebSignInAsync(app.Services).ConfigureAwait(false);
         }
 
         // Forwarded headers first, so HTTPS redirection and links see the client's scheme/host.
@@ -220,8 +245,25 @@ public static class Program
             ? Results.Ok(new { status = "ready" })
             : Results.Json(new { status = "starting" }, statusCode: StatusCodes.Status503ServiceUnavailable));
 
+        if (!isRemote)
+        {
+            // Phase 145: each browser's sign-in cookie → its own user. The request's user also becomes
+            // the ambient principal, so tool policies and background work started here know who it is.
+            app.UseAuthentication();
+            app.Use(async (ctx, next) =>
+            {
+                var uid = ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (uid is null) { await next(ctx).ConfigureAwait(false); return; }
+                using (AmbientPrincipal.Push(uid, ctx.User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value))
+                    await next(ctx).ConfigureAwait(false);
+            });
+            app.UseAuthorization();
+        }
+
         app.MapStaticAssets();
         app.UseAntiforgery();
+        if (!isRemote)
+            app.MapSovrantWebAuth();
 
         app.MapRazorComponents<Sovrant.Web.Components.App>()
             .AddInteractiveServerRenderMode();
@@ -264,23 +306,8 @@ public static class Program
                     await app.Services.InitializeRuntimeAsync().ConfigureAwait(false);
                     app.Services.GetRequiredService<ToolRegistrar>().RegisterAll();
 
-                    // Only seed user/workspace if a session was restored at startup.
-                    // If not, the user hasn't logged in yet; Login.razor will seed after auth.
-                    if (webSession.IsAuthenticated)
-                    {
-                        await SeedUserAndWorkspaceAsync(app.Services, webSession.UserId!).ConfigureAwait(false);
-                        // Re-apply preferences for the authenticated user. InitializeRuntimeAsync
-                        // used the OS identity; this pass corrects it to the token's actual userId.
-                        await app.Services.ApplyUserPreferencesForUserAsync(webSession.UserId!).ConfigureAwait(false);
-                        // Sync mutableAuth with the DB-loaded config so the provider routes correctly.
-                        var auth = app.Services.GetService<Sovrant.Web.Adapters.MutableAuthProvider>();
-                        var cfg = app.Services.GetService<Sovrant.Runtime.Config.SovrantConfig>();
-                        if (auth is not null && cfg is not null && !string.IsNullOrWhiteSpace(cfg.ApiKey))
-                        {
-                            auth.ApiKey = cfg.ApiKey!;
-                            auth.BaseUrl = cfg.BaseUrl;
-                        }
-                    }
+                    // No one is signed in at startup (Phase 145: sign-in is per browser); each user's
+                    // row, workspace and preferences are set up when they sign in (/auth/login).
                 }
                 catch (Exception ex)
                 {
@@ -297,61 +324,22 @@ public static class Program
         await app.RunAsync();
     }
 
-    internal static void SetUserId(string userId) => SovrantUserId = userId;
 
-    private static async Task TryRestoreWebRemoteSessionAsync(IServiceProvider services, WebSessionService session)
+    /// <summary>
+    /// Earlier versions saved the last Web sign-in token and restored it at startup for the whole
+    /// process, so after a restart any visitor was signed in as that user without a password.
+    /// Web no longer saves the token; this deletes one left behind by an older version.
+    /// Phase 145 replaces process-wide sign-in with a per-browser cookie.
+    /// </summary>
+    private static async Task ForgetStoredWebSignInAsync(IServiceProvider services)
     {
         try
         {
-            var store = services.GetRequiredService<ICredentialStore>();
-            var token = await store.RetrieveAsync(StoredWebTokenKey).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(token)) return;
-
-            var remoteOptions = services.GetRequiredService<SovrantRemoteOptions>();
-            remoteOptions.ApiToken = token;
-
-            // Validate against the server's /v1/auth/me endpoint.
-            var httpFactory = services.GetRequiredService<IHttpClientFactory>();
-            using var http = httpFactory.CreateClient("SovrantApi");
-            var resp = await http.GetAsync(new Uri("/v1/auth/me", UriKind.Relative)).ConfigureAwait(false);
-            if (!resp.IsSuccessStatusCode) return;
-
-            var json = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            var userId = doc.RootElement.TryGetProperty("user_id", out var u) ? u.GetString() : null;
-            var role = doc.RootElement.TryGetProperty("role", out var r) ? r.GetString() : "user";
-            if (string.IsNullOrEmpty(userId)) return;
-
-            session.SignIn(userId, role ?? "user");
-            SovrantUserId = userId;
+            await services.GetRequiredService<ICredentialStore>().DeleteAsync(StoredWebTokenKey).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // Ignore restore errors — user will be redirected to login.
-        }
-    }
-
-    private static async Task TryRestoreWebSessionAsync(IServiceProvider services, WebSessionService session)
-    {
-        try
-        {
-            var store = services.GetRequiredService<ICredentialStore>();
-            var plaintext = await store.RetrieveAsync(StoredWebTokenKey).ConfigureAwait(false);
-            if (string.IsNullOrEmpty(plaintext)) return;
-
-            var tokens = services.GetRequiredService<ITokenService>();
-            var resolved = await tokens.ResolveAsync(plaintext).ConfigureAwait(false);
-            if (resolved is null) return;
-
-            // Hydrate email so the sidebar shows the friendly name, not the raw usr_... ID.
-            var userService = services.GetRequiredService<Sovrant.Runtime.Users.IUserService>();
-            var user = await userService.GetAsync(resolved.Token.UserId).ConfigureAwait(false);
-            session.SignIn(resolved.Token.UserId, resolved.Role, user?.Email);
-            SovrantUserId = resolved.Token.UserId;
-        }
-        catch
-        {
-            // Ignore restore errors — user will be redirected to login.
+            await Console.Error.WriteLineAsync($"[web] Could not clear a stored sign-in token: {ex.Message}").ConfigureAwait(false);
         }
     }
 

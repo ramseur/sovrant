@@ -34,7 +34,7 @@
             </DockPanel>
 
             <TextBox Text="{Binding SearchText}"
-                     Watermark="Search skills..."
+                     PlaceholderText="Search skills..."
                      CornerRadius="8"
                      Padding="12,8" />
         </StackPanel>

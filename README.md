@@ -23,7 +23,7 @@ The engine runs as a **CLI agent**, an **OpenAI-compatible HTTP server**, a **de
 
 **Runtime:** .NET 10 / C# 14
 **License:** Business Source License 1.1 — source-available, converts to Apache 2.0 on 2029-05-15. See [LICENSE](LICENSE).
-**Status:** 60 tools. 25 agent templates. 32 built-in skills. 146 server endpoints + SignalR hub. Conversation folders. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,343 tests passing across 10 projects.
+**Status:** 60 tools. 25 agent templates. 32 built-in skills. 138 HTTP endpoints + SignalR hub. Conversation folders. Command Center cockpit + User Dashboard (Web + Desktop). Per-record privacy toggles. Optional Supabase/PostgreSQL backend. Multi-user with login, registration, per-user API tokens, workspaces, projects, and ownership scoping. Team orchestration with per-team run profiles. Swarm orchestrator. Workflow engine with background scheduler. Inter-agent coordination. Cost tracking. Eval framework. MCP server mode. Desktop app. Web app (embedded + remote mode). Frontend SDK. 2,627 tests across 12 projects.
 
 | Web | Desktop |
 |---|---|
@@ -117,6 +117,8 @@ On first launch, the setup wizard guides you through provider configuration (API
 
 Browser-based UI on port 5100 with the full runtime embedded.
 
+> **Pre-release — multi-user Web is new in 2.1.0.** Embedded Web (the default) now signs in each browser separately, so a team can share one Web server: everyone sees only their own conversations and approvals and picks from the models their admins configured ([Phase 145](docs/roadmap.md), GitHub #32). Load-tested with 1,000 people connected to one 4-core server — see [Sizing Sovrant.Web](docs/web-sizing.md). **Remote mode** (Web in front of Sovrant.Server, `SOVRANT_RUNTIME_MODE=remote`) is still single-user — [Phase 146](docs/roadmap.md). See [Running Web for a team](#running-web-for-a-team).
+
 ```bash
 dotnet run --project src/Sovrant.Web
 # Open http://localhost:5100
@@ -143,7 +145,7 @@ dotnet run --project src/Sovrant.Cli -- auth delete llm
 cat key.txt | dotnet run --project src/Sovrant.Cli -- auth set llm --stdin
 ```
 
-**From the environment (12-factor / containers / CI):** set the key in the shell, the container's env, or a `.env` file. On first boot it's imported into the encrypted keystore, and a provider is set up for you; after that the stored value wins, so changes made in the UI stick. Set `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply env values on every start.
+**From the environment (12-factor / containers / CI):** set the key in the shell, the container's env, or a `.env` file. On first boot it's imported into the encrypted keystore, and a provider is set up for you; after that the stored value wins, so changes made in the UI stick. Set `SOVRANT_ENV_OVERRIDE=true` to re-apply env values on every start.
 
 Linux / macOS / WSL:
 ```bash
@@ -196,7 +198,7 @@ curl -X POST http://localhost:5200/v1/auth/register \
 export SVT_TOKEN="svt_..."
 ```
 
-All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` by default. Environment variables (e.g. `LLM_API_KEY`, from the shell, container env or `.env`) are imported into it on first boot — or on every start with `SOVRANT_ENV_KEYS_OVERRIDE=true` — for 12-factor / CI deployments and always take precedence over the stored value.
+All credentials (API keys, provider tokens) are stored in the AES-256-GCM encrypted keystore at `~/.sovrant/credentials/` by default. Environment variables (e.g. `LLM_API_KEY`, from the shell, container env or `.env`) are imported into it on first boot — or on every start with `SOVRANT_ENV_OVERRIDE=true` — for 12-factor / CI deployments and always take precedence over the stored value.
 
 ```bash
 # Non-streaming
@@ -215,7 +217,7 @@ curl -X POST http://localhost:5200/v1/chat/completions \
 curl -X POST http://localhost:5200/v1/chat/completions \
   -H "Authorization: Bearer $SVT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"My name is Eric"}],"session_id":"user-123"}'
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"My name is Alex"}],"session_id":"user-123"}'
 ```
 
 > **Auth model:** All requests require a `svt_*` bearer token. Log in via `POST /v1/auth/login` to get a token. Additional long-lived tokens can be issued via `POST /v1/users/me/tokens` (self-service) or `POST /v1/users/{id}/tokens` (admin). Tokens carry an optional expiry and can be revoked at any time. Non-admin callers see only their own data. See [Multi-User & Workspaces](#multi-user--workspaces).
@@ -354,7 +356,7 @@ Every conversation is stored in a SQLite database with full-text search via FTS5
 
 ### Multi-User & Workspaces
 
-Sovrant ships as a proper multi-user system, not a single-admin tool.
+Sovrant ships as a proper multi-user system, not a single-admin tool. Sovrant.Server enforces it per request, and embedded Sovrant.Web per browser sign-in (2.1.0; see [Running Web for a team](#running-web-for-a-team)). Web in remote mode is still single-user until Phase 146.
 
 - **Login + registration on Web and Desktop.** First-run goes through registration, not a blank config screen. Username + password (hashed in SQLite via V026). Admins can flip **open registration** and **require admin approval** flags from the Admin UI.
 - **Per-user API tokens.** Users issue `svt_*` bearer tokens via `POST /v1/users/me/tokens` (or admins via `POST /v1/users/{id}/tokens`); the plaintext is returned once and never recoverable. Tokens carry an optional expiry, a sliding `last_used_at` for inactivity TTL, and can be revoked at any time.
@@ -362,7 +364,7 @@ Sovrant ships as a proper multi-user system, not a single-admin tool.
 - **Admin role.** `users.role = 'admin'` grants cross-user visibility and `/v1/users/{id}/*` management. Admin-issued password reset tokens (`password_reset_tokens` table, 24-hour TTL, one-time use) cover lost-password flows.
 - **Personal workspace per user.** Every user gets an auto-created `ws-personal-{user_id}` workspace on signup, idempotent and undeletable. Team workspaces are created via the API with 7-day invite tokens and owner/editor/viewer roles. Accept invites via `POST /v1/workspaces/invites/accept`.
 - **Projects nest inside workspaces** with their own member lists and 3-tier config inheritance (project → workspace → global).
-- **Workspace-scoped provider profiles.** Admins add a provider key once at workspace level and every member sees it in the provider dropdown (marked with a "Workspace" badge) without ever seeing the plaintext key. Per-user profiles work the same way at personal-workspace scope. All API keys flow through the encrypted keystore — `provider_profiles.credential_id` references the encrypted store, never the raw value.
+- **Shared models, configured by admins.** Admins add providers and keys; members never see a key. On Web, each member picks any model allowed for the workspace they're in (each conversation remembers its own model), and personal workspaces use a **default model set** an admin chooses (Workspaces → All personal workspaces) and can change at any time. All API keys flow through the encrypted keystore — `provider_profiles.credential_id` references the encrypted store, never the raw value.
 - **Per-workspace provider gating (opt-in).** Globally configured providers are hidden from all workspaces by default. Admins explicitly enable each provider per workspace from the Workspaces admin page — members only see providers their workspace has been granted access to. When adding a provider on the Providers page, a workspace picker lets the admin opt in one or more workspaces immediately. The model picker refreshes on every open, so access changes take effect for connected clients without requiring re-login.
 - **Per-record privacy toggles.** Any session or agent run can be marked private from the chat header or Agents UI. Private records are visible only to the owner — on the Command Center they appear as masked rows (title/content hidden); on the User Dashboard they are excluded from all other users' views entirely. Server-side enforcement via `is_private` column (V030 migration).
 
@@ -474,7 +476,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | Project | Description |
 |---|---|
 | `Sovrant.Cli` | Interactive REPL and one-shot `prompt` CLI. Entry point for local use. |
-| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 146 endpoints + SignalR hub. |
+| `Sovrant.Server` | ASP.NET Core Minimal API — OpenAI-compatible endpoints plus management APIs. 138 HTTP endpoints + SignalR hub. |
 | `Sovrant.Desktop` | Avalonia desktop app — full GUI with streaming chat, tool use, settings, and management pages. |
 | `Sovrant.Web` | Blazor Server web app — browser-based UI with embedded or remote runtime. Port 5100. Dual-mode: `SOVRANT_RUNTIME_MODE=embedded` (default) or `remote` (connects to Sovrant.Server via SignalR). |
 | `Sovrant.Runtime` | Core agentic loop, workflow engine, planner/executor, SQLite persistence (48 migrations V001–V048), permission system, tool executor, MCP client, cost tracking. |
@@ -485,7 +487,7 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 | `Sovrant.Agents` | Orchestration: team registry (SQLite-backed), agent factory, dual backends (isolated + shared), 25 agent templates, swarm orchestrator, unified run ledger, inter-agent coordination (PM agents + mailbox). |
 | `Sovrant.Mcp` | Shared MCP protocol handlers (tools/list, tools/call, resources, prompts, completions). Consumed by both the CLI's `mcp-server` stdio subcommand and `Sovrant.Server`'s HTTP/SSE MCP transport. |
 | `Sovrant.Lsp` | Language Server Protocol client: JSON-RPC over stdio, manages language server lifecycle, 5 LSP tools. |
-| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the 146-endpoint server (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
+| `sdk/js` | TypeScript/JavaScript client SDK: `SovrantClient` covering the server API (incl. `login` / `register` / `getCommandCenterState` / `updateTeamProfile`), SSE streaming, React `useChat()` hook, 85+ TypeScript interfaces. |
 
 ### Key Design Decisions
 
@@ -504,6 +506,8 @@ Rolling file logs, JSON structured output for log aggregators, configurable log 
 ## Tools
 
 60 tools available. All run inside the agentic loop with automatic retries up to 20 tool rounds per turn.
+
+> On Web and Server, file and shell tools (File, Shell, `TaskCreate`, code and LSP tools) are off unless an admin allows them — see [Running Web for a team](#running-web-for-a-team). Desktop and the CLI have them all.
 
 ### File
 `Read` · `Write` · `Edit` · `Glob` · `Grep` · `LS`
@@ -773,7 +777,7 @@ GET  /v1/evals/{name}/history
 
 **CLI:** use `sovrant auth set llm` (prompts without echo) to store the key in the same encrypted keystore, then set the base URL with `sovrant auth set base-url` or `LLM_BASE_URL`. Keys stored this way are managed, rotatable, and never land in shell history or config files.
 
-> **CI / scripted deployments and containers:** set `LLM_API_KEY` (plus optional `LLM_BASE_URL`, `SOVRANT_MODEL`) in the environment or a `.env` file. On first boot the key is imported into the encrypted keystore and every signed-up user without a provider gets one for it, so there's nothing to click through. After that the stored value wins; set `SOVRANT_ENV_KEYS_OVERRIDE=true` to re-apply env values on every start.
+> **CI / scripted deployments and containers:** set `LLM_API_KEY` (plus optional `LLM_BASE_URL`, `SOVRANT_MODEL`) in the environment or a `.env` file. On first boot the key is imported into the encrypted keystore and becomes one shared provider (owned by the first admin) in the default model set for everyone's personal workspace, so there's nothing to click through. After that the stored value wins; set `SOVRANT_ENV_OVERRIDE=true` to re-apply env values on every start.
 
 > Gemma models via Google AI Studio do not support function calling over the OpenAI-compat endpoint. Use Gemini 2.5 Flash or a newer Gemini model.
 
@@ -783,7 +787,7 @@ The `SmartRouter` pings all configured providers on startup, scores them by late
 
 ## Server API
 
-The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 146 endpoints + SignalR hub across 27 route groups:
+The server exposes an OpenAI-compatible chat completions endpoint plus comprehensive management APIs. 138 HTTP endpoints + SignalR hub across 30 route groups:
 
 | Group | Endpoints | Description |
 |---|---|---|
@@ -853,7 +857,36 @@ dotnet run --project src/Sovrant.Web
 # Open http://localhost:5100
 ```
 
-**Dual-mode design:** Components depend on runtime interfaces (`IConversationRuntime`, `ISessionStore`, `IToolRegistry`, etc.). In embedded mode (default), these are real implementations via `AddSovrantRuntime()`. In remote mode (`SOVRANT_RUNTIME_MODE=remote`), they are replaced by HTTP/SignalR client wrappers that call `Sovrant.Server` via `AddSovrantClient()` — components never change. Set `SOVRANT_SERVER_URL` and `SOVRANT_API_TOKEN` to connect to a remote server.
+**Dual-mode design:** Components depend on runtime interfaces (`IConversationRuntime`, `ISessionStore`, `IToolRegistry`, etc.). In embedded mode (default), these are real implementations via `AddSovrantRuntime()`. In remote mode (`SOVRANT_RUNTIME_MODE=remote`), they are replaced by HTTP/SignalR client wrappers that call `Sovrant.Server` via `AddSovrantClient()` — components never change. Set `SOVRANT_SERVER_URL` and `SOVRANT_API_TOKEN` to connect to a remote server. Remote mode is single-user for now (one token for the whole Web process) — per-person sign-in through Server is [Phase 146](docs/roadmap.md).
+
+### Running Web for a team
+
+Embedded Web (the default) is multi-user as of 2.1.0:
+
+- **Each browser signs in separately** (an HttpOnly cookie). Signed out after **1 hour** without activity, after **12 hours** regardless, or after **14 days** with "Keep me signed in". Admins change these under **Users → Registration & sign-in** (Web and Desktop) — including turning "Keep me signed in" off, for places that don't want people signed in for days; changes reach browsers already signed in within about a minute. `SOVRANT_WEB_IDLE_MINUTES`, `SOVRANT_WEB_MAX_SESSION_HOURS` and `SOVRANT_WEB_REMEMBER_DAYS` set the starting values. Admins see every browser signed in (Admin → Signed in on Web) and can sign any of them out; anyone can sign out everywhere from Settings.
+- **Everyone sees only their own** conversations, approvals and permission mode. Each conversation keeps the model it was started with.
+- **Long-running work:** signing out doesn't stop your work — it runs as you and the result is waiting when you're back. Any run stops after **2 hours** by default (admins: Users → Registration & sign-in → Stop runs after). A run that needs an approval while you're away waits for you; a banner links to it. "Sign out everywhere", an admin revoke or a disabled account stop that person's running work.
+- **Models come from admins** — see *Shared models* under [Multi-User & Workspaces](#multi-user--workspaces). Members don't add providers or keys.
+- **File and shell tools are off** (Bash, PowerShell, Read/Write/Edit, Glob/Grep, background tasks, code tools). On a hosted server they would run on the server itself, as its account, so an agent could reach other people's files, the database and the server's settings. They're also hidden from the model, which saves files with the Artifact tool instead (documents, code, reports all still work and are downloadable). For a server used by one trusted team, an admin can turn them on under Governance → **Allow file and shell tools on this server** (`SOVRANT_GOVERNANCE_HOST_FILE_TOOLS`), and separately **Let members use file and shell tools**. Running code safely for hosted users is [Phase 147](docs/roadmap.md) (sandboxes). Desktop and the CLI run on your own machine and keep these tools.
+- Put it behind HTTPS (a reverse proxy is fine — forwarded headers are supported) before anyone signs in from another machine.
+- **How big a server:** about 0.5–1 MB per connected person plus ~110 MB; 1,000 people ran on 4 cores within a 2 GB memory limit. Set a memory limit — see [Sizing Sovrant.Web](docs/web-sizing.md).
+
+**Load test** (`tools/Sovrant.LoadTest`, 4-core laptop, 16 GB; each person signs in, keeps a live connection and changes page every 15–20 s):
+
+```mermaid
+xychart-beta
+    title "Sovrant.Web memory with everyone connected (MB, after a full GC)"
+    x-axis "People connected" [0, 300, 1000]
+    y-axis "Memory (MB)" 0 --> 1000
+    bar [110, 534, 668]
+```
+
+| People connected | Memory limit | Errors | Page change (p95) | Sign-in (p50) | Memory once settled |
+|---|---|---|---|---|---|
+| 300 | 1 GB | 0 | 34 ms | 1.4 s | 534 MB |
+| 1,000 | 2 GB | 0 | 33 ms | 2.4 s | 668 MB |
+
+Chat replies aren't included — they're generated at your model provider.
 
 ---
 
@@ -861,7 +894,7 @@ dotnet run --project src/Sovrant.Web
 
 The TypeScript/JavaScript SDK (`sdk/js`) provides a typed client for building custom frontends against the Sovrant server.
 
-- **`SovrantClient`** — covers the 146-endpoint server: chat, **auth (login, register, password reset, registration / approval toggles)**, command center (`getCommandCenterState`), user dashboard (`getUserDashboardState`), sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), workflows, swarm, engine, evals, artifacts, and registries
+- **`SovrantClient`** — covers the server API: chat, **auth (login, register, password reset, registration / approval toggles)**, command center (`getCommandCenterState`), user dashboard (`getUserDashboardState`), sessions, users (incl. admin `issueResetToken` / `approveUser`), workspaces, projects, teams (incl. `updateTeamProfile`), workflows, swarm, engine, evals, artifacts, and registries
 - **SSE streaming** — real-time token-by-token responses with `streamChat()`
 - **React `useChat()` hook** — drop-in conversational UI component
 - **85+ TypeScript interfaces** — full type coverage for all request/response shapes
@@ -1042,14 +1075,14 @@ Place a markdown file at `.sovrant/commands/{name}.md`. Invoking `/{name}` in th
 
 ### Environment Variables
 
-Every variable works from the shell, a container's environment, or a `.env` file in the app's working directory ([`.env.example`](.env.example) is the full, annotated list; a test fails if it documents a variable the code doesn't read). API-key variables marked **(stored)** are imported into the encrypted credential store on first boot, after which the stored value wins (edit it in the UI or with `sovrant auth set <name>`); `SOVRANT_ENV_KEYS_OVERRIDE=true` re-imports them on every start.
+Every variable works from the shell, a container's environment, or a `.env` file in the app's working directory ([`.env.example`](.env.example) is the full, annotated list; a test fails if it documents a variable the code doesn't read). API-key variables marked **(stored)** are imported into the encrypted credential store on first boot, after which the stored value wins (edit it in the UI or with `sovrant auth set <name>`); `SOVRANT_ENV_OVERRIDE=true` re-imports them on every start.
 
 | Variable | Required | Description |
 |---|---|---|
-| `LLM_API_KEY` | Yes (or the setup screen / `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Signed-up users without a provider get one for it. Alias: `OPENAI_API_KEY` |
+| `LLM_API_KEY` | Yes (or the setup screen / `auth set llm`) | API key for the primary provider — **(stored)** as `llm`. Becomes one shared provider in the default model set for personal workspaces. Alias: `OPENAI_API_KEY` |
 | `LLM_BASE_URL` | No | Provider base URL. Default: inferred from the key (`sk-or-` → OpenRouter, `sk-ant-` → Anthropic), else `https://api.openai.com/v1` |
 | `SOVRANT_MODEL` | No | Default model when a user hasn't picked one |
-| `SOVRANT_ENV_KEYS_OVERRIDE` | No | `true` = env keys replace stored keys on every start (default: imported on first boot only) |
+| `SOVRANT_ENV_OVERRIDE` | No | How env relates to the app, for keys and settings. Default: env values seed the app once and the app's values win after that. `true`: env values are final — used on every start, and shown disabled in the app with a note. (`SOVRANT_ENV_KEYS_OVERRIDE` still accepted.) |
 | `OPENROUTER_API_KEY` | No | Live model metadata and pricing from OpenRouter — **(stored)** as `openrouter` |
 | `SOVRANT_PORT` | No | Server HTTP port (default: `5200`) — Server only |
 | `SOVRANT_WEB_PORT` | No | Web HTTP port (default: `5100`) — Web only |
@@ -1179,7 +1212,7 @@ Replace `-r linux-x64` with `-r win-x64` for Windows deployments.
 ## Tests
 
 ```bash
-dotnet test Sovrant.slnx   # 2,343 tests across 10 projects
+dotnet test Sovrant.slnx   # 2,627 tests across 12 projects
 ```
 
 Test projects (10): `Sovrant.Runtime.Tests` (998) · `Sovrant.Agents.Tests` (240) · `Sovrant.Tools.Tests` (404) · `Sovrant.Server.Tests` (161) · `Sovrant.Api.Tests` (215) · `Sovrant.Runtime.Documents.Tests` (87) · `Sovrant.Commands.Tests` (56) · `Sovrant.Mcp.Tests` (34) · `Sovrant.Lsp.Tests` (26) · `Sovrant.Integration.Tests` (1).
@@ -1192,7 +1225,7 @@ All tests use isolated in-memory SQLite databases. No external services or API k
 
 | Document | Contents |
 |---|---|
-| [`docs/server.md`](docs/server.md) | Full server API reference — all 146 endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
+| [`docs/server.md`](docs/server.md) | Full server API reference — all 138 HTTP endpoints + SignalR hub, Command Center, auth, CORS, streaming format, cost tracking, remote mode |
 | [`docs/frontend-integration.md`](docs/frontend-integration.md) | SDK reference, proxy setup, browser SSE, multi-tenant LLM keys, React hook, remote mode (dual-mode web frontend) |
 | [`docs/persistence.md`](docs/persistence.md) | SQLite schema reference — 48 migrations (V001–V048), domain stores, Supabase/PostgreSQL backend, security model, keystore integration |
 | [`docs/agent-systems.md`](docs/agent-systems.md) | Team vs Swarm deep dive — architecture, value analysis, unified orchestration, inter-agent coordination |

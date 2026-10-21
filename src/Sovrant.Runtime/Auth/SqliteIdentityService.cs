@@ -105,7 +105,7 @@ internal sealed partial class SqliteIdentityService : IIdentityService
         return updated is not null;
     }
 
-    public async Task<RegisterResult> RegisterAsync(string email, string password, CancellationToken ct = default)
+    public async Task<RegisterResult> RegisterAsync(string email, string password, bool issueToken = true, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email))
             return new RegisterResult(false, null, null, null, "Email is required.");
@@ -137,14 +137,10 @@ internal sealed partial class SqliteIdentityService : IIdentityService
         {
             await SetSettingAsync(RegistrationOpenKey, "0", ct).ConfigureAwait(false);
 
-            var issued = await _tokens.IssueAsync(
-                user.UserId,
-                name: "login",
-                expiresAt: DateTimeOffset.UtcNow.AddDays(30),
-                ct: ct).ConfigureAwait(false);
+            var issued = issueToken ? await IssueLoginTokenAsync(user.UserId, ct).ConfigureAwait(false) : null;
 
             LogRegistered(_logger, user.UserId, role);
-            return new RegisterResult(true, issued.Plaintext, user.UserId, role, null);
+            return new RegisterResult(true, issued, user.UserId, role, null);
         }
 
         // Subsequent registrations: check approval requirement.
@@ -157,17 +153,13 @@ internal sealed partial class SqliteIdentityService : IIdentityService
         }
 
         // Approval not required — activate immediately and issue token.
-        var directIssued = await _tokens.IssueAsync(
-            user.UserId,
-            name: "login",
-            expiresAt: DateTimeOffset.UtcNow.AddDays(30),
-            ct: ct).ConfigureAwait(false);
+        var directIssued = issueToken ? await IssueLoginTokenAsync(user.UserId, ct).ConfigureAwait(false) : null;
 
         LogRegistered(_logger, user.UserId, role);
-        return new RegisterResult(true, directIssued.Plaintext, user.UserId, role, null);
+        return new RegisterResult(true, directIssued, user.UserId, role, null);
     }
 
-    public async Task<LoginResult> LoginAsync(string email, string password, CancellationToken ct = default)
+    public async Task<LoginResult> LoginAsync(string email, string password, bool issueToken = true, CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
         {
@@ -199,15 +191,14 @@ internal sealed partial class SqliteIdentityService : IIdentityService
             return new LoginResult(false, null, null, null, "Invalid email or password.");
         }
 
-        var issued = await _tokens.IssueAsync(
-            user.UserId,
-            name: "login",
-            expiresAt: DateTimeOffset.UtcNow.AddDays(30),
-            ct: ct).ConfigureAwait(false);
+        var issued = issueToken ? await IssueLoginTokenAsync(user.UserId, ct).ConfigureAwait(false) : null;
 
         LogLoggedIn(_logger, user.UserId);
-        return new LoginResult(true, issued.Plaintext, user.UserId, user.Role, null);
+        return new LoginResult(true, issued, user.UserId, user.Role, null);
     }
+
+    private async Task<string> IssueLoginTokenAsync(string userId, CancellationToken ct) =>
+        (await _tokens.IssueAsync(userId, name: "login", expiresAt: DateTimeOffset.UtcNow.AddDays(30), ct: ct).ConfigureAwait(false)).Plaintext;
 
     public Task LogoutAsync(string tokenId, CancellationToken ct = default)
         => _tokens.RevokeAsync(tokenId, ct);

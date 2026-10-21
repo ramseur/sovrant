@@ -84,6 +84,8 @@ internal sealed class RuntimeSessionPool : IRuntimeSessionPool
         await runtime.InitializeSessionAsync(persistenceId, ownerUserId, ct).ConfigureAwait(false);
 
         var entry = new SessionEntry(runtime);
+        entry.Config.SessionId = persistenceId;
+        entry.Config.OwnerUserId = ownerUserId;
         if (agentName is not null)
             entry.Config.AgentName = agentName;
 

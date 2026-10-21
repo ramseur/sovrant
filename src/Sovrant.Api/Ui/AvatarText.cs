@@ -9,8 +9,8 @@ public static class AvatarText
     private static readonly char[] Separators = [' ', '.', '_', '-'];
 
     /// <summary>
-    /// Up to two uppercase initials from a display name or email: "Eric Ramseur" → "ER",
-    /// "eric.ramseur@x.com" → "ER", "ramseur" → "R". Empty input → "?".
+    /// Up to two uppercase initials from a display name or email: "Alex Morgan" → "AM",
+    /// "alex.morgan@example.com" → "AM", "morgan" → "M". Empty input → "?".
     /// </summary>
     public static string Initials(string? displayName)
     {

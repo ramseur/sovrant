@@ -13,7 +13,7 @@ namespace Sovrant.Runtime.Tests.Config;
 /// <summary>
 /// Phase 144 — provider keys from the environment: imported on first boot, kept when an admin has
 /// changed them (unless SOVRANT_ENV_KEYS_OVERRIDE=true), and a user with no provider gets a working,
-/// visible profile for LLM_API_KEY. Real SQLite stores; env values come from a dictionary.
+/// one shared admin profile for LLM_API_KEY (Phase 145 Part B). Real SQLite stores; env values come from a dictionary.
 /// </summary>
 public sealed class EnvCredentialSeederTests : IAsyncDisposable
 {
@@ -102,49 +102,56 @@ public sealed class EnvCredentialSeederTests : IAsyncDisposable
     }
 
     [Fact]
-    public async Task A_User_Without_A_Provider_Gets_A_Visible_Active_Profile()
+    public async Task The_First_Admin_Gets_One_Shared_Profile_That_Becomes_The_Default_Set()
     {
         var env = Env(("LLM_API_KEY", "sk-or-v1-abc"), ("SOVRANT_MODEL", "openai/gpt-4.1-mini"));
         await EnvCredentialSeeder.SeedAsync(_credentials, env);
-        await CreateUserAsync("alex@example.com"); // registration creates the user and their personal workspace
+        await CreateUserAsync("admin@example.com", "admin");
+        await CreateUserAsync("sam@example.com", "user");
 
-        await EnvCredentialSeeder.EnsureUserProviderAsync(Services(), "alex@example.com", env);
+        await EnvCredentialSeeder.EnsureSharedProfileAsync(Services(), env);
+        await EnvCredentialSeeder.EnsureSharedProfileAsync(Services(), env); // idempotent
 
-        var profile = Assert.Single(await _profiles.ListAsync("alex@example.com"));
-        Assert.Equal("OpenRouter", profile.ProviderKind);
-        Assert.Equal(EnvCredentialSeeder.EnvProfileCredentialId, profile.CredentialId);
-        Assert.Equal("openai/gpt-4.1-mini", profile.DefaultModel);
-        Assert.Equal(profile.ProfileId, await _prefs.GetAsync("alex@example.com", UserPreferenceKeys.ActiveProviderProfileId));
+        var shared = await _profiles.GetAsync(EnvCredentialSeeder.SharedProfileId);
+        Assert.NotNull(shared);
+        Assert.Equal("admin@example.com", shared!.UserId); // shows under Admin → Providers
+        Assert.Equal("OpenRouter", shared.ProviderKind);
+        Assert.Equal("openai/gpt-4.1-mini", shared.DefaultModel);
+        Assert.Equal(EnvCredentialSeeder.EnvProfileCredentialId, shared.CredentialId);
+        Assert.Empty(await _profiles.ListAsync("sam@example.com")); // no per-user profiles any more
 
-        // Enabled for the personal workspace, so it shows in the model menu (enablement is strict opt-in).
-        var personal = await _workspaces.GetPersonalAsync("alex@example.com");
-        Assert.NotNull(personal);
-        var visible = await _profiles.ListUserAndWorkspaceAsync("alex@example.com", personal!.WorkspaceId, _wsSettings);
-        Assert.Contains(visible, p => p.ProfileId == profile.ProfileId);
+        // Members use it in their personal workspace through the default set.
+        var samPersonal = WorkspaceIdentity.DefaultPersonalFor("sam@example.com");
+        var visible = await _profiles.ListUserAndWorkspaceAsync("sam@example.com", samPersonal, _wsSettings);
+        Assert.Contains(visible, p => p.ProfileId == EnvCredentialSeeder.SharedProfileId);
     }
 
     [Fact]
-    public async Task Users_With_Their_Own_Provider_Are_Left_Alone()
+    public async Task A_Default_Set_The_Admin_Chose_Is_Never_Overwritten()
     {
-        await _prefs.SetAsync("sam@example.com", UserPreferenceKeys.ActiveProviderProfileId, "their-own");
-        await EnvCredentialSeeder.EnsureUserProviderAsync(Services(), "sam@example.com", Env(("LLM_API_KEY", "sk-x")));
-        Assert.Empty(await _profiles.ListAsync("sam@example.com"));
+        await CreateUserAsync("admin@example.com", "admin");
+        await _wsSettings.SetAsync(WorkspaceSettingsKeys.GlobalWorkspaceId, WorkspaceSettingsKeys.PersonalDefaultProfileIds, "admins-choice");
 
-        await EnvCredentialSeeder.EnsureUserProviderAsync(Services(), "nokey@example.com", Env());
-        Assert.Empty(await _profiles.ListAsync("nokey@example.com"));
+        await EnvCredentialSeeder.EnsureSharedProfileAsync(Services(), Env(("LLM_API_KEY", "sk-x")));
+
+        Assert.Equal("admins-choice", await _wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds));
+        Assert.NotNull(await _profiles.GetAsync(EnvCredentialSeeder.SharedProfileId)); // still available to enable
     }
 
     [Fact]
-    public async Task Accounts_That_Never_Signed_Up_Are_Skipped()
+    public async Task Nothing_Happens_Without_A_Key_Or_Before_An_Admin_Exists()
     {
-        // Runtime start-up applies preferences for the OS account name, which has no user row.
-        await EnvCredentialSeeder.EnsureUserProviderAsync(Services(), "os-account", Env(("LLM_API_KEY", "sk-x")));
-        Assert.Empty(await _profiles.ListAsync("os-account"));
+        await EnvCredentialSeeder.EnsureSharedProfileAsync(Services(), Env(("LLM_API_KEY", "sk-x"))); // no admin yet
+        Assert.Null(await _profiles.GetAsync(EnvCredentialSeeder.SharedProfileId));
+
+        await CreateUserAsync("admin@example.com", "admin");
+        await EnvCredentialSeeder.EnsureSharedProfileAsync(Services(), Env()); // no key
+        Assert.Null(await _profiles.GetAsync(EnvCredentialSeeder.SharedProfileId));
     }
 
-    private async Task CreateUserAsync(string userId)
+    private async Task CreateUserAsync(string userId, string role)
     {
-        await new Sovrant.Runtime.Users.SqliteUserStore(_storage, NullLogger<Sovrant.Runtime.Users.SqliteUserStore>.Instance).CreateAsync(userId: userId);
+        await new Sovrant.Runtime.Users.SqliteUserStore(_storage, NullLogger<Sovrant.Runtime.Users.SqliteUserStore>.Instance).CreateAsync(userId: userId, role: role);
         await _workspaces.CreatePersonalWorkspaceAsync(userId);
     }
 
@@ -154,6 +161,7 @@ public sealed class EnvCredentialSeederTests : IAsyncDisposable
         .AddSingleton<IWorkspaceService>(_workspaces)
         .AddSingleton<IWorkspaceSettingsStore>(_wsSettings)
         .AddSingleton<ICredentialStore>(_credentials)
+        .AddSingleton<Sovrant.Runtime.Users.IUserService>(new Sovrant.Runtime.Users.SqliteUserStore(_storage, NullLogger<Sovrant.Runtime.Users.SqliteUserStore>.Instance))
         .BuildServiceProvider();
 
     private sealed class MemoryCredentials : ICredentialStore

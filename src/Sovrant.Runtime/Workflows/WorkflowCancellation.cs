@@ -21,6 +21,9 @@ public static class WorkflowCancellation
             workflow.WorkspaceId, workflow.ProjectId, ct).ConfigureAwait(false);
         await store.UpdateStateAsync(workflow.Id, WorkflowStatus.Cancelled, completedAt: DateTimeOffset.UtcNow, ct: ct)
             .ConfigureAwait(false);
+        // Stop its run too, if one is going here — otherwise it carried on, using the model, and
+        // wrote its own status (Running, Completed, Failed) over the cancel.
+        WorkflowRuns.Stop(workflow.Id);
         return true;
     }
 }

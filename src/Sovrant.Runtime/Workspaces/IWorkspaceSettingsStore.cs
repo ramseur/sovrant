@@ -78,6 +78,19 @@ public static class WorkspaceSettingsKeys
     /// <summary>JSON-encoded array of regex patterns identifying secrets in tool output.</summary>
     public const string GovernanceSecretPatterns = "governance.secret_patterns";
 
+    /// <summary>
+    /// Whether members (non-admins) may use file and shell tools on a shared Web server (bool).
+    /// Default false. Phase 145 stopgap; see <c>HostToolAccess</c>.
+    /// </summary>
+    public const string GovernanceMemberFileTools = "governance.member_file_tools";
+
+    /// <summary>
+    /// Whether file and shell tools may run on a hosted server (Web, Server) at all (bool). Default
+    /// false — they'd run on the server itself. Phase 145 Part D; members also need
+    /// <see cref="GovernanceMemberFileTools"/>.
+    /// </summary>
+    public const string GovernanceHostFileTools = "governance.host_file_tools";
+
     /// <summary>Master switch for the trust boundary pipeline (bool). Default false (opt-in).</summary>
     public const string TrustBoundaryEnabled = "trustboundary.enabled";
 
@@ -130,10 +143,35 @@ public static class WorkspaceSettingsKeys
     public const string EnabledProviderProfileIds = "provider.enabled_profile_ids";
 
     /// <summary>
+    /// Phase 145 Part B (global row): the admin's default model set — comma-separated provider
+    /// profile IDs every personal workspace allows. Absent (never configured) = each personal
+    /// workspace keeps its own <see cref="EnabledProviderProfileIds"/> list, as before.
+    /// </summary>
+    public const string PersonalDefaultProfileIds = "provider.personal_default_profile_ids";
+
+    /// <summary>Phase 145 A7 — Web sign-in rules (global; admins set them under Users → Registration &amp; sign-in).</summary>
+    public const string WebSignInRememberAllowed = "web_signin.remember_allowed";
+    public const string WebSignInRememberDays = "web_signin.remember_days";
+    public const string WebSignInIdleMinutes = "web_signin.idle_minutes";
+    public const string WebSignInMaxHours = "web_signin.max_hours";
+
+    /// <summary>Phase 145 A8.1 — the longest any run may take, in minutes (global; default 120).</summary>
+    public const string RunMaxMinutes = "runs.max_minutes";
+
+    /// <summary>Phase 145 Part B (global row): the default profile for personal workspaces (its default model is used).</summary>
+    public const string PersonalDefaultProfileId = "provider.personal_default_profile_id";
+
+    /// <summary>
     /// Comma-separated list of MCP server IDs (McpServerEntry.Id) enabled for this workspace.
     /// When empty or absent, no MCP servers are available to workspace members — admin must explicitly opt in.
     /// </summary>
     public const string EnabledMcpServerIds = "mcp.enabled_server_ids";
+
+    /// <summary>
+    /// Phase 148 — MCP servers every personal workspace gets (global, comma-separated ids). Additive:
+    /// a personal workspace has these plus its own <see cref="EnabledMcpServerIds"/>.
+    /// </summary>
+    public const string PersonalDefaultMcpServerIds = "mcp.personal_default_server_ids";
 
     // ── General / LLM behaviour ──────────────────────────────────────────────
 

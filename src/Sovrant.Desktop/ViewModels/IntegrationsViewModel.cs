@@ -13,6 +13,7 @@ namespace Sovrant.Desktop.ViewModels;
 
 public partial class IntegrationsViewModel : ViewModelBase
 {
+    private const string PersonalDefaultSetId = "__personal_default_set__";
     private readonly IMcpServerStore _serverStore;
     private readonly McpClientRegistry _clientRegistry;
     private readonly McpToolRegistrar _registrar;
@@ -235,10 +236,13 @@ public partial class IntegrationsViewModel : ViewModelBase
             _workspaceId = ws?.WorkspaceId;
         }
 
+        // Phase 148: team workspaces plus one choice for every personal workspace (the default set),
+        // not one per person. Nothing ticked by default.
         var allWs = await _workspaceSvc.ListAllAsync().ConfigureAwait(true);
         AddWorkspaceToggles.Clear();
-        foreach (var ws in allWs.OrderBy(w => w.Name, StringComparer.Ordinal))
+        foreach (var ws in allWs.Where(w => w.Type != WorkspaceType.Personal).OrderBy(w => w.Name, StringComparer.Ordinal))
             AddWorkspaceToggles.Add(new WorkspaceToggleItem { WorkspaceId = ws.WorkspaceId, Name = ws.Name });
+        AddWorkspaceToggles.Add(new WorkspaceToggleItem { WorkspaceId = PersonalDefaultSetId, Name = "Personal workspaces (default set)" });
 
         await LoadServersAsync().ConfigureAwait(true);
     }
@@ -584,6 +588,15 @@ public partial class IntegrationsViewModel : ViewModelBase
             if (entry is null) continue;
             foreach (var wsId in selected)
             {
+                if (wsId == PersonalDefaultSetId)
+                {
+                    var setRaw = await _wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultMcpServerIds).ConfigureAwait(true);
+                    var set = new HashSet<string>(
+                        (setRaw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                        StringComparer.Ordinal) { entry.Id };
+                    await _wsSettings.SetAsync(WorkspaceSettingsKeys.GlobalWorkspaceId, WorkspaceSettingsKeys.PersonalDefaultMcpServerIds, string.Join(',', set)).ConfigureAwait(true);
+                    continue;
+                }
                 var raw = await _wsSettings.GetAsync(wsId, WorkspaceSettingsKeys.EnabledMcpServerIds).ConfigureAwait(true);
                 var ids = new HashSet<string>(
                     (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),

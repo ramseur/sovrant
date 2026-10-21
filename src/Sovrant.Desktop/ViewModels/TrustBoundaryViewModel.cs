@@ -9,6 +9,18 @@ namespace Sovrant.Desktop.ViewModels;
 
 public partial class TrustBoundaryViewModel : ViewModelBase
 {
+    // Phase 148: controls the server's environment sets while SOVRANT_ENV_OVERRIDE is on.
+    public Sovrant.Runtime.Config.EnvLock EnabledLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.TrustBoundaryEnabled);
+    public Sovrant.Runtime.Config.EnvLock SanitizerEnabledLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerEnabled);
+    public Sovrant.Runtime.Config.EnvLock SanitizerModeLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerMode);
+    public Sovrant.Runtime.Config.EnvLock LogRedactionsLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerLogRedactions);
+    public Sovrant.Runtime.Config.EnvLock DomainsLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerCorporateDomains);
+    public Sovrant.Runtime.Config.EnvLock AllowLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerAllowList);
+    public Sovrant.Runtime.Config.EnvLock ExemptLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.SanitizerExemptProviders);
+    public Sovrant.Runtime.Config.EnvLock IntentEnabledLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentVerificationEnabled);
+    public Sovrant.Runtime.Config.EnvLock ClarifyLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentClarifyAmbiguous);
+    public Sovrant.Runtime.Config.EnvLock BlockHarmfulLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.IntentBlockHarmful);
+
     [ObservableProperty]
     private bool _enabled;
 

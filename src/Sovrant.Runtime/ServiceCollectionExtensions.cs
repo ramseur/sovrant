@@ -190,7 +190,8 @@ public static class ServiceCollectionExtensions
             sp.GetService<Permissions.IPerTurnApprovalCache>(),
             sp.GetService<Mcp.IMcpTrustGate>(),
             sp.GetService<Mcp.McpClientRegistry>(),
-            sp.GetService<Governance.IAuditStore>()));
+            sp.GetService<Governance.IAuditStore>(),
+            sp.GetService<Tools.IHostToolPolicy>()));
 
         // Session store — SQLite primary, optional JSONL dual-write.
         services.AddSingleton<ISessionStore>(sp =>
@@ -225,8 +226,9 @@ public static class ServiceCollectionExtensions
 
         // Workspace settings store — budgets, session caps, and other
         // runtime-mutable knobs that previously lived in env vars only.
-        services.AddSingleton<IWorkspaceSettingsStore>(sp =>
-            new SqliteWorkspaceSettingsStore(sp.GetRequiredService<ISqliteConnectionFactory>()));
+        // Phase 148: with SOVRANT_ENV_OVERRIDE on, settings set by the environment can't be changed here.
+        services.AddSingleton<IWorkspaceSettingsStore>(sp => new Config.EnvLockedSettingsStore(
+            new SqliteWorkspaceSettingsStore(sp.GetRequiredService<ISqliteConnectionFactory>())));
 
         // Phase 88-A — per-user preference store. Replaces the user-facing
         // fields previously written to ~/.sovrant/settings.json. API keys
@@ -277,6 +279,10 @@ public static class ServiceCollectionExtensions
             new Sovrant.Runtime.Auth.SqliteTokenService(
                 sp.GetRequiredService<ISqliteConnectionFactory>(),
                 sp.GetRequiredService<ILogger<Sovrant.Runtime.Auth.SqliteTokenService>>()));
+
+        // Phase 145 — per-browser Web sign-ins (V049).
+        services.AddSingleton<Sovrant.Runtime.Auth.IWebSignInService>(sp =>
+            new Sovrant.Runtime.Auth.SqliteWebSignInService(sp.GetRequiredService<ISqliteConnectionFactory>()));
 
         // Phase 85 — password hasher + identity service
         services.AddSingleton<Sovrant.Runtime.Auth.IPasswordHasher,
@@ -365,7 +371,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IWorkflowPlanner, LlmWorkflowPlanner>();
         services.AddSingleton<IAcceptanceGate, AllStepsSucceededGate>();
         services.AddSingleton<WorkflowSessionNotifier>();
-        services.AddSingleton<IWorkflowExecutor, LlmWorkflowExecutor>();
+        services.AddSingleton<LlmWorkflowExecutor>();
+        // Phase 145 A8.1: every workflow run is held to the admin's run time limit.
+        services.AddSingleton<IWorkflowExecutor>(sp => new TimeLimitedWorkflowExecutor(
+            sp.GetRequiredService<LlmWorkflowExecutor>(), sp.GetRequiredService<IWorkflowStore>(),
+            sp.GetService<IWorkspaceSettingsStore>(), sp.GetService<WorkflowSessionNotifier>(),
+            prefs: sp.GetService<Preferences.IUserPreferenceStore>(), profiles: sp.GetService<Providers.IProviderProfileStore>()));
         services.AddSingleton<WorkflowExportService>();
         services.AddSingleton<WorkflowPlanningService>();
 
@@ -506,6 +517,9 @@ public static class ServiceCollectionExtensions
             services.GetRequiredService<Mcp.ICredentialStore>(), Environment.GetEnvironmentVariable,
             services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Runtime.EnvCredentialSeeder"), ct).ConfigureAwait(false);
         Config.EnvCredentialSeeder.ApplyDefaults(services.GetRequiredService<SovrantConfig>(), Environment.GetEnvironmentVariable);
+        // Phase 148: the same rule for settings — env values seed the database once (override off).
+        if (services.GetService<IWorkspaceSettingsStore>() is { } settingsStore)
+            await Config.EnvBackedSettings.SeedAsync(settingsStore, Environment.GetEnvironmentVariable, ct).ConfigureAwait(false);
 
         // Phase 88-C — apply persisted user preferences and the active
         // provider's credential to the runtime SovrantConfig. The migrator
@@ -615,12 +629,12 @@ public static class ServiceCollectionExtensions
 #pragma warning disable CA1031, CA1848 // best-effort, like the preference load around it
         try
         {
-            await Config.EnvCredentialSeeder.EnsureUserProviderAsync(services, userId, Environment.GetEnvironmentVariable, ct).ConfigureAwait(false);
+            await Config.EnvCredentialSeeder.EnsureSharedProfileAsync(services, Environment.GetEnvironmentVariable, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             services.GetService<ILoggerFactory>()?.CreateLogger("Sovrant.Runtime.EnvCredentialSeeder")
-                .LogWarning(ex, "Could not create a provider from LLM_API_KEY for {UserId}", userId);
+                .LogWarning(ex, "Could not create the shared provider from LLM_API_KEY");
         }
 #pragma warning restore CA1031, CA1848
 

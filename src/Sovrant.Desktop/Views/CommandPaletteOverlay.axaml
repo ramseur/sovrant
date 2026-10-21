@@ -25,7 +25,7 @@
                 <!-- Search input -->
                 <TextBox DockPanel.Dock="Top"
                          Text="{Binding SearchText}"
-                         Watermark="Type a command..."
+                         PlaceholderText="Type a command..."
                          Padding="14,12"
                          FontSize="15"
                          BorderThickness="0,0,0,1"

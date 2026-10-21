@@ -83,7 +83,7 @@
     <!-- Privacy toggle + token count — sits between messages and input, matching Desktop layout -->
     <div class="chat-bottom-bar">
         <button class="privacy-toggle @(_isPrivate ? "private" : "public")"
-                title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to admins")"
+                title="@(_isPrivate ? "Private — only you can see this session" : "Public — visible to your workspace and admins")"
                 @onclick="TogglePrivacyAsync">
             <span class="privacy-icon">
                 @if (_isPrivate)
@@ -162,6 +162,9 @@
 </div>
 
 @code {
+    /// <summary>The user signed in on this browser tab (Phase 145).</summary>
+    private string Me => Session.UserId ?? string.Empty;
+
     [Inject] private IRuntimeSessionPool SessionPool { get; set; } = default!;
     [Inject] private ISessionStore SessionStore { get; set; } = default!;
     [Inject] private SlashCommandDispatcher CommandDispatcher { get; set; } = default!;
@@ -172,6 +175,9 @@
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private Sovrant.Web.Services.WebSessionService Session { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Preferences.IUserPreferenceStore Prefs { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Providers.IProviderProfileStore ProfileStore { get; set; } = default!;
+    [Inject] private Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore WsSettings { get; set; } = default!;
     [Inject] private Sovrant.Agents.Templates.AgentTemplateRegistry AgentRegistry { get; set; } = default!;
     [Inject] private ChatSeedService ChatSeed { get; set; } = default!;
     [Inject] private Sovrant.Runtime.Governance.IAuditStore AuditStore { get; set; } = default!;
@@ -199,6 +205,8 @@
     private int _nextTurnIndex;
     private string _pageError = string.Empty;
     private string _sessionId = $"session-{Guid.NewGuid():N}";
+    private IDisposable? _approvals;
+    private (string Session, Sovrant.Runtime.Permissions.PermissionMode Mode)? _modeApplied;
     private string? _agentName;
     private string? _agentSystemPrompt;
     // Phase 99 — defaults to private until a stored value (or user toggle)
@@ -262,7 +270,9 @@
 
     protected override void OnInitialized()
     {
-        ConfirmationHandler.ConfirmationRequested += OnConfirmationRequested;
+        // Phase 145: only this tab's user's approvals, preferring the conversation shown here.
+        if (!string.IsNullOrEmpty(Me))
+            _approvals = ConfirmationHandler.Subscribe(Me, () => _sessionId, OnConfirmationRequested);
         ActiveContext.OnChanged += OnContextChanged;
         ActiveContext.OnSessionResume += OnSessionResume;
         ActiveContext.OnNewSession += OnNewSession;
@@ -320,12 +330,16 @@
             _sessionCost = 0;
             ActiveContext.PendingResumeSessionId = null;
 
-            // If this session has a running background turn, replay buffered events
-            // and re-subscribe live instead of loading from DB.
-            if (ActiveSessions.HasSession(sessionId))
+            // If this session's reply is still running, replay its buffered events and re-subscribe
+            // live. A reply that already finished is saved, so it just loads — replaying it too showed
+            // it twice (it stays in the Active list, ticked, until dismissed).
+            if (ActiveSessions.IsRunning(sessionId))
             {
                 await LoadSessionAsync(sessionId);
-                var lastAssistant = _messages.FindLast(m => m.Role == "assistant");
+                // The running reply isn't saved yet, so the saved history ends with your message:
+                // give the reply its own bubble. (FindLast picked the previous answer, so the rest of
+                // the running reply was glued onto it.)
+                var lastAssistant = _messages.LastOrDefault() is { Role: "assistant" } tail ? tail : null;
                 if (lastAssistant is null)
                 {
                     lastAssistant = new ChatMessageModel { Role = "assistant", ModelName = Config.Model };
@@ -333,17 +347,30 @@
                 }
                 var (buffered, isRunning) = ActiveSessions.Attach(sessionId, evt =>
                     InvokeAsync(() => { HandleEvent((RuntimeEvent)evt, lastAssistant); StateHasChanged(); return Task.CompletedTask; }));
+                if (!isRunning)
+                {
+                    // It finished just now, between the check and attaching: load the saved conversation.
+                    ActiveSessions.Detach(sessionId);
+                    _messages.Clear();
+                    await LoadSessionAsync(sessionId);
+                    ShowWaitingApprovals();
+                    StateHasChanged();
+                    return;
+                }
                 foreach (var evt in buffered)
                     HandleEvent((RuntimeEvent)evt, lastAssistant);
                 _streamingMsg = isRunning ? lastAssistant : null;
                 _isSending = isRunning;
                 _isBackgroundSession = isRunning;
+                ShowWaitingApprovals();
                 StateHasChanged();
                 await ScrollToBottom();
                 return;
             }
 
             await LoadSessionAsync(sessionId);
+            ShowWaitingApprovals();
+            StateHasChanged();
         });
     }
 
@@ -352,9 +379,16 @@
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task;
-            var entries = await SessionStore.LoadAsync(sessionId, ownerUserId: Sovrant.Web.Program.SovrantUserId);
+            var entries = await SessionStore.LoadAsync(sessionId, ownerUserId: Me);
+            var compactedPending = false;
             foreach (var entry in entries)
             {
+                // Phase 148: note the reply during which older messages were summarised.
+                if (entry.Role == Sovrant.Runtime.Conversation.ConversationCompaction.EntryRole)
+                {
+                    compactedPending = true;
+                    continue;
+                }
                 if (entry.Role is "user" or "assistant")
                 {
                     _messages.Add(new ChatMessageModel
@@ -365,9 +399,13 @@
                         UserDisplayName = entry.Role == "user" ? _userDisplayName : null,
                         ModelName = entry.Role == "assistant" ? entry.Model : null,
                         ProviderName = entry.Role == "assistant" ? entry.Provider : null,
+                        HistoryCompacted = compactedPending && entry.Role == "assistant",
                     });
+                    if (entry.Role == "assistant") compactedPending = false;
                 }
             }
+            if (compactedPending && _messages.LastOrDefault(m => !m.IsUser) is { } lastReply)
+                lastReply.HistoryCompacted = true;
             var storedPrivacy = await SessionStore.GetIsPrivateAsync(sessionId);
             _isPrivate = storedPrivacy ?? true;
             var storedAgent = await SessionStore.GetAgentNameAsync(sessionId);
@@ -388,8 +426,8 @@
         StateHasChanged();
         try
         {
-            await SessionStore.UpdatePrivacyAsync(_sessionId, Sovrant.Web.Program.SovrantUserId, newValue);
-            await AuditStore.LogPrivacyChangeAsync(Sovrant.Web.Program.SovrantUserId, "session", _sessionId, newValue);
+            await SessionStore.UpdatePrivacyAsync(_sessionId, Me, newValue);
+            await AuditStore.LogPrivacyChangeAsync(Me, "session", _sessionId, newValue);
         }
         catch (Exception ex)
         {
@@ -416,6 +454,27 @@
     {
         InvokeAsync(() =>
         {
+            // Phase 145 A8.2: a request from another conversation stays waiting — the banner at the top
+            // links to it, and its card appears when that conversation is opened.
+            if (request.SessionId is not null && _sessionId is not null && request.SessionId != _sessionId)
+                return;
+            ShowApprovalCard(request);
+            StateHasChanged();
+        });
+    }
+
+    /// <summary>Cards for approvals that waited for this conversation while you were away (A8.2).</summary>
+    private void ShowWaitingApprovals()
+    {
+        foreach (var r in ConfirmationHandler.PendingFor(Me).Where(r => r.SessionId == _sessionId))
+            ShowApprovalCard(r);
+    }
+
+    private void ShowApprovalCard(ConfirmationRequest request)
+    {
+        if (request.IsAnswered || _messages.Any(m => m.ToolUses.Any(t => ReferenceEquals(t.PendingRequest, request))))
+            return;
+        {
             var lastAssistant = _messages.FindLast(m => m.Role == "assistant");
             lastAssistant?.ToolUses.Add(new ToolUseModel
             {
@@ -425,8 +484,7 @@
                 PendingRequest = request,
                 Result = request.Input.ToString(),
             });
-            StateHasChanged();
-        });
+        }
     }
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
@@ -544,6 +602,12 @@
     {
         var text = _inputText.Trim();
         if (string.IsNullOrEmpty(text) || _isSending) return;
+        // Phase 145: a tab whose sign-in has ended can't start work as that user.
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo(Session.EndedReason is { } why ? $"/login?reason={why}" : "/login", forceLoad: true);
+            return;
+        }
 
         _inputText = string.Empty;
         await ResetTextareaHeight();
@@ -564,6 +628,8 @@
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task;
+            // Run as the signed-in person, so admin-only commands are refused for members.
+            using var _asUser = string.IsNullOrEmpty(Me) ? null : Sovrant.Runtime.Auth.AmbientPrincipal.Push(Me, Session.Role);
             var result = await CommandDispatcher.TryDispatchAsync(text, Session.UserId);
 
             if (result is null)
@@ -636,9 +702,9 @@
         if (isFirstMessage)
         {
             title = text.Length > 60 ? text[..60] + "..." : text;
-            await SessionStore.SetTitleAsync(_sessionId, title, ownerUserId: Sovrant.Web.Program.SovrantUserId);
+            await SessionStore.SetTitleAsync(_sessionId, title, ownerUserId: Me);
             if (_agentName is not null)
-                await SessionStore.SetAgentNameAsync(_sessionId, _agentName, ownerUserId: Sovrant.Web.Program.SovrantUserId);
+                await SessionStore.SetAgentNameAsync(_sessionId, _agentName, ownerUserId: Me);
             ActiveContext.NotifyDataChanged();
         }
 
@@ -654,23 +720,48 @@
 
     private async Task RunTurnCoreAsync(string text, ChatMessageModel assistantMsg, string sessionId, CancellationToken ct)
     {
-        SessionPool.BeginTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
+        // Phase 145: the turn runs as this tab's user, so tool policies and background work see who it is.
+        using var _asUser = string.IsNullOrEmpty(Me) ? null : Sovrant.Runtime.Auth.AmbientPrincipal.Push(Me, Session.Role);
+        SessionPool.BeginTurn(sessionId, Me);
         try
         {
             await Sovrant.Web.Program.RuntimeReady.Task.WaitAsync(ct);
-            var pooled = await SessionPool.GetOrCreateAsync(sessionId,
+            // The owner keys the pooled runtime (and matches BeginTurn/EndTurn), so two users never share one.
+            var pooled = await SessionPool.GetOrCreateAsync(sessionId, ownerUserId: Me,
                 agentSystemPrompt: _agentSystemPrompt, agentName: _agentName, ct: ct);
+
+            // Phase 145 Part B: this member's model pick (from the admin-configured models allowed on
+            // the current workspace) applies to this conversation only — routed by SessionProviderRouter.
+            if (!Sovrant.Web.Program.IsRemoteMode && !string.IsNullOrEmpty(Me))
+            {
+                var pick = await Sovrant.Runtime.Providers.ModelSelection.ResolveAsync(
+                    Me, ActiveContext.WorkspaceId, Prefs, ProfileStore, WsSettings, ct);
+                pooled.Config.ProviderProfileId = pick?.ProfileId;
+                pooled.Config.Model = pick?.Model;
+            }
+
+            // Phase 145: this user's permission mode applies to this conversation only. Applied when the
+            // conversation starts or the saved preference changes, so EnterPlanMode/ExitPlanMode (which
+            // change just this conversation) aren't undone on the next message.
+            if (!string.IsNullOrEmpty(Me)
+                && Enum.TryParse<Sovrant.Runtime.Permissions.PermissionMode>(
+                       await Prefs.GetAsync(Me, Sovrant.Runtime.Preferences.UserPreferenceKeys.PermissionMode, ct), out var myMode)
+                && (pooled.Config.PermissionMode is null || _modeApplied != (sessionId, myMode)))
+            {
+                pooled.Config.PermissionMode = myMode;
+                _modeApplied = (sessionId, myMode);
+            }
 
             // Sync privacy — the session row may have just been created with the
             // default (is_private = true). If the user already toggled before
             // sending (pre-message toggle), persist that choice now.
             if (!_isPrivate)
-                await SessionStore.UpdatePrivacyAsync(sessionId, Sovrant.Web.Program.SovrantUserId, false, ct);
+                await SessionStore.UpdatePrivacyAsync(sessionId, Me, false, ct);
 
             // Apply the session-level MCP selection from the context bar (opt-in).
             var activeMcps = ActiveContext.ActiveMcpServers;
             pooled.Config.AllowedMcpServers = activeMcps.Count > 0 ? activeMcps : null;
-            await SessionStore.SetMcpConnectionsAsync(sessionId, pooled.Config.AllowedMcpServers, ownerUserId: Sovrant.Web.Program.SovrantUserId);
+            await SessionStore.SetMcpConnectionsAsync(sessionId, pooled.Config.AllowedMcpServers, ownerUserId: Me);
 
             using var _scope = SessionContext.Push(pooled.Config);
             await foreach (var ev in pooled.Runtime.RunTurnAsync(text, ct))
@@ -690,7 +781,7 @@
         }
         finally
         {
-            SessionPool.EndTurn(sessionId, Sovrant.Web.Program.SovrantUserId);
+            SessionPool.EndTurn(sessionId, Me);
 
             // Phase 116 H — load attributions for this turn off the UI thread.
             List<Sovrant.Runtime.Knowledge.KnowledgeAttribution>? sources = null;
@@ -789,6 +880,10 @@
             case RuntimeEvent.IntentNarrated { Narration: var narration }:
                 msg.IntentNarration = narration;
                 msg.ThinkingText = narration;
+                break;
+
+            case RuntimeEvent.HistoryCompacted:
+                msg.HistoryCompacted = true;
                 break;
 
             case RuntimeEvent.ClarificationNeeded { Question: var question }:
@@ -909,7 +1004,7 @@
 
     public void Dispose()
     {
-        ConfirmationHandler.ConfirmationRequested -= OnConfirmationRequested;
+        _approvals?.Dispose();
         ActiveContext.OnChanged -= OnContextChanged;
         ActiveContext.OnSessionResume -= OnSessionResume;
         ActiveContext.OnNewSession -= OnNewSession;

@@ -100,8 +100,8 @@ public sealed partial class ActiveSessionsViewModel : ObservableObject, IDisposa
         lock (_lock)
         {
             if (!_sessions.TryGetValue(sessionId, out var entry)) return;
-            if (entry.Buffer.Count < 500)
-                entry.Buffer.Add(evt);
+            // Merges text chunks so a long reply replays in full (it used to stop at 500 events).
+            Sovrant.Runtime.Conversation.RuntimeEventBuffer.Add(entry.Buffer, evt);
             handler = entry.LiveHandler;
         }
         handler?.Invoke(evt);

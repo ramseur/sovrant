@@ -6,10 +6,12 @@ namespace Sovrant.Commands;
 public sealed class SlashCommandDispatcher
 {
     private readonly IReadOnlyDictionary<string, ISlashCommand> _byName;
+    private readonly ISlashCommandPolicy? _policy;
 
-    public SlashCommandDispatcher(IEnumerable<ISlashCommand> commands)
+    public SlashCommandDispatcher(IEnumerable<ISlashCommand> commands, ISlashCommandPolicy? policy = null)
     {
         ArgumentNullException.ThrowIfNull(commands);
+        _policy = policy;
         var dict = new Dictionary<string, ISlashCommand>(StringComparer.OrdinalIgnoreCase);
         foreach (var cmd in commands)
         {
@@ -61,6 +63,9 @@ public sealed class SlashCommandDispatcher
 
             return new SlashCommandResult($"Unknown command: /{name}. Type /help for a list of commands.");
         }
+
+        if (_policy?.GetBlockReason(cmd.Name) is { } blocked)
+            return new SlashCommandResult(blocked);
 
         return await cmd.ExecuteAsync(args, ownerUserId, ct).ConfigureAwait(false);
     }

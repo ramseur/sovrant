@@ -24,6 +24,7 @@ namespace Sovrant.Runtime.Conversation;
 public sealed partial class ConversationRuntime : IConversationRuntime
 {
     private const int MaxToolRounds = 20;
+    private readonly IWorkspaceSettingsStore? _settings;
     private const int MaxRepeatedToolCalls = 3;
 
     private readonly ISmartRouter _router;
@@ -31,6 +32,13 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly IToolRegistry _toolRegistry;
     private readonly ISessionStore _sessionStore;
     private readonly SovrantConfig _config;
+
+    /// <summary>
+    /// The model for this turn: the conversation's own choice (<see cref="SessionContext"/>, set per
+    /// session by the host — Phase 145: each member's pick on a shared Web server; Server's per-session
+    /// model) or else the install default. Never read the global <c>_config.Model</c> directly.
+    /// </summary>
+    private string Model => SessionContext.Current?.Model is { Length: > 0 } m ? m : _config.Model;
     private readonly ILogger<ConversationRuntime> _logger;
     private readonly IHookRunner _hookRunner;
     private readonly MemoryInjector? _memoryInjector;
@@ -46,6 +54,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     private readonly Prompt.IKnowledgeRouter? _knowledgeRouter;
     private readonly Knowledge.IKnowledgeAttributionStore? _attributionStore;
     private readonly List<InputMessage> _history = [];
+
+    // Phase 148: items kept word for word across compactions (restored from the saved summary).
+    private CompactionPins _compactionPins = CompactionPins.None;
     private string _systemPrompt;
     /// <summary>Once true, all subsequent turns expose tools (session used tools at least once).</summary>
     private bool _sessionHasUsedTools;
@@ -150,6 +161,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // to a static snapshot resolved once from env > store > settings.json.
         _compaction = compaction ?? LiveSettings.Static(
             CompactionSettings.Resolve(settings, fallback: _config.CompactThreshold));
+        _settings = settings;
         _approvalCache = approvalCache;
         _mcpClients = mcpClients;
         _artifactStore = artifactStore;
@@ -181,13 +193,27 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             switch (entry.Role)
             {
                 case "user" when !string.IsNullOrEmpty(entry.Content):
+                    // A user message followed by another one never got a reply (its turn failed):
+                    // only answered messages go to the model.
+                    DropUnansweredTail();
                     _history.Add(InputMessage.UserText(entry.Content));
                     break;
                 case "assistant" when !string.IsNullOrEmpty(entry.Content):
                     _history.Add(InputMessage.AssistantText(entry.Content));
                     break;
+                case ConversationCompaction.EntryRole when ConversationCompaction.Parse(entry.Content) is { } compaction:
+                    // Phase 148: send the saved summary plus the messages it kept, not the full history.
+                    var kept = _history.GetRange(Math.Max(0, _history.Count - compaction.Kept), Math.Min(compaction.Kept, _history.Count));
+                    var rebuilt = ConversationCompaction.Rebuild(compaction.Summary, kept);
+                    _history.Clear();
+                    _history.AddRange(rebuilt);
+                    _compactionPins = compaction.Pins ?? CompactionPins.None;
+                    break;
             }
         }
+
+        // The last message may be unanswered too (the previous turn failed).
+        DropUnansweredTail();
 
         // Inject multi-layered memory (session summaries, learned patterns, instincts)
         // plus user-saved workspace_memory entries scoped to the active workspace/project (Phase 81).
@@ -226,16 +252,19 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var turnSw = Stopwatch.StartNew();
-        LogTurnStart(_logger, SessionId, _config.Model);
+        LogTurnStart(_logger, SessionId, Model);
 
         // Ambient logging scope — session_id and model appear on every log line within this turn.
         using var sessionScope = _logger.BeginScope(
-            new Dictionary<string, object?> { ["session_id"] = SessionId, ["model"] = _config.Model });
+            new Dictionary<string, object?> { ["session_id"] = SessionId, ["model"] = Model });
 
         // Phase 87 Track E — fresh "always allow this turn" approval set for
         // each turn. Disposed when the turn ends (including early returns).
         using var approvalScope = _approvalCache?.BeginTurn();
 
+        // A previous turn in this conversation that failed leaves its request at the end; drop it so
+        // this message isn't read as a reminder to finish it.
+        DropUnansweredTail();
         _history.Add(InputMessage.UserText(userMessage));
         await AppendSessionEntryAsync("user", userMessage, ct).ConfigureAwait(false);
 
@@ -254,7 +283,12 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             Environment.GetEnvironmentVariable("SOVRANT_TURN_TIMEOUT_SECONDS"), out var tts) && tts > 0 ? tts : 300;
         var originalCt = ct;
         using var turnCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        turnCts.CancelAfter(TimeSpan.FromSeconds(turnTimeoutSeconds));
+        // Phase 145 A8.1: the per-reply timeout plus the admin's run time limit. Waiting for an approval
+        // pauses the per-reply timeout (the person may be away) but still counts toward the run limit.
+        using var deadline = RunDeadline.Begin(turnCts, TimeSpan.FromSeconds(turnTimeoutSeconds), RunLimits.Load(_settings));
+        // A8.3: a security sign-out of the owner stops this reply.
+        using var running = Auth.RunningWork.Track(
+            SessionContext.Current?.OwnerUserId ?? _ownerUserId ?? Auth.AmbientPrincipal.Current?.UserId, turnCts);
         ct = turnCts.Token;
 
         var round = 0;
@@ -365,6 +399,11 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             // Routed items are injected as an extra text block prepended to the
             // current user message. _history is NOT mutated; the addendum only
             // travels to the LLM for this turn and is never stored in session_entries.
+            // Phase 148: compact before sending when the request is already past the threshold
+            // (a long tool result can put it there between replies).
+            if (await MaybeCompactHistoryAsync(ConversationCompaction.EstimateTokens(_history, _systemPrompt), ct).ConfigureAwait(false) is { } preSend)
+                yield return preSend;
+
             IReadOnlyList<InputMessage> messagesForRequest = _history;
             if (round == 0 && _knowledgeRouter is not null)
             {
@@ -399,8 +438,8 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             }
 
             var request = new MessagesRequest(
-                _config.Model,
-                CapMaxTokens(_config.Model, _config.MaxTokens),
+                Model,
+                CapMaxTokens(Model, _config.MaxTokens),
                 messagesForRequest)
             {
                 System = _systemPrompt,
@@ -452,10 +491,10 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             LogProviderSelected(_logger, resolvedProvider.Name);
 
             // Emit model/provider info immediately so UIs can show it before text streams.
-            // Use _config.Model (the user's selected model) rather than request.Model
+            // Use Model (the user's selected model) rather than request.Model
             // which may have been overridden by intent routing to a different tier.
             if (round == 0)
-                yield return new RuntimeEvent.ModelSelected(_config.Model, FriendlyProviderName(resolvedProvider));
+                yield return new RuntimeEvent.ModelSelected(Model, FriendlyProviderName(resolvedProvider));
 
             var llmSw = Stopwatch.StartNew();
 
@@ -492,7 +531,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             if (!string.IsNullOrEmpty(assistantText))
             {
                 await AppendSessionEntryAsync("assistant", assistantText,
-                    ct, model: _config.Model,
+                    ct, model: Model,
                     provider: FriendlyProviderName(resolvedProvider),
                     inputTokens: accumulated.InputTokens,
                     outputTokens: accumulated.OutputTokens)
@@ -522,8 +561,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 : [new InputContentBlock.TextBlock(string.Empty)]));
 
             // Compact history if approaching token limit
-            if (accumulated.InputTokens > 0)
-                await MaybeCompactHistoryAsync(accumulated.InputTokens, ct).ConfigureAwait(false);
+            if (accumulated.InputTokens > 0
+                && await MaybeCompactHistoryAsync(accumulated.InputTokens, ct).ConfigureAwait(false) is { } compacted)
+                yield return compacted;
 
             // Process tool use blocks
             var toolUseBlocks = accumulated.Blocks.OfType<OutputContentBlock.ToolUseBlock>().ToList();
@@ -556,7 +596,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     LogTurnComplete(_logger, turnSw.ElapsedMilliseconds, accumulated.InputTokens, accumulated.OutputTokens);
                     yield return new RuntimeEvent.TurnComplete(
                         "end_turn", accumulated.InputTokens, accumulated.OutputTokens,
-                        Model: _config.Model, ProviderName: FriendlyProviderName(resolvedProvider));
+                        Model: Model, ProviderName: FriendlyProviderName(resolvedProvider));
                     var costEvt1 = RecordCostIfEnabled(accumulated.InputTokens, accumulated.OutputTokens);
                     if (costEvt1 is not null) yield return costEvt1;
                     yield break;
@@ -575,7 +615,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                     accumulated.StopReason,
                     accumulated.InputTokens,
                     accumulated.OutputTokens,
-                    Model: _config.Model,
+                    Model: Model,
                     ProviderName: FriendlyProviderName(resolvedProvider));
                 var costEvt2 = RecordCostIfEnabled(accumulated.InputTokens, accumulated.OutputTokens);
                 if (costEvt2 is not null) yield return costEvt2;
@@ -709,8 +749,9 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         if (timedOut)
         {
             turnSw.Stop();
-            yield return new RuntimeEvent.RuntimeError(
-                $"Turn timed out after {turnTimeoutSeconds} seconds.");
+            yield return new RuntimeEvent.RuntimeError(running.StoppedBySignOut ? Auth.RunningWork.StoppedMessage
+                : deadline.RunLimitReached ? RunLimits.StoppedMessage(deadline.RunLimit)
+                : $"Turn timed out after {turnTimeoutSeconds} seconds.");
             yield break;
         }
 
@@ -721,6 +762,26 @@ public sealed partial class ConversationRuntime : IConversationRuntime
 
     /// <inheritdoc/>
     public void Reset() => _history.Clear();
+
+    /// <summary>
+    /// Removes a request that never got a reply from the end of the history, together with any
+    /// half-finished tool exchange from that failed turn (a tool call without its result can't be
+    /// sent back to a provider anyway). Without this, a model sees old unanswered requests and acts on
+    /// them when the person later says something unrelated — e.g. "are you here?" producing a PDF
+    /// requested weeks earlier in a turn that had failed. The messages stay in the saved conversation
+    /// (and on screen); they just aren't part of what the model is asked to respond to.
+    /// </summary>
+    private void DropUnansweredTail()
+    {
+        while (_history.Count > 0)
+        {
+            var last = _history[^1];
+            var unanswered = last.Role == "user"
+                || (last.Role == "assistant" && last.Content.Any(b => b is InputContentBlock.ToolUseBlock));
+            if (!unanswered) break;
+            _history.RemoveAt(_history.Count - 1);
+        }
+    }
 
     private static readonly int[] s_retryDelaysMs = [1000, 2000, 4000];
 
@@ -913,15 +974,26 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     }
 
     /// <summary>
-    /// Summarises the oldest portion of <see cref="_history"/> using the LLM when the input
-    /// token count approaches the resolved compact threshold (env &gt; workspace_settings &gt;
-    /// <see cref="SovrantConfig.CompactThreshold"/>).
+    /// Phase 148 — summarises the older part of <see cref="_history"/> once a request reaches
+    /// 75% of the model's context window (or the configured threshold; see
+    /// <see cref="ConversationCompaction.Threshold"/>). The newest messages stay word for word,
+    /// tool calls are never separated from their results, and the first request, the request being
+    /// worked on, an approved plan and the latest tool error are kept word for word in the summary.
+    /// The summary is saved so a reopened conversation sends it instead of the full history.
+    /// The summary uses the conversation's own model: another model could be one this person isn't
+    /// allowed to use, or cost money they didn't choose to spend.
+    /// Returns the event to show in the chat, or null when nothing was compacted.
     /// </summary>
-    private async Task MaybeCompactHistoryAsync(int inputTokens, CancellationToken ct)
+    private async Task<RuntimeEvent.HistoryCompacted?> MaybeCompactHistoryAsync(int inputTokens, CancellationToken ct)
     {
-        var threshold = _compaction.Current.Threshold;
-        if (threshold <= 0 || inputTokens < threshold) return;
-        if (_history.Count < 6) return;
+        var threshold = ConversationCompaction.Threshold(
+            _compaction.Current.Threshold,
+            _capabilityRegistry?.GetCapabilities(Model).MaxContext,
+            Config.EnvBackedSettings.LockedBy(WorkspaceSettingsKeys.CompactThreshold) is not null);
+        if (threshold <= 0 || inputTokens < threshold) return null;
+
+        var cutPoint = ConversationCompaction.ChooseCut(_history, threshold);
+        if (cutPoint < 2) return null;
 
         // Allow hooks to save state before context is lost.
         await _hookRunner.RunAsync(
@@ -929,31 +1001,16 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             new HookContext(HookEvent.PreCompact, SessionId, InputTokens: inputTokens),
             ct).ConfigureAwait(false);
 
-        // Keep the last 4 messages intact; summarise everything before that
-        const int KeepTail = 4;
-        var cutPoint = _history.Count - KeepTail;
-        if (cutPoint <= 0) return;
-
-        // Build summary text via a single forward pass; copy the tail with
-        // GetRange so we can clear _history without losing it.
-        var historyBuilder = new StringBuilder();
-        for (var i = 0; i < cutPoint; i++)
-        {
-            if (i > 0) historyBuilder.Append("\n\n");
-            var m = _history[i];
-            historyBuilder.Append(m.Role.ToUpperInvariant()).Append(": ").Append(ExtractText(m));
-        }
-        var historyText = historyBuilder.ToString();
-        var toKeep = _history.GetRange(cutPoint, KeepTail);
-        var summarizedCount = cutPoint;
+        var summarised = _history.GetRange(0, cutPoint);
+        var toKeep = _history.GetRange(cutPoint, _history.Count - cutPoint);
 
         var summaryRequest = new MessagesRequest(
-            _config.Model,
+            Model,
             2048,
             [InputMessage.UserText(
                 "Summarise the following conversation history in 3-5 concise paragraphs. " +
                 "Preserve all key facts, file paths, decisions, and technical context:\n\n" +
-                historyText)])
+                ConversationCompaction.Describe(summarised))])
         {
             System = "You are a concise technical summariser. Preserve important details.",
             Stream = true,
@@ -967,27 +1024,30 @@ public sealed partial class ConversationRuntime : IConversationRuntime
             var summaryText = string.Join(string.Empty,
                 accumulated.Blocks.OfType<OutputContentBlock.TextBlock>().Select(b => b.Text)).Trim();
 
-            if (string.IsNullOrEmpty(summaryText)) return;
+            if (!accumulated.Success || string.IsNullOrEmpty(summaryText)) return null;
 
+            var pins = ConversationCompaction.Pin(summarised, toKeep, _compactionPins);
+            var summaryMessage = ConversationCompaction.SummaryMessage(summaryText, pins);
+            var rebuilt = ConversationCompaction.Rebuild(summaryMessage, toKeep);
             _history.Clear();
-            _history.Add(InputMessage.UserText($"[Conversation history summary — auto-compacted at {inputTokens} tokens]\n\n{summaryText}"));
-            _history.Add(InputMessage.AssistantText("Understood. I have the context from the conversation summary."));
-            _history.AddRange(toKeep);
+            _history.AddRange(rebuilt);
+            _compactionPins = pins;
 
-            LogCompacted(_logger, SessionId, summarizedCount, inputTokens);
+            LogCompacted(_logger, SessionId, cutPoint, inputTokens);
 
-            await AppendSessionEntryAsync("compaction",
-                $"History compacted: {summarizedCount} messages summarised at {inputTokens} input tokens.",
+            await AppendSessionEntryAsync(ConversationCompaction.EntryRole,
+                ConversationCompaction.Serialize(new CompactionRecord(
+                    summaryMessage, ConversationCompaction.SavedEntryCount(toKeep), cutPoint, inputTokens, pins)),
                 ct).ConfigureAwait(false);
+
+            return new RuntimeEvent.HistoryCompacted(cutPoint);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             LogRequestFailed(_logger, $"Compaction failed (non-fatal): {ex.Message}");
+            return null;
         }
     }
-
-    private static string ExtractText(InputMessage m) =>
-        string.Join(" ", m.Content.OfType<InputContentBlock.TextBlock>().Select(b => b.Text));
 
     private static readonly HashSet<string> s_scopeAwareTools = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -1076,6 +1136,14 @@ public sealed partial class ConversationRuntime : IConversationRuntime
         // Unclosed fence — still count what we accumulated.
         if (inFence && current > longest) longest = current;
         return longest;
+    }
+
+    private bool HostToolsAvailable()
+    {
+        var defs = _toolRegistry.GetDefinitions();
+        for (var i = 0; i < defs.Count; i++)
+            if (defs[i].Name is "Read" or "Bash" or "PowerShell") return true;
+        return false;
     }
 
     private bool ArtifactToolRegistered()
@@ -1273,7 +1341,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     {
         if (_costFacade is null) return null;
         var record = _costFacade.RecordTurn(
-            _sessionId, _config.Model, inputTokens, outputTokens);
+            _sessionId, Model, inputTokens, outputTokens);
         return new RuntimeEvent.TurnCost(record.EstimatedUsd, record.Source);
     }
 
@@ -1281,7 +1349,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
     {
         var sb = new StringBuilder(
             "You are a highly capable AI assistant with access to tools. " +
-            $"You are powered by the {_config.Model} model, served through the Sovrant runtime. " +
+            $"You are powered by the {Model} model, served through the Sovrant runtime. " +
             "When asked what model or provider you are, state your actual model name. " +
             "When you have tools available, USE them proactively to accomplish the user's request. " +
             "Do not just describe what you would do — actually do it by calling the appropriate tools. " +
@@ -1313,23 +1381,46 @@ public sealed partial class ConversationRuntime : IConversationRuntime
           .Append("  workspace_id='").Append(workspaceId).Append("'\n")
           .Append("  project_id='").Append(projectId).Append("'\n")
           .Append("  run_id='").Append(_sessionId).Append("'\n")
-          .Append("Choose a descriptive relative path (e.g. 'plan.md', 'report.md', 'output/data.json').\n")
-          .Append("The Write tool is ONLY for editing existing source code files at absolute paths. ")
-          .Append("Never use Write to create new documents or save generated content.");
+          .Append("Choose a descriptive relative path (e.g. 'plan.md', 'report.md', 'output/data.json').\n");
 
-        // Global memory: ~/.sovrant/memory.md
-        var globalMemory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".sovrant", "memory.md");
-        AppendMemoryFile(sb, globalMemory, "Global memory");
+        // On a hosted server (Web, Server) file and shell tools may be off for this person — they'd run
+        // on the server itself (Phase 145 Part D). Then don't describe them, and don't put the server's
+        // own memory files or git state into the prompt: they belong to whoever runs the server.
+        if (HostToolsAvailable())
+        {
+            sb.Append("The Write tool is ONLY for editing existing source code files at absolute paths. ")
+              .Append("Never use Write to create new documents or save generated content.");
 
-        // Project memory: .sovrant/memory.md in the working directory
-        var projectMemory = Path.Combine(
-            Directory.GetCurrentDirectory(), ".sovrant", "memory.md");
-        AppendMemoryFile(sb, projectMemory, "Project memory");
+            // Phase 43 (moved here from the unused SystemPromptBuilder in Phase 148): tell the model which
+            // shell runs its commands, so it doesn't write bash one-liners PowerShell can't parse.
+            sb.Append("\n\n").Append(OperatingSystem.IsWindows()
+                ? "The Bash tool on this system runs commands through PowerShell (pwsh 7+ if available, otherwise " +
+                  "Windows PowerShell 5.1). Write PowerShell, not bash: chain commands with `;` (not `&&`, which " +
+                  "Windows PowerShell 5.1 doesn't support), and use Get-ChildItem, Remove-Item, Copy-Item, Get-Content " +
+                  "and Set-Location when you need more than the basic aliases. Forward slashes in paths work. The " +
+                  "working directory persists across Bash calls."
+                : "The Bash tool on this system runs commands through /bin/bash with standard POSIX syntax. The " +
+                  "working directory persists across Bash calls.");
 
-        // Git context: branch, status, recent commits
-        AppendGitContext(sb, Directory.GetCurrentDirectory());
+            // Global memory: ~/.sovrant/memory.md
+            var globalMemory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                ".sovrant", "memory.md");
+            AppendMemoryFile(sb, globalMemory, "Global memory");
+
+            // Project memory: .sovrant/memory.md in the working directory
+            var projectMemory = Path.Combine(
+                Directory.GetCurrentDirectory(), ".sovrant", "memory.md");
+            AppendMemoryFile(sb, projectMemory, "Project memory");
+
+            // Git context: branch, status, recent commits
+            AppendGitContext(sb, Directory.GetCurrentDirectory());
+        }
+        else
+        {
+            sb.Append("File and shell tools (reading or writing files on disk, running commands) aren't available here. ")
+              .Append("Save anything you create with the Artifact tool; if the user asks for something that needs them, say so plainly.");
+        }
 
         if (catalog is not null)
         {
@@ -1737,7 +1828,7 @@ public sealed partial class ConversationRuntime : IConversationRuntime
                 ? tools.Take(DefaultMaxToolsFallback).ToList()
                 : tools;
 
-        var caps = _capabilityRegistry.GetCapabilities(_config.Model);
+        var caps = _capabilityRegistry.GetCapabilities(Model);
 
         // Model doesn't support native tool calling — don't send tools.
         if (!caps.NativeTools)

@@ -26,7 +26,7 @@
             </DockPanel>
 
             <TextBox Text="{Binding SearchText}"
-                     Watermark="Search templates..."
+                     PlaceholderText="Search templates..."
                      CornerRadius="8" Padding="12,8" />
         </StackPanel>
 
@@ -113,7 +113,7 @@
                                        Foreground="{DynamicResource TextPrimary}" />
                             <StackPanel Orientation="Horizontal" Spacing="10">
                                 <TextBox Text="{Binding ProjectName}"
-                                         Watermark="Project name"
+                                         PlaceholderText="Project name"
                                          Width="220" FontSize="12"
                                          Padding="8,6" CornerRadius="6" />
                                 <Button Content="Scaffold"

@@ -137,11 +137,12 @@ public sealed class OnboardingService(IServiceProvider services)
             .. Shared,
             new(IconNames.Projects, "Projects", "Keep the files and conversations for a piece of work together.", "Open Projects", WelcomeTarget.Projects),
             new(IconNames.Integrations, "Integrations", "Your admin connects MCP servers and platforms so agents can work in your tools.", null, null, AdminManaged: true),
-            // Only claim redaction when the Trust Boundary is on (it's off by default). Activity is visible
-            // to teammates in shared workspaces unless marked Private (V030 defaults is_private to 0).
+            // Only claim redaction when the Trust Boundary is on (it's off by default). New conversations,
+            // agent runs and workflows are created private (is_private = 1); making one Public shows it to
+            // teammates in the same workspace (Home → Activity) and to admins.
             new(IconNames.Private, "Privacy & governance", trustBoundaryOn
-                ? "Mark a conversation Private and teammates won't see it. Sensitive data is redacted before it reaches a model, and your admin decides which tools agents may use."
-                : "Mark a conversation Private and teammates won't see it. Your admin decides which tools agents may use.", null, null, AdminManaged: true),
+                ? "Your conversations are private by default. Make one Public to share it with your workspace. Sensitive data is redacted before it reaches a model, and your admin decides which tools agents may use."
+                : "Your conversations are private by default. Make one Public to share it with your workspace. Your admin decides which tools agents may use.", null, null, AdminManaged: true),
         ];
 
     private static readonly WelcomeArea[] Shared =
@@ -174,9 +175,12 @@ public sealed class OnboardingService(IServiceProvider services)
             }
         }
 
-        var invited = false;
+        // Someone besides the first admin has an account (people join by registering; there are no
+        // invites on Web yet), or a team workspace has more than one member.
+        var invited = services.GetService<Sovrant.Runtime.Users.IUserService>() is { } userService
+            && await userService.CountAsync(ct: ct).ConfigureAwait(false) > 1;
         var wsService = services.GetService<IWorkspaceService>();
-        if (wsService is not null)
+        if (!invited && wsService is not null)
         {
             foreach (var ws in workspaces)
             {
@@ -196,7 +200,7 @@ public sealed class OnboardingService(IServiceProvider services)
                 provider is not null, "Set up a provider", WelcomeTarget.ProviderSetup),
             new("workspace-providers", "Enable providers for a workspace", "Admins choose what each workspace can use",
                 anyEnabled, "Open Workspaces", WelcomeTarget.Workspaces),
-            new("invite", "Invite your team", "Add people and set their roles", invited, "Open Users", WelcomeTarget.Users),
+            new("invite", "Add your team", "Open registration so people can sign up, then set their roles", invited, "Open Users", WelcomeTarget.Users),
             new("integration", "Connect an integration",
                 integrations > 0 ? $"{integrations} connected" : "GitHub, Slack, databases and more",
                 integrations > 0, "Open Integrations", WelcomeTarget.Integrations),

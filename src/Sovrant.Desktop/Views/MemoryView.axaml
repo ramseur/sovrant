@@ -302,7 +302,7 @@
                         <TextBlock Text="Add a memory note" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextSecondary}" />
                         <TextBox Text="{Binding NewMemoryText}"
-                                 Watermark="e.g. Always check the README before suggesting changes"
+                                 PlaceholderText="e.g. Always check the README before suggesting changes"
                                  AcceptsReturn="True" MinHeight="56" TextWrapping="Wrap"
                                  FontSize="13" />
                         <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">

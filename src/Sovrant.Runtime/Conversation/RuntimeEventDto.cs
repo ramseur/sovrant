@@ -132,6 +132,7 @@ public sealed class RuntimeEventDto
         RuntimeEvent.PlanApproved e => new() { Type = "plan_approved", PlanId = e.PlanId },
         RuntimeEvent.PlanRejected e => new() { Type = "plan_rejected", PlanId = e.PlanId, Reason = e.Reason },
         RuntimeEvent.StepProgress e => new() { Type = "step_progress", Current = e.Current, Total = e.Total, Intent = e.Intent, Status = e.Status },
+        RuntimeEvent.HistoryCompacted e => new() { Type = "history_compacted", Total = e.SummarisedMessages },
         _ => new() { Type = "unknown" },
     };
 
@@ -153,6 +154,7 @@ public sealed class RuntimeEventDto
         "plan_approved" => new RuntimeEvent.PlanApproved(PlanId ?? string.Empty),
         "plan_rejected" => new RuntimeEvent.PlanRejected(PlanId ?? string.Empty, Reason),
         "step_progress" => new RuntimeEvent.StepProgress(Current ?? 0, Total ?? 0, Intent ?? string.Empty, Status ?? string.Empty),
+        "history_compacted" => new RuntimeEvent.HistoryCompacted(Total ?? 0),
         _ => null,
     };
 }

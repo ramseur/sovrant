@@ -14,6 +14,22 @@ public partial class GovernanceViewModel : ViewModelBase
     [ObservableProperty]
     private bool _auditLogEnabled;
 
+    /// <summary>Phase 145 stopgap: members may use file and shell tools on a shared Web server.</summary>
+    [ObservableProperty]
+    private bool _memberFileToolsEnabled;
+
+    /// <summary>Phase 145 Part D: file and shell tools may run on a hosted server (Web, Server) at all.</summary>
+    [ObservableProperty]
+    private bool _hostFileToolsEnabled;
+
+    // Phase 148: controls the server's environment sets while SOVRANT_ENV_OVERRIDE is on.
+    public Sovrant.Runtime.Config.EnvLock AuditLogLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceAuditLog);
+    public Sovrant.Runtime.Config.EnvLock HostToolsLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceHostFileTools);
+    public Sovrant.Runtime.Config.EnvLock MemberToolsLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceMemberFileTools);
+    public Sovrant.Runtime.Config.EnvLock BlockedLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceBlockedCommands);
+    public Sovrant.Runtime.Config.EnvLock ProtectedLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceProtectedFiles);
+    public Sovrant.Runtime.Config.EnvLock SecretsLock { get; } = Sovrant.Runtime.Config.EnvLock.ForSetting(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.GovernanceSecretPatterns);
+
     [ObservableProperty]
     private string _newBlockedCommand = string.Empty;
 
@@ -101,12 +117,28 @@ public partial class GovernanceViewModel : ViewModelBase
         SaveConfig();
     }
 
+    [RelayCommand]
+    private void ToggleHostFileTools()
+    {
+        HostFileToolsEnabled = !HostFileToolsEnabled;
+        SaveConfig();
+    }
+
+    [RelayCommand]
+    private void ToggleMemberFileTools()
+    {
+        MemberFileToolsEnabled = !MemberFileToolsEnabled;
+        SaveConfig();
+    }
+
     private void LoadConfig()
     {
         var config = GovernanceConfig.Load(_settings);
 
         GovernanceLevel = config.Level.ToString();
         AuditLogEnabled = config.AuditLog;
+        MemberFileToolsEnabled = config.MemberFileTools;
+        HostFileToolsEnabled = config.HostFileTools;
 
         BlockedCommands.Clear();
         foreach (var cmd in config.BlockedCommands)
@@ -138,6 +170,8 @@ public partial class GovernanceViewModel : ViewModelBase
                     : GovernanceLevel.Equals("PERMISSIVE", StringComparison.OrdinalIgnoreCase) ? "permissive"
                     : "standard",
                 AuditLog = AuditLogEnabled,
+                MemberFileTools = MemberFileToolsEnabled,
+                HostFileTools = HostFileToolsEnabled,
             };
 
             foreach (var cmd in BlockedCommands)

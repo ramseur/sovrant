@@ -1,7 +1,9 @@
 using System.Net;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.DependencyInjection;
 
-namespace Sovrant.Server.Hosting;
+namespace Sovrant.Hosting;
 
 /// <summary>
 /// Reverse-proxy support (GitHub #33): honour X-Forwarded-For / -Proto / -Host so the app sees the
@@ -9,9 +11,9 @@ namespace Sovrant.Server.Hosting;
 /// Only trusted proxies are believed: loopback by default; <c>SOVRANT_TRUSTED_PROXIES</c> adds a
 /// comma-separated list of proxy IPs or CIDR networks (e.g. <c>172.18.0.0/16</c>), or <c>*</c> to
 /// trust any sender (only safe when the app isn't reachable except through the proxy).
-/// The same helper exists in Sovrant.Web.
+/// Used by both Sovrant.Web and Sovrant.Server.
 /// </summary>
-internal static class ForwardedHeadersSetup
+public static class ForwardedHeadersSetup
 {
     public const string TrustedProxiesVariable = "SOVRANT_TRUSTED_PROXIES";
 

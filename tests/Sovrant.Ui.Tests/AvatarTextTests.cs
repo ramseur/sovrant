@@ -6,10 +6,10 @@ namespace Sovrant.Ui.Tests;
 public sealed class AvatarTextTests
 {
     [Theory]
-    [InlineData("Eric Ramseur", "ER")]
-    [InlineData("eric.ramseur@anant.us", "ER")]
-    [InlineData("ramseur@anant.us", "R")]
-    [InlineData("ramseur", "R")]
+    [InlineData("Alex Morgan", "AM")]
+    [InlineData("alex.morgan@example.com", "AM")]
+    [InlineData("morgan@example.com", "M")]
+    [InlineData("morgan", "M")]
     [InlineData("nav-test", "NT")]
     [InlineData("  ada   lovelace byron ", "AL")]
     [InlineData("You", "Y")]

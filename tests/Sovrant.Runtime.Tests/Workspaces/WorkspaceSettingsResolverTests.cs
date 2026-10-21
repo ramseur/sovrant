@@ -31,14 +31,33 @@ public sealed class WorkspaceSettingsResolverTests : IDisposable
         Environment.SetEnvironmentVariable(StrEnv, _origStr);
     }
 
+    /// <summary>Phase 148: SOVRANT_ENV_OVERRIDE on (env wins). Passed in, so no process-wide variable changes.</summary>
+    private static string? OverrideOn(string name) =>
+        name == Sovrant.Runtime.Config.EnvOverride.Variable ? "true" : Environment.GetEnvironmentVariable(name);
+
     [Fact]
-    public void ResolveInt_EnvBeatsStoreAndFallback()
+    public void Without_The_Override_The_Stored_Value_Beats_Env()
+    {
+        // Phase 148: env only seeds; the admin's stored value wins.
+        var store = new InMemoryWorkspaceSettingsStore();
+        store.Seed("k", "5");
+        Environment.SetEnvironmentVariable(IntEnv, "9");
+        Assert.Equal(5, WorkspaceSettingsResolver.ResolveInt(store, "k", IntEnv, fallback: 1));
+
+        store.Seed("s", "from-store");
+        Environment.SetEnvironmentVariable(StrEnv, "from-env");
+        Assert.Equal("from-store", WorkspaceSettingsResolver.ResolveString(store, "s", StrEnv, fallback: null));
+        Assert.Equal("from-env", WorkspaceSettingsResolver.ResolveString(store, "missing", StrEnv, fallback: null)); // env still the fallback
+    }
+
+    [Fact]
+    public void ResolveInt_EnvBeatsStoreAndFallback_WithOverride()
     {
         var store = new InMemoryWorkspaceSettingsStore();
         store.Seed("k", "5");
         Environment.SetEnvironmentVariable(IntEnv, "9");
 
-        Assert.Equal(9, WorkspaceSettingsResolver.ResolveInt(store, "k", IntEnv, fallback: 1));
+        Assert.Equal(9, WorkspaceSettingsResolver.ResolveInt(store, "k", IntEnv, fallback: 1, env: OverrideOn));
     }
 
     [Fact]
@@ -103,13 +122,13 @@ public sealed class WorkspaceSettingsResolverTests : IDisposable
     }
 
     [Fact]
-    public void ResolveDecimalOrNull_EnvBeatsStore()
+    public void ResolveDecimalOrNull_EnvBeatsStore_WithOverride()
     {
         var store = new InMemoryWorkspaceSettingsStore();
         store.Seed("k", "1.5");
         Environment.SetEnvironmentVariable(DecEnv, "2.75");
 
-        Assert.Equal(2.75m, WorkspaceSettingsResolver.ResolveDecimalOrNull(store, "k", DecEnv));
+        Assert.Equal(2.75m, WorkspaceSettingsResolver.ResolveDecimalOrNull(store, "k", DecEnv, env: OverrideOn));
     }
 
     [Fact]
@@ -126,14 +145,14 @@ public sealed class WorkspaceSettingsResolverTests : IDisposable
             new InMemoryWorkspaceSettingsStore(), "k", DecEnv));
 
     [Fact]
-    public void ResolveString_EnvBeatsStoreAndFallback()
+    public void ResolveString_EnvBeatsStoreAndFallback_WithOverride()
     {
         var store = new InMemoryWorkspaceSettingsStore();
         store.Seed("k", "from-store");
         Environment.SetEnvironmentVariable(StrEnv, "from-env");
 
         Assert.Equal("from-env",
-            WorkspaceSettingsResolver.ResolveString(store, "k", StrEnv, fallback: "from-fallback"));
+            WorkspaceSettingsResolver.ResolveString(store, "k", StrEnv, fallback: "from-fallback", env: OverrideOn));
     }
 
     [Fact]
@@ -171,13 +190,13 @@ public sealed class WorkspaceSettingsResolverTests : IDisposable
     }
 
     [Fact]
-    public void ResolveBool_EnvBeatsStoreAndFallback()
+    public void ResolveBool_EnvBeatsStoreAndFallback_WithOverride()
     {
         var store = new InMemoryWorkspaceSettingsStore();
         store.Seed("k", "false");
         Environment.SetEnvironmentVariable(StrEnv, "true");
 
-        Assert.True(WorkspaceSettingsResolver.ResolveBool(store, "k", StrEnv, fallback: false));
+        Assert.True(WorkspaceSettingsResolver.ResolveBool(store, "k", StrEnv, fallback: false, env: OverrideOn));
     }
 
     [Fact]
@@ -200,14 +219,14 @@ public sealed class WorkspaceSettingsResolverTests : IDisposable
     }
 
     [Fact]
-    public void ResolveStringList_EnvJsonBeatsStore()
+    public void ResolveStringList_EnvJsonBeatsStore_WithOverride()
     {
         var store = new InMemoryWorkspaceSettingsStore();
         store.Seed("k", """["a","b"]""");
         Environment.SetEnvironmentVariable(StrEnv, """["x","y","z"]""");
 
         var result = WorkspaceSettingsResolver.ResolveStringList(
-            store, "k", StrEnv, fallback: Array.Empty<string>());
+            store, "k", StrEnv, fallback: Array.Empty<string>(), env: OverrideOn);
         Assert.Equal(new[] { "x", "y", "z" }, result);
     }
 

@@ -32,6 +32,7 @@ internal sealed partial class WorkflowSchedulerService : BackgroundService
 
     private readonly IWorkflowStore _store;
     private readonly IWorkflowExecutor _executor;
+    private readonly Sovrant.Runtime.Users.IUserService? _users;
     private readonly ILogger<WorkflowSchedulerService> _logger;
     private readonly TimeSpan _pollInterval;
     private readonly int _maxConcurrent;
@@ -60,11 +61,13 @@ internal sealed partial class WorkflowSchedulerService : BackgroundService
         IWorkflowStore store,
         IWorkflowExecutor executor,
         IWorkspaceSettingsStore settings,
-        ILogger<WorkflowSchedulerService> logger)
+        ILogger<WorkflowSchedulerService> logger,
+        Sovrant.Runtime.Users.IUserService? users = null)
     {
         _store = store;
         _executor = executor;
         _logger = logger;
+        _users = users;
 
         var pollSeconds = ResolveInt(settings, WorkspaceSettingsKeys.WorkflowPollSeconds,
             "SOVRANT_WORKFLOW_POLL_SECONDS", DefaultPollSeconds);
@@ -125,12 +128,12 @@ internal sealed partial class WorkflowSchedulerService : BackgroundService
 
         using var gate = new SemaphoreSlim(_maxConcurrent, _maxConcurrent);
 #pragma warning disable CA2025 // Task.WhenAll below ensures all tasks complete before gate is disposed
-        var tasks = due.Select(w => AdvanceOneAsync(w.Id, gate, stoppingToken));
+        var tasks = due.Select(w => AdvanceOneAsync(w.Id, w.OwnerUserId, gate, stoppingToken));
 #pragma warning restore CA2025
         await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
-    private async Task AdvanceOneAsync(string workflowId, SemaphoreSlim gate, CancellationToken stoppingToken)
+    private async Task AdvanceOneAsync(string workflowId, string? ownerUserId, SemaphoreSlim gate, CancellationToken stoppingToken)
     {
         try
         {
@@ -150,7 +153,12 @@ internal sealed partial class WorkflowSchedulerService : BackgroundService
             // workflow has actually started advancing, a shutdown signal
             // must not abort it mid-step and leave it in an inconsistent
             // state. The host's shutdown timeout gives this a grace window.
-            await _executor.RunAsync(workflowId, CancellationToken.None).ConfigureAwait(false);
+            // Run as the workflow's owner, so tool policies see who it belongs to (Phase 145 stopgap:
+            // a member's workflow can't use file/shell tools; an admin's can).
+            // Set here, not in a helper: an AsyncLocal set inside an async method is undone when it returns.
+            var role = await OwnerRoleAsync(ownerUserId).ConfigureAwait(false);
+            using (string.IsNullOrEmpty(ownerUserId) ? null : Sovrant.Runtime.Auth.AmbientPrincipal.Push(ownerUserId, role))
+                await _executor.RunAsync(workflowId, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -160,6 +168,19 @@ internal sealed partial class WorkflowSchedulerService : BackgroundService
         {
             gate.Release();
             _inFlight.TryRemove(workflowId, out _);
+        }
+    }
+
+    /// <summary>The owner's role ("user" when unknown), so an admin's workflow keeps admin tools.</summary>
+    private async Task<string> OwnerRoleAsync(string? ownerUserId)
+    {
+        if (string.IsNullOrEmpty(ownerUserId) || _users is null)
+            return "user";
+        try { return (await _users.GetAsync(ownerUserId).ConfigureAwait(false))?.Role ?? "user"; }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogAdvanceFailed(_logger, ownerUserId, ex.Message);
+            return "user";
         }
     }
 

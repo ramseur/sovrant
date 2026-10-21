@@ -5,6 +5,7 @@
 @using Sovrant.Runtime.Preferences
 @using Sovrant.Runtime.Providers
 @using Sovrant.Web.Adapters
+@inject Sovrant.Web.Services.WebSessionService Session
 
 <div class="setup-backdrop">
     <div class="setup-card">
@@ -47,6 +48,9 @@
 </div>
 
 @code {
+    /// <summary>The user signed in on this browser tab (Phase 145).</summary>
+    private string Me => Session.UserId ?? string.Empty;
+
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private SovrantConfig Config { get; set; } = default!;
     [Inject] private MutableAuthProvider AuthProvider { get; set; } = default!;
@@ -110,7 +114,7 @@
 
             var profileId = MakeProfileId(_provider);
             var credentialId = $"provider.{profileId}.api_key";
-            var userId = Sovrant.Web.Program.SovrantUserId;
+            var userId = Me;
 
             // Local providers (Ollama, LM Studio) may have no key; store one only when given.
             if (trimmedKey.Length > 0)

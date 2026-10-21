@@ -1,0 +1,12 @@
+@* Phase 148 — shown under a control that the server's environment sets (SOVRANT_ENV_OVERRIDE on). *@
+@if (!string.IsNullOrEmpty(Variable))
+{
+    <div class="env-lock-note" role="note">
+        Set by the server's environment (<code>@Variable</code>). To change it here, turn off <code>@Sovrant.Runtime.Config.EnvOverride.Variable</code>.
+    </div>
+}
+
+@code {
+    /// <summary>The environment variable that sets this control, or null when it isn't locked.</summary>
+    [Parameter] public string? Variable { get; set; }
+}

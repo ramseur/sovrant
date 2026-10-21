@@ -19,6 +19,7 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
     private readonly IMcpTrustGate? _trustGate;
     private readonly McpClientRegistry? _mcpRegistry;
     private readonly IAuditStore? _auditStore;
+    private readonly IHostToolPolicy? _hostToolPolicy;
     private readonly ILogger<DefaultToolExecutor> _logger;
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Executing tool '{ToolName}'")]
@@ -57,7 +58,8 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         IPerTurnApprovalCache? approvalCache = null,
         IMcpTrustGate? trustGate = null,
         McpClientRegistry? mcpRegistry = null,
-        IAuditStore? auditStore = null)
+        IAuditStore? auditStore = null,
+        IHostToolPolicy? hostToolPolicy = null)
     {
         _registry = registry;
         _policy = policy;
@@ -67,6 +69,7 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         _trustGate = trustGate;
         _mcpRegistry = mcpRegistry;
         _auditStore = auditStore;
+        _hostToolPolicy = hostToolPolicy;
         _logger = logger;
     }
 
@@ -76,6 +79,13 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
         JsonElement input,
         CancellationToken ct = default)
     {
+        // Host policy first (shared Web servers): refused outright, before any approval prompt.
+        if (_hostToolPolicy?.GetBlockReason(toolName) is { } hostBlock)
+        {
+            LogDenied(_logger, toolName);
+            return new ToolExecutionResult(false, hostBlock, IsError: true);
+        }
+
         var isDestructive = ModeAwarePermissionPolicy.IsDestructive(toolName);
         var decision = _policy.Evaluate(toolName, isDestructive);
 
@@ -90,8 +100,11 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
                 if (_approvalCache is not null && _approvalCache.IsAllowed(toolName))
                     break; // user already said "always allow this turn" for this tool
                 LogConfirmationRequired(_logger, toolName);
-                var userDecision = await _confirmationHandler
-                    .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
+                ConfirmationDecision userDecision;
+                // Waiting for the person doesn't use up the reply's own timeout (Phase 145 A8.1).
+                using (Sovrant.Runtime.Conversation.RunDeadline.Current?.PauseForApproval())
+                    userDecision = await _confirmationHandler
+                        .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
                 if (userDecision == ConfirmationDecision.Deny)
                 {
                     LogDenied(_logger, toolName);
@@ -137,8 +150,11 @@ public sealed partial class DefaultToolExecutor : IToolExecutor
                 _approvalCache?.IsAllowed(toolName) != true)
             {
                 LogTrustConfirmation(_logger, toolName, trustVerdict.MatchedPattern ?? "*");
-                var trustDecision = await _confirmationHandler
-                    .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
+                ConfirmationDecision trustDecision;
+                // Waiting for the person doesn't use up the reply's own timeout (Phase 145 A8.1).
+                using (Sovrant.Runtime.Conversation.RunDeadline.Current?.PauseForApproval())
+                    trustDecision = await _confirmationHandler
+                        .RequestConfirmationAsync(toolName, input, ct).ConfigureAwait(false);
                 if (trustDecision == ConfirmationDecision.Deny)
                 {
                     LogDenied(_logger, toolName);

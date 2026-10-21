@@ -43,13 +43,18 @@ public interface IIdentityService
     /// When approval is required, returns <see cref="RegisterResult.IsPendingApproval"/> = true
     /// and no token — the account is created but cannot log in until an admin approves it.
     /// </summary>
-    Task<RegisterResult> RegisterAsync(string email, string password, CancellationToken ct = default);
+    /// <param name="issueToken">
+    /// False to skip issuing an API token (Sovrant.Web signs in with a per-browser cookie instead, Phase 145);
+    /// the result's <c>Token</c> is then null.
+    /// </param>
+    Task<RegisterResult> RegisterAsync(string email, string password, bool issueToken = true, CancellationToken ct = default);
 
     /// <summary>
     /// Authenticates with email + password. Returns a 30-day sliding svt_ token on success.
     /// Returns a descriptive error for pending or disabled accounts.
     /// </summary>
-    Task<LoginResult> LoginAsync(string email, string password, CancellationToken ct = default);
+    /// <param name="issueToken">False to check the credentials without issuing an API token (Phase 145).</param>
+    Task<LoginResult> LoginAsync(string email, string password, bool issueToken = true, CancellationToken ct = default);
 
     /// <summary>Revokes the token that authenticated the current request.</summary>
     Task LogoutAsync(string tokenId, CancellationToken ct = default);

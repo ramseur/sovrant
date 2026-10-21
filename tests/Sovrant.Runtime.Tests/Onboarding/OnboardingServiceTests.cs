@@ -7,6 +7,7 @@ using Sovrant.Runtime.Mcp;
 using Sovrant.Runtime.Onboarding;
 using Sovrant.Runtime.Preferences;
 using Sovrant.Runtime.Providers;
+using Sovrant.Runtime.Session;
 using Sovrant.Runtime.Storage;
 using Sovrant.Runtime.TrustBoundary;
 
@@ -42,9 +43,10 @@ public sealed class OnboardingServiceTests : IAsyncDisposable
         try { Directory.Delete(_baseDir, recursive: true); } catch { /* best-effort */ }
     }
 
-    private OnboardingService Build(SovrantConfig? config = null, bool withPrefs = true)
+    private OnboardingService Build(SovrantConfig? config = null, bool withPrefs = true, Sovrant.Runtime.Users.IUserService? users = null)
     {
         var services = new ServiceCollection();
+        if (users is not null) services.AddSingleton(users);
         if (withPrefs) services.AddSingleton<IUserPreferenceStore>(_prefs);
         services.AddSingleton<IProviderProfileStore>(_profiles);
         services.AddSingleton<IKnowledgeStore>(_knowledge);
@@ -111,6 +113,35 @@ public sealed class OnboardingServiceTests : IAsyncDisposable
     }
 
     [Fact]
+    public async Task Add_Your_Team_Ticks_When_Someone_Else_Has_Registered()
+    {
+        // People join by registering into their own personal workspace (no invites on Web), so the step
+        // used to stay unticked forever. Real SQLite user store.
+        var dbPath = Path.Combine(Path.GetTempPath(), $"sovrant_onboard_{Guid.NewGuid():N}.db");
+        var storage = new SqliteStorageProvider(NullLogger<SqliteStorageProvider>.Instance, dbPath);
+        await storage.InitializeAsync();
+        try
+        {
+            var users = new Sovrant.Runtime.Users.SqliteUserStore(storage, NullLogger<Sovrant.Runtime.Users.SqliteUserStore>.Instance);
+            await users.CreateAsync(userId: "admin@x", role: "admin");
+            var alone = await Build(users: users).GetWelcomeAsync("admin@x", isAdmin: true, workspaceId: null);
+            var step = alone.Checklist.Single(c => c.Key == "invite");
+            Assert.False(step.Done);
+            Assert.Equal("Add your team", step.Title);
+
+            await users.CreateAsync(userId: "sam@x");
+            var withTeam = await Build(users: users).GetWelcomeAsync("admin@x", isAdmin: true, workspaceId: null);
+            Assert.True(withTeam.Checklist.Single(c => c.Key == "invite").Done);
+        }
+        finally
+        {
+            await storage.DisposeAsync();
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            try { File.Delete(dbPath); } catch (IOException) { }
+        }
+    }
+
+    [Fact]
     public async Task BuiltIn_Agents_Do_Not_Count_As_Your_First_Agent()
     {
         _knowledge.Agents.Add(Agent("architect", tier: "BuiltIn"));
@@ -172,6 +203,21 @@ public sealed class OnboardingServiceTests : IAsyncDisposable
 
         var privacy = welcome.Areas.Single(a => a.IconName == IconNames.Private);
         Assert.Equal(mentionsRedaction, privacy.Description.Contains("redacted", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Privacy_Copy_Matches_The_Real_Default()
+    {
+        // The member copy promises private-by-default; a new conversation must really be stored private,
+        // whichever way it's created (first message, or a title set before the first message).
+        var privacy = OnboardingService.Areas(isAdmin: false, trustBoundaryOn: false).Single(a => a.IconName == IconNames.Private);
+        Assert.Contains("private by default", privacy.Description, StringComparison.Ordinal);
+
+        var sessions = new SqliteSessionStore(_storage);
+        await sessions.AppendAsync("s-first-message", new SessionEntry("e1", DateTimeOffset.UtcNow, "user", "hi"), ownerUserId: "sam");
+        await sessions.SetTitleAsync("s-title-first", "Untitled", ownerUserId: "sam");
+        Assert.True(await sessions.GetIsPrivateAsync("s-first-message"));
+        Assert.True(await sessions.GetIsPrivateAsync("s-title-first"));
     }
 
     private static KnowledgePage Agent(string slug, string tier) =>

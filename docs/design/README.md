@@ -327,7 +327,8 @@ Roadmap Phase 140. It takes Rahul Singh's first-run login (his issue #27) and hi
 
 **Updated at build time (2026-10-05):**
 - **Admin-only areas:** Integrations, Trust Boundary / Governance and Workspaces are admin-only pages, so members now see *Integrations* and *Privacy & governance* described with "Managed by your admin" and **no link** (`.wb.managed`), plus *Projects*. The Welcome page is never a way into an admin page.
-- **Privacy copy:** the check above failed. Conversations are public to teammates in a shared workspace unless marked Private (`is_private` defaults to 0), so the copy is now "Mark a conversation Private and teammates won't see it". Redaction is only mentioned when the Trust Boundary is on.
+- **Privacy copy:** redaction is only mentioned when the Trust Boundary is on.
+- **Correction (2026-10-06):** the 2026-10-05 note here said conversations are public by default, because the `is_private` column defaults to 0. That was wrong. Every code path that creates a conversation, agent run or workflow writes `is_private = 1`; the column default only covers rows that predate V030. The member copy is now "Your conversations are private by default. Make one Public to share it with your workspace." Public means teammates in the same workspace (Home → Activity) and admins can see it; Private means only you, and admins see a masked "(private)" row in Command Center. The same check found that the Postgres store created new conversations as public, and the SQLite → Postgres migrator dropped privacy; both are fixed.
 
 **Verified:** rendered in headless Edge, on both mocks:
 - **Login:** all four states (buttons, notes, spinner).
@@ -409,6 +410,34 @@ Roadmap Phase 142. With real activity, Phase 141's Home pushed the guide below t
 **Review links:** `web.html#home&glance` (also `&member`, `&first`, `&allset`, `&dismissed`, `&activity`) opens Home in that state.
 
 **Verified:** rendered in headless Edge on both mocks: 32 Overview combinations measured (overflow, cards visible, checklist rows, All set, managed cards), plus the Activity tab. Parity diff still 49 chrome-only lines.
+
+## Multi-user Web: per-browser sign-in (2026-10-06, design-only, Phase 145)
+
+Sign-in moves from one per server to one per browser, so the UI needs to show how long you stay signed in, let you sign out here or everywhere, and let admins see and end sign-ins. Three small changes, identical on both mocks.
+
+**Login** (`#login`, toggle *Timed out* / *Revoked*, or `#expired` / `#revoked`):
+- **"Keep me signed in on this browser for 30 days"** below the password. Hint: otherwise you're signed out after an hour without activity (renewed while you're active, 12 hours at most); leave it off on a shared computer. Revised 2026-10-06: the first draft said 8 hours, then 30 minutes; settled on **1 hour** until long-running work (replies, workflows) is guaranteed to finish and hand back its result after a sign-out. All three limits are env-settable. Hidden on first run (the administrator signs up first; they can choose it next time).
+- Two reasons you land back on Sign in, in the warning style: **Timed out** (an hour without activity, or the 12-hour limit) and **Revoked** (an admin signed you out of this browser).
+
+**Account menu** (rail footer, every screen; on Users toggle *Account menu* / *1-hour idle sign-in* / *Kept 30 days*, or `#users&acct` / `#users&kept`):
+- The footer row (avatar, name, role) opens it: name, email and role; how long this browser stays signed in (1 hour idle, renewed while active and 12 hours at most, or kept 30 days until a date); how many browsers you're signed in on; **Sign out** and **Sign out of all browsers**. Text-only items: the icon vocabulary has no sign-out icon yet.
+
+**Admin → Users** (`#users`):
+- Each row says where the person is signed in ("Signed in on 2 browsers", "Not signed in", "Awaiting approval").
+- The detail adds **Signed in on**: one row per browser (device, IP, when signed in, kept 30 days), Last active, Expires, and **Revoke**. Below it, **Sign out everywhere** and Reset password (plus Approve for pending accounts).
+
+**Verified:** rendered in headless Edge, both mocks: login with the Revoked warning and the Remember-me box; Users with the account menu open in both lifetimes. First pass found the sign-ins table too wide for the detail pane; IP and sign-in time moved under the browser name and it fits. Parity diff still 49 chrome-only lines.
+
+## Shared models: the personal default set (2026-10-07, design-only, Phase 145 Part B)
+
+Members have no providers, keys or models of their own: admins configure them, and a member picks any model allowed on the workspace they're in (the pick applies to them only). Admin → Workspaces is where "allowed" is set, identical on both mocks (`#workspaces`; toggle *Default set* / *Team workspace*, or `#teamws`):
+
+- **"All personal workspaces"** is the first row, badged *Default set*: the providers (and their models) every personal workspace gets, including new users', and its **Default model**. It's one admin setting, editable any time; an info note says what a change does (added models appear in everyone's picker; anyone on a removed model moves to the default on their next message, conversations kept).
+- **Team workspaces** show the same toggles and default model for that workspace only, with a note that members' personal workspaces use the default set instead.
+
+The member's model picker (top bar) is unchanged; it lists only what the current workspace allows.
+
+**Verified:** rendered in headless Edge, both mocks, both toggles. The first render was blank (an extra bracket in the new detail function); fixed. Parity diff still 49 chrome-only lines.
 
 ## Open decisions
 

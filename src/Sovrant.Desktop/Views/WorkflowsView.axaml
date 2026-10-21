@@ -109,7 +109,7 @@
                                 <TextBlock Text="Goal" FontSize="12" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextSecondary}" />
                                 <TextBox Text="{Binding CreateGoal, Mode=TwoWay}"
-                                         Watermark="Describe what you want accomplished…"
+                                         PlaceholderText="Describe what you want accomplished…"
                                          AcceptsReturn="True" MinHeight="70"
                                          CornerRadius="6" Padding="8,6" />
                             </StackPanel>
@@ -272,10 +272,10 @@
                                                                   ItemsSource="{Binding $parent[UserControl].((vm:WorkflowsViewModel)DataContext).TierOptions, Mode=OneTime}"
                                                                   SelectedItem="{Binding Tier, Mode=TwoWay}" />
                                                         <TextBox Text="{Binding Intent, Mode=TwoWay}"
-                                                                 Watermark="Intent" FontSize="12" />
+                                                                 PlaceholderText="Intent" FontSize="12" />
                                                     </DockPanel>
                                                     <TextBox Text="{Binding Expected, Mode=TwoWay}"
-                                                             Watermark="Expected outcome" FontSize="11" />
+                                                             PlaceholderText="Expected outcome" FontSize="11" />
                                                 </StackPanel>
                                             </Border>
                                         </DataTemplate>

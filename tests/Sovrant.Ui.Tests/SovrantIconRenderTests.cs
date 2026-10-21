@@ -10,6 +10,9 @@ using Sovrant.Api.Ui;
 using Sovrant.Desktop.Controls;
 
 [assembly: AvaloniaTestApplication(typeof(Sovrant.Ui.Tests.HeadlessTestApp))]
+// The headless Avalonia render tests share one UI thread; run in parallel they occasionally deadlock
+// (seen as a test host hanging forever). The whole project takes a few seconds, so run tests one at a time.
+[assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Sovrant.Ui.Tests;
 

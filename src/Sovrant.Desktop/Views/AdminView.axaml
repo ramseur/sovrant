@@ -72,12 +72,12 @@
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
                         IsVisible="{Binding !IsUsersTab}" />
 
-                <Button Content="Registration"
+                <Button Content="Registration &amp; sign-in"
                         Command="{Binding SelectTabCommand}" CommandParameter="1"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource BrandPrimary}" Foreground="White"
                         IsVisible="{Binding IsRegistrationTab}" />
-                <Button Content="Registration"
+                <Button Content="Registration &amp; sign-in"
                         Command="{Binding SelectTabCommand}" CommandParameter="1"
                         Padding="14,6" CornerRadius="6" FontSize="13" FontWeight="SemiBold"
                         Background="{DynamicResource SurfaceCard}" Foreground="{DynamicResource TextSecondary}"
@@ -185,6 +185,50 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
+                <!-- Phase 145 — who is signed in on Web (same database), one row per browser -->
+                <StackPanel Spacing="6" Margin="0,12,0,0" IsVisible="{Binding HasWebSignIns}">
+                    <TextBlock Text="Signed in on Web" FontSize="14" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}" />
+                    <ItemsControl ItemsSource="{Binding WebSignIns}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:WebSignInRow">
+                                <Border Padding="14,8" CornerRadius="10" Margin="0,0,0,6"
+                                        Background="{DynamicResource SurfaceMuted}"
+                                        BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1">
+                                    <DockPanel>
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding LastActive}" FontSize="12" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextSecondary}" Width="80" />
+                                            <TextBlock Text="{Binding Expires}" FontSize="12" VerticalAlignment="Center"
+                                                       Foreground="{DynamicResource TextSecondary}" Width="70" />
+                                            <Button Content="Revoke"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).RevokeWebSignInCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="10,5" CornerRadius="6" FontSize="12"
+                                                    Background="{DynamicResource SurfaceMuted}" Foreground="{DynamicResource TextPrimary}" />
+                                            <Button Content="Sign out everywhere"
+                                                    Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).SignOutWebEverywhereCommand}"
+                                                    CommandParameter="{Binding}"
+                                                    Padding="10,5" CornerRadius="6" FontSize="12"
+                                                    Background="{DynamicResource SurfaceMuted}" Foreground="{DynamicResource TextPrimary}" />
+                                        </StackPanel>
+                                        <StackPanel Spacing="2">
+                                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                                <TextBlock Text="{Binding UserId}" FontWeight="SemiBold" FontSize="13"
+                                                           Foreground="{DynamicResource TextPrimary}" />
+                                                <TextBlock Text="{Binding Browser}" FontSize="13"
+                                                           Foreground="{DynamicResource TextSecondary}" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Meta}" FontSize="11" TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextMuted}" />
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
@@ -239,6 +283,112 @@
                     </DockPanel>
                 </Border>
 
+                <!-- Phase 145 A7: how long people stay signed in on Web -->
+                <TextBlock Text="Sign-in" FontWeight="SemiBold" FontSize="15" Margin="0,12,0,0"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="How long people stay signed in on Web. Changes reach browsers already signed in within about a minute; a longer limit never extends a sign-in that already exists."
+                           FontSize="13" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <CheckBox DockPanel.Dock="Right"
+                                  IsChecked="{Binding RememberAllowed}" IsEnabled="{Binding RememberAllowedLock.IsEditable}"
+                                  VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Allow &quot;Keep me signed in&quot;" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Shows the checkbox on Sign in. Turn off where people shouldn't stay signed in for days — remembered browsers then follow the limits below."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding RememberAllowedLock.Note}" IsVisible="{Binding RememberAllowedLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding RememberDayChoices}"
+                                  SelectedItem="{Binding SelectedRememberDays}" IsEnabled="{Binding RememberDaysLock.IsEditable}"
+                                  MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Keep signed in for" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="How long &quot;Keep me signed in&quot; lasts on a browser."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding RememberDaysLock.Note}" IsVisible="{Binding RememberDaysLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding IdleMinuteChoices}"
+                                  SelectedItem="{Binding SelectedIdleMinutes}" IsEnabled="{Binding IdleMinutesLock.IsEditable}"
+                                  MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Sign out after inactivity" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="Renewed while the person is active."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding IdleMinutesLock.Note}" IsVisible="{Binding IdleMinutesLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding MaxHourChoices}"
+                                  SelectedItem="{Binding SelectedMaxHours}" IsEnabled="{Binding MaxHoursLock.IsEditable}"
+                                  MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Sign out after at most" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="However active they are, unless they chose &quot;Keep me signed in&quot;."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding MaxHoursLock.Note}" IsVisible="{Binding MaxHoursLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
+                <Border Padding="14,12" CornerRadius="10"
+                        Background="{DynamicResource SurfaceMuted}"
+                        BorderBrush="{DynamicResource SurfaceBorder}"
+                        BorderThickness="1">
+                    <DockPanel>
+                        <ComboBox DockPanel.Dock="Right" ItemsSource="{Binding RunMinuteChoices}"
+                                  SelectedItem="{Binding SelectedRunMinutes}" IsEnabled="{Binding RunMinutesLock.IsEditable}"
+                                  MinWidth="140" CornerRadius="8" Padding="10,6" VerticalAlignment="Center" />
+                        <StackPanel Spacing="2">
+                            <TextBlock Text="Stop runs after" FontWeight="SemiBold"
+                                       FontSize="14" Foreground="{DynamicResource TextPrimary}" />
+                            <TextBlock Text="A reply, workflow or swarm still running after this long is stopped, keeping what it finished. Signing out doesn't stop your work; Sign out everywhere and Revoke do."
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}"
+                                       TextWrapping="Wrap" MaxWidth="480" />
+                            <TextBlock Text="{Binding RunMinutesLock.Note}" IsVisible="{Binding RunMinutesLock.IsLocked}"
+                                       FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" MaxWidth="480" />
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+
             </StackPanel>
 
             <!-- ═══════════════════════════════════════════════ -->
@@ -246,7 +396,36 @@
             <!-- ═══════════════════════════════════════════════ -->
             <StackPanel Spacing="12" IsVisible="{Binding IsWorkspacesSection}">
 
-                <TextBlock Text="No projects found." FontSize="13"
+                <!-- Phase 148: personal workspaces as one grid by person; their models come from the default set -->
+                <TextBlock Text="{Binding PersonalWorkspacesTitle}" FontSize="15" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="Their models come from the default set (Workspaces → All personal workspaces). Manage one person's workspace only for an exception."
+                           FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
+                <Border CornerRadius="10" BorderBrush="{DynamicResource SurfaceBorder}" BorderThickness="1"
+                        Background="{DynamicResource SurfaceMuted}" Padding="12,6">
+                    <ItemsControl ItemsSource="{Binding PersonalWorkspaceRows}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="vm:PersonalWorkspaceRow">
+                                <Grid ColumnDefinitions="*,90,90,Auto" Margin="0,4">
+                                    <TextBlock Grid.Column="0" Text="{Binding Email}" FontSize="13" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" />
+                                    <TextBlock Grid.Column="1" Text="{Binding Role}" FontSize="12" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <TextBlock Grid.Column="2" Text="{Binding Created}" FontSize="12" VerticalAlignment="Center"
+                                               Foreground="{DynamicResource TextSecondary}" />
+                                    <Button Grid.Column="3" Content="Manage"
+                                            Command="{Binding $parent[ItemsControl].((vm:AdminViewModel)DataContext).ConfigureWorkspaceCommand}"
+                                            CommandParameter="{Binding Workspace}"
+                                            Padding="10,4" CornerRadius="6" FontSize="12" />
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Border>
+
+                <TextBlock Text="Team workspaces" FontSize="15" FontWeight="SemiBold" Margin="0,8,0,0"
+                           Foreground="{DynamicResource TextPrimary}" />
+                <TextBlock Text="No team workspaces yet." FontSize="13"
                            Foreground="{DynamicResource TextSecondary}"
                            IsVisible="{Binding !AdminWorkspaces.Count}" />
 
@@ -398,7 +577,7 @@
                         <!-- Add member form -->
                         <Grid ColumnDefinitions="*,Auto,Auto" RowDefinitions="Auto" HorizontalAlignment="Stretch">
                             <TextBox Grid.Column="0" Text="{Binding NewMemberEmail}"
-                                     Watermark="User email or ID"
+                                     PlaceholderText="User email or ID"
                                      CornerRadius="8" Padding="10,6" FontSize="12" Margin="0,0,6,0" />
                             <ComboBox Grid.Column="1" ItemsSource="{Binding MemberRoles}"
                                       SelectedItem="{Binding NewMemberRole}"
@@ -499,7 +678,7 @@
                         <TextBlock Text="New team workspace" FontSize="13" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                         <TextBox Text="{Binding NewWorkspaceName}"
-                                 Watermark="Name"
+                                 PlaceholderText="Name"
                                  FontSize="13" Padding="8,6" CornerRadius="6" />
                         <Button Content="Create"
                                 Command="{Binding CreateWorkspaceCommand}"

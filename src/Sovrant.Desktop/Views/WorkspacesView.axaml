@@ -37,7 +37,7 @@
                         <TextBlock Text="New Team Workspace" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                         <TextBox Text="{Binding NewWorkspaceName}"
-                                 Watermark="Workspace name"
+                                 PlaceholderText="Workspace name"
                                  FontSize="12" Padding="8,6" CornerRadius="6" />
                         <Button Content="Create"
                                 Command="{Binding CreateWorkspaceCommand}"
@@ -125,6 +125,7 @@
                         <!-- Members section -->
                         <ScrollViewer>
                             <StackPanel Spacing="8">
+                                <StackPanel Spacing="8" IsVisible="{Binding !IsDefaultSetSelected}">
                                 <TextBlock Text="Members" FontSize="14" FontWeight="SemiBold"
                                            Foreground="{DynamicResource TextPrimary}" />
 
@@ -169,7 +170,7 @@
                                         <TextBlock Text="Add Member" FontSize="12" FontWeight="SemiBold"
                                                    Foreground="{DynamicResource TextPrimary}" />
                                         <TextBox Text="{Binding AddMemberUserId}"
-                                                 Watermark="Email or username"
+                                                 PlaceholderText="Email or username"
                                                  FontSize="12" Padding="8,6" CornerRadius="6" />
                                         <ComboBox ItemsSource="{Binding RoleOptions}"
                                                   SelectedItem="{Binding AddMemberRole}"
@@ -182,13 +183,19 @@
                                     </StackPanel>
                                 </Border>
 
+                                </StackPanel>
+
                                 <!-- Providers section (admin only) -->
                                 <StackPanel Spacing="6" Margin="0,16,0,0"
                                             IsVisible="{Binding IsAdmin}">
                                     <TextBlock Text="Providers" FontSize="14" FontWeight="SemiBold"
                                                Foreground="{DynamicResource TextPrimary}" />
                                     <TextBlock Text="Select which configured providers are available in this workspace."
-                                               FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                               FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                                               IsVisible="{Binding !IsDefaultSetSelected}" />
+                                    <TextBlock Text="Allowed providers and their models, for every personal workspace."
+                                               FontSize="11" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap"
+                                               IsVisible="{Binding IsDefaultSetSelected}" />
 
                                     <TextBlock Text="Loading providers…" FontSize="12"
                                                Foreground="{DynamicResource TextMuted}"
@@ -217,12 +224,47 @@
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
 
+                                    <!-- Phase 145 Part B: the default set's default model -->
+                                    <DockPanel IsVisible="{Binding IsDefaultSetSelected}" Margin="0,6,0,0">
+                                        <ComboBox DockPanel.Dock="Right" MinWidth="220"
+                                                  ItemsSource="{Binding DefaultModelOptions}"
+                                                  SelectedItem="{Binding SelectedDefaultModel}" />
+                                        <StackPanel Spacing="2" VerticalAlignment="Center">
+                                            <TextBlock Text="Default model" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{DynamicResource TextPrimary}" />
+                                            <TextBlock Text="Used until a member picks another, and when their pick isn't allowed here."
+                                                       FontSize="10" Foreground="{DynamicResource TextMuted}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </DockPanel>
+
                                     <Button Content="Save Providers"
                                             Command="{Binding SaveProviderSettingsCommand}"
                                             HorizontalAlignment="Left"
                                             Padding="12,6" CornerRadius="6"
                                             Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12"
                                             IsVisible="{Binding !ProvidersLoading}" />
+
+                                    <!-- Phase 148: MCP servers everyone gets in their personal workspace -->
+                                    <StackPanel Spacing="8" Margin="0,12,0,0" IsVisible="{Binding IsDefaultSetSelected}">
+                                        <TextBlock Text="Integrations (MCP servers)" FontSize="14" FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextPrimary}" />
+                                        <TextBlock Text="Everyone gets these in their personal workspace, plus any you enable for one person under Admin → Workspaces → Manage."
+                                                   FontSize="12" Foreground="{DynamicResource TextSecondary}" TextWrapping="Wrap" />
+                                        <TextBlock Text="No MCP servers configured yet." FontSize="12" Foreground="{DynamicResource TextMuted}"
+                                                   IsVisible="{Binding !DefaultMcpToggles.Count}" />
+                                        <ItemsControl ItemsSource="{Binding DefaultMcpToggles}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate DataType="vm:WorkspaceMcpToggleViewModel">
+                                                    <CheckBox IsChecked="{Binding IsEnabled}" Content="{Binding Name}" Margin="0,2" />
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                        <Button Content="Save integrations"
+                                                Command="{Binding SaveDefaultMcpsCommand}"
+                                                HorizontalAlignment="Left"
+                                                Padding="12,6" CornerRadius="6"
+                                                Background="{DynamicResource BrandPrimary}" Foreground="White" FontSize="12" />
+                                    </StackPanel>
                                 </StackPanel>
                             </StackPanel>
                         </ScrollViewer>

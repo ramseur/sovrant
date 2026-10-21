@@ -62,6 +62,13 @@ public sealed class ActiveSessionsService : IDisposable
     }
 
     /// <summary>Removes the live handler without cancelling. Called on Chat dispose.</summary>
+    /// <summary>True while this conversation's reply is still running (not finished, failed or cancelled).</summary>
+    public bool IsRunning(string sessionId)
+    {
+        lock (_lock)
+            return _sessions.TryGetValue(sessionId, out var entry) && entry.Status == ActiveSessionStatus.Running;
+    }
+
     public void Detach(string sessionId)
     {
         lock (_lock)
@@ -80,8 +87,8 @@ public sealed class ActiveSessionsService : IDisposable
         lock (_lock)
         {
             if (!_sessions.TryGetValue(sessionId, out var entry)) return;
-            if (entry.Buffer.Count < 500)
-                entry.Buffer.Add(evt);
+            // Merges text chunks so a long reply replays in full (it used to stop at 500 events).
+            Sovrant.Runtime.Conversation.RuntimeEventBuffer.Add(entry.Buffer, evt);
             handler = entry.LiveHandler;
         }
         handler?.Invoke(evt);

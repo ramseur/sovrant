@@ -1,5 +1,8 @@
 /* ===== Theme tokens ===== */
 :root, :root[data-theme="dark"] {
+    /* Native controls (select lists, scrollbars, date pickers) follow the theme; without this the
+       open list of a <select> was drawn light with the dark theme's light text on it. */
+    color-scheme: dark;
     --brand-primary: #6D52C6;
     --surface-background: #1A1A1A;
     --sidebar-background: #141414;
@@ -21,6 +24,7 @@
 }
 
 :root[data-theme="light"] {
+    color-scheme: light;
     --surface-background: #F5F5F5;
     --sidebar-background: #EBEBEB;
     --surface-card: #FFFFFF;
@@ -198,6 +202,11 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     background-repeat: no-repeat;
     background-position: right 2px center;
     padding-right: 16px;
+}
+/* The open option list of every <select>: themed surface and text, not the browser's default. */
+select option, select optgroup {
+    background-color: var(--surface-card);
+    color: var(--text-primary);
 }
 .top-context-bar .tcb-field select:disabled {
     cursor: default;
@@ -1414,6 +1423,15 @@ input, textarea, select { font-family: inherit; font-size: inherit; }
     font-size: 11px;
     color: var(--text-muted);
     margin-left: 4px;
+}
+
+/* Phase 148 — older messages were summarised to fit the model */
+.msg-compacted {
+    font-size: 12px;
+    color: var(--text-muted);
+    border-left: 2px solid var(--surface-border);
+    padding-left: 8px;
+    margin-bottom: 6px;
 }
 
 .intent-narration {
@@ -4234,6 +4252,39 @@ svg.icon-brand { color: #FF9800; fill: currentColor; }
 .login-status { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); }
 .login-spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--surface-border); border-top-color: var(--brand-primary); animation: login-spin .8s linear infinite; }
 @keyframes login-spin { to { transform: rotate(360deg); } }
+/* Phase 145 — per-browser sign-in */
+.signout-form { display: contents; }
+.acct-scrim { position: fixed; inset: 0; z-index: 40; }
+.acct-menu { position: absolute; left: 12px; right: 12px; bottom: 72px; z-index: 41; background: var(--surface-card); border: 1px solid var(--surface-border);
+    border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,.25); padding: 12px; display: flex; flex-direction: column; }
+.acct-head { display: flex; gap: 10px; align-items: center; padding-bottom: 10px; border-bottom: 1px solid var(--surface-border); }
+.acct-name { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+.acct-email { font-size: 12px; color: var(--text-secondary); }
+.acct-body { font-size: 12px; line-height: 1.5; color: var(--text-secondary); padding: 10px 0; border-bottom: 1px solid var(--surface-border); margin-bottom: 4px; }
+.acct-body b { color: var(--text-primary); font-weight: 600; }
+.acct-item { display: flex; align-items: center; width: 100%; height: 34px; border: none; background: transparent; color: var(--text-primary);
+    font: inherit; font-size: 13px; border-radius: 8px; padding: 0 8px; cursor: pointer; text-align: left; }
+.acct-item:hover { background: var(--surface-hover); }
+.rail-footer-user.open { background: var(--surface-hover); }
+.signin-table { margin-top: 10px; border: 1px solid var(--surface-border); border-radius: 9px; overflow-x: auto; }
+.signin-table table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.signin-table th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); padding: 8px 10px; border-bottom: 1px solid var(--surface-border); }
+.signin-table td { padding: 8px 10px; border-bottom: 1px solid var(--surface-border); white-space: nowrap; color: var(--text-primary); }
+.signin-table tr:last-child td { border-bottom: none; }
+.signin-table td:first-child { white-space: normal; width: 100%; }
+.signin-dev { font-size: 13px; }
+.signin-meta { font-size: 11.5px; color: var(--text-secondary); margin-top: 2px; }
+.signin-this { font-size: 11px; color: var(--brand-primary); font-weight: 600; margin-left: 6px; }
+.login-form { display: flex; flex-direction: column; gap: inherit; }
+.login-form .login-status { display: none; }
+.login-form.busy .login-status { display: flex; }
+.login-form.busy .login-btn { opacity: .6; pointer-events: none; }
+.login-warn { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.45; color: var(--text-primary);
+    background: color-mix(in srgb, var(--status-warn) 12%, transparent); border: 1px solid color-mix(in srgb, var(--status-warn) 38%, transparent); border-radius: 9px; padding: 10px 12px; }
+.login-warn svg { margin-top: 1px; color: var(--status-warn); flex-shrink: 0; }
+.login-remember { display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-primary); cursor: pointer; }
+.login-remember input { width: 16px; height: 16px; accent-color: var(--brand-primary); margin: 0; }
+.login-hint { font-size: 12px; line-height: 1.45; color: var(--text-secondary); margin-top: -4px; }
 
 .wel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
 .wel-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; border: 1px solid var(--surface-border); border-radius: 12px;
@@ -4351,3 +4402,21 @@ a.home-card:hover { border-color: var(--brand-primary); }
 .home-allset-tick { width: 20px; height: 20px; border-radius: 50%; background: var(--status-pass); color: #fff; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .home-allset-text { flex: 1; color: var(--text-secondary); }
 .home-allset-text b { color: var(--text-primary); }
+
+/* Phase 145 A8.2 — a run is waiting for your approval somewhere you aren't looking */
+.approval-banner { display: flex; align-items: center; gap: 10px; margin: 8px 16px 0; padding: 8px 12px;
+    border: 1px solid var(--status-warn); border-radius: 8px; background: var(--surface-card);
+    color: var(--text-primary); font-size: 13px; line-height: 1.4; }
+.approval-banner svg { color: var(--status-warn); flex-shrink: 0; }
+.approval-banner span { flex: 1; min-width: 0; }
+.approval-banner .btn { flex-shrink: 0; text-decoration: none; }
+
+/* Blazor's <FocusOnNavigate Selector="h1"> focuses the page heading on load and navigation, so screen
+   readers announce the new page. It isn't a control, so don't draw a focus outline around it (it showed
+   as a dark box around "What are you working on?" / "Welcome back" after a refresh). */
+h1:focus, h1[tabindex="-1"]:focus { outline: none; }
+
+/* Phase 148 — a control the server's environment sets (SOVRANT_ENV_OVERRIDE on): disabled, with this note */
+.env-lock-note { margin-top: 6px; padding: 6px 9px; border: 1px dashed var(--surface-border); border-radius: 7px;
+    font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+.env-lock-note code { font-size: 11.5px; }

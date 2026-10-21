@@ -274,6 +274,13 @@ internal static class SessionRoutes
                     sb.AppendLine();
                     break;
 
+                case Sovrant.Runtime.Conversation.ConversationCompaction.EntryRole:
+                    sb.Append(CultureInfo.InvariantCulture, $"### Earlier messages summarised ({ts})").AppendLine();
+                    sb.AppendLine();
+                    sb.AppendLine(Sovrant.Runtime.Conversation.ConversationCompaction.DisplayText(entry.Content));
+                    sb.AppendLine();
+                    break;
+
                 default:
                     // system, compaction, etc. — include as a note
                     sb.Append(CultureInfo.InvariantCulture,

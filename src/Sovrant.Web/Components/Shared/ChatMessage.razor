@@ -16,6 +16,11 @@
         </div>
         <div class="msg-content">
 
+            @if (Message.HistoryCompacted)
+            {
+                <div class="msg-compacted msg-indent">@Sovrant.Runtime.Conversation.ConversationCompaction.ChatNote</div>
+            }
+
             @if (!string.IsNullOrEmpty(Message.IntentNarration) && (Message.IsThinking || Message.IsExecutingTools))
             {
                 <div class="intent-narration msg-indent">@Message.IntentNarration</div>

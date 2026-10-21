@@ -9,6 +9,18 @@ namespace Sovrant.Runtime.Conversation;
 /// </summary>
 public sealed class SessionConfig
 {
+    /// <summary>The conversation this config belongs to (set by the session pool). Phase 145: approvals are routed by it.</summary>
+    public string? SessionId { get; set; }
+
+    /// <summary>Who owns the conversation (set by the session pool), or null for single-user hosts.</summary>
+    public string? OwnerUserId { get; set; }
+
+    /// <summary>
+    /// Phase 145: the shared, admin-configured provider profile this conversation uses (the member's
+    /// pick), or null for the install default. <c>SessionProviderRouter</c> routes by it.
+    /// </summary>
+    public string? ProviderProfileId { get; set; }
+
     private volatile string? _model;
     private volatile int _permissionModeInt = -1; // -1 = use global default
     private IReadOnlyList<string>? _allowedMcpServers;

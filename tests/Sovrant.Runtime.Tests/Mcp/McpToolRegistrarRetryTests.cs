@@ -75,8 +75,9 @@ public sealed class McpToolRegistrarRetryTests : IAsyncDisposable
         await using var registrar = Build(factory);
 
         await registrar.RegisterAllAsync(new Dictionary<string, McpServerConfig> { ["pixellab"] = Http });
-        await WaitUntil(() => factory.Calls == 4 && _status.Get("pixellab")?.State == McpServerState.Unavailable);
-        await Task.Delay(200);
+        // Wait for the end state (no retry scheduled) rather than a fixed pause: under load the last
+        // retry's status update can land later than 200 ms.
+        await WaitUntil(() => factory.Calls == 4 && _status.Get("pixellab") is { State: McpServerState.Unavailable, NextRetryAt: null });
 
         var exhausted = _status.Get("pixellab")!;
         Assert.Null(exhausted.NextRetryAt);
@@ -108,7 +109,10 @@ public sealed class McpToolRegistrarRetryTests : IAsyncDisposable
 
         await registrar.RegisterAllAsync(new Dictionary<string, McpServerConfig> { ["pixellab"] = Http, ["github"] = Http });
 
-        Assert.Equal(McpServerState.Unavailable, _status.Get("pixellab")!.State);
+        Assert.Equal(McpServerState.Connected, _status.Get("github")!.State);
+        // pixellab's background retries (40 ms apart here) pass through a connecting state; wait for
+        // it to settle rather than catching it mid-retry under load.
+        await WaitUntil(() => _status.Get("pixellab") is { State: McpServerState.Unavailable, NextRetryAt: null });
         Assert.Equal(McpServerState.Connected, _status.Get("github")!.State);
     }
 
@@ -134,7 +138,8 @@ public sealed class McpToolRegistrarRetryTests : IAsyncDisposable
 
     private static async Task WaitUntil(Func<bool> condition)
     {
-        for (var i = 0; i < 100 && !condition(); i++)
+        // Up to 15 s: a busy test run (the whole suite in parallel) can slow the retries well past 3 s.
+        for (var i = 0; i < 500 && !condition(); i++)
             await Task.Delay(30);
         Assert.True(condition(), "condition not reached in time");
     }

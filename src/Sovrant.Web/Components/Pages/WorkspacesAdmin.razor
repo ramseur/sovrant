@@ -18,7 +18,7 @@
 <div class="settings-page">
     <div class="diag-header">
         <h1>Workspaces</h1>
-        <span class="item-count">@_workspaces.Count workspaces</span>
+        <span class="item-count">@TeamWorkspaces.Count() team · @PersonalWorkspaces.Count() personal</span>
     </div>
 
     @if (!string.IsNullOrEmpty(_status))
@@ -43,18 +43,127 @@
             </div>
         </div>
 
+        @* Phase 145 Part B — the default model set: one setting for every personal workspace. *@
+        <div class="memory-list" style="margin-bottom:8px">
+            <div class="memory-card">
+                <div class="memory-content">
+                    <div class="memory-text">
+                        <strong>Personal workspaces — @PersonalWorkspaces.Count() @(PersonalWorkspaces.Count() == 1 ? "person" : "people")</strong>
+                        <span class="outcome-badge info">Default set</span>
+                    </div>
+                    <div class="memory-meta">
+                        <span class="text-muted text-sm">One default set for everyone's personal workspace, including people who join later</span>
+                    </div>
+                </div>
+                <div class="memory-actions">
+                    <button class="btn btn-sm btn-primary" @onclick="ToggleDefaultSetAsync">@(_defaultSetOpen ? "Close" : "Configure")</button>
+                </div>
+            </div>
+        </div>
+
+        @if (_defaultSetOpen)
+        {
+            <div class="admin-config-panel">
+                <h4>All personal workspaces</h4>
+                <div class="login-info" style="margin:8px 0 12px">
+                    <strong>Everyone gets these in their personal workspace</strong>, including people who join later.
+                    Change it any time: added models appear in everyone's model picker; anyone using a removed model
+                    moves to the default model on their next message (their conversations are kept).
+                </div>
+                <h5>Allowed providers and their models</h5>
+                @if (_allProfiles.Count == 0)
+                {
+                    <p class="text-secondary">No providers configured yet. <a href="/admin/providers">Add one →</a></p>
+                }
+                else
+                {
+                    @foreach (var p in _allProfiles)
+                    {
+                        <div class="form-group toggle-row">
+                            <div>
+                                <div class="toggle-title">@p.Name</div>
+                                <div class="text-sm text-muted">@p.ProviderKind@(string.IsNullOrEmpty(p.DefaultModel) ? "" : " · " + p.DefaultModel)</div>
+                            </div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked="@_defaultSetIds.Contains(p.ProfileId)"
+                                       @onchange="e => ToggleDefaultSet(p.ProfileId, (bool)(e.Value ?? false))" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    }
+                    <div class="form-group toggle-row">
+                        <div>
+                            <div class="toggle-title">Default model</div>
+                            <div class="text-sm text-muted">Used until a member picks another, and when their pick isn't allowed here.</div>
+                        </div>
+                        <select class="login-input" style="width:auto" @bind="_defaultSetDefault">
+                            <option value="">First allowed provider</option>
+                            @foreach (var p in _allProfiles.Where(p => _defaultSetIds.Contains(p.ProfileId)))
+                            {
+                                <option value="@p.ProfileId">@p.Name@(string.IsNullOrEmpty(p.DefaultModel) ? "" : " · " + p.DefaultModel)</option>
+                            }
+                        </select>
+                    </div>
+                    <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveDefaultSetAsync">Save default set</button>
+                }
+
+                @* Phase 148: MCP servers everyone gets, plus any enabled for one person under Manage. *@
+                <h5 style="margin-top:18px">Integrations (MCP servers)</h5>
+                <p class="text-sm text-muted" style="margin-bottom:8px">Everyone gets these in their personal workspace, plus any you enable for one person under Manage. <a href="/admin/integrations">Manage servers →</a></p>
+                @if (_allMcpEntries.Count == 0)
+                {
+                    <p class="text-secondary">No MCP servers configured yet.</p>
+                }
+                else
+                {
+                    @foreach (var entry in _allMcpEntries)
+                    {
+                        <div class="form-group toggle-row">
+                            <div><div class="toggle-title">@entry.Name</div></div>
+                            <label class="toggle-switch">
+                                <input type="checkbox" checked="@_defaultMcpIds.Contains(entry.Id)"
+                                       @onchange="e => { if ((bool)(e.Value ?? false)) _defaultMcpIds.Add(entry.Id); else _defaultMcpIds.Remove(entry.Id); }" />
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    }
+                    <button class="btn-primary btn-sm" style="margin-top:8px" @onclick="SaveDefaultMcpsAsync">Save integrations</button>
+                }
+
+                @* Phase 148 — one row per person, instead of a list of identical "Personal" workspaces. *@
+                <h5 style="margin-top:18px">People with a personal workspace</h5>
+                <div class="signin-table">
+                    <table>
+                        <thead><tr><th>Email</th><th>Role</th><th>Created</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var w in PersonalWorkspaces.OrderBy(w => OwnerEmail(w), StringComparer.OrdinalIgnoreCase))
+                            {
+                                <tr>
+                                    <td>@OwnerEmail(w)</td>
+                                    <td class="text-muted">@(_owners.TryGetValue(w.OwnerId, out var u) ? u.Role : "")</td>
+                                    <td class="text-muted">@w.CreatedAt.LocalDateTime.ToString("d")</td>
+                                    <td style="text-align:right"><button class="btn btn-sm" @onclick="() => ToggleConfigureWorkspace(w)">Manage</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <p class="text-muted text-sm" style="margin-top:6px">Manage opens that one person's workspace — for the rare exception. Everyone else uses the default set above.</p>
+            </div>
+        }
+
         @if (_wsLoading)
         {
             <p class="loading-row">Loading workspaces…</p>
         }
-        else if (_workspaces.Count == 0)
+        else if (!TeamWorkspaces.Any())
         {
-            <p class="text-secondary">No workspaces found.</p>
+            <p class="text-secondary">No team workspaces yet. Create one above to share models and conversations with a group.</p>
         }
         else
         {
             <div class="memory-list">
-                @foreach (var w in _workspaces)
+                @foreach (var w in TeamWorkspaces)
                 {
                     <div class="memory-card">
                         <div class="memory-content">
@@ -147,6 +256,10 @@
                 </div>
 
                 <h5>Providers</h5>
+                @if (_configWorkspace.Type == WorkspaceType.Personal)
+                {
+                    <p class="text-sm text-muted" style="margin-bottom:8px">Once a default set is saved (All personal workspaces), every personal workspace uses it and these toggles no longer apply.</p>
+                }
                 <p class="text-sm text-muted" style="margin-bottom:8px">Select which configured providers are available in this workspace. <a href="/admin/providers">Manage providers →</a></p>
                 @if (_allProfiles.Count == 0)
                 {
@@ -235,10 +348,21 @@
         await LoadWorkspacesAsync();
     }
 
+    // Phase 148: team workspaces are listed; personal ones are one row (the default set) with a grid by person.
+    private IEnumerable<Workspace> TeamWorkspaces => _workspaces.Where(w => w.Type != WorkspaceType.Personal);
+    private IEnumerable<Workspace> PersonalWorkspaces => _workspaces.Where(w => w.Type == WorkspaceType.Personal);
+    private Dictionary<string, Sovrant.Runtime.Users.User> _owners = new(StringComparer.Ordinal);
+    private string OwnerEmail(Workspace w) =>
+        _owners.TryGetValue(w.OwnerId, out var u) && !string.IsNullOrEmpty(u.Email) ? u.Email : w.OwnerId;
+
     private async Task LoadWorkspacesAsync()
     {
         _wsLoading = true;
-        try { _workspaces = (await WorkspaceService.ListAllAsync().ConfigureAwait(false)).ToList(); }
+        try
+        {
+            _workspaces = (await WorkspaceService.ListAllAsync().ConfigureAwait(false)).ToList();
+            _owners = (await UserService.ListAsync().ConfigureAwait(false)).ToDictionary(u => u.UserId, StringComparer.Ordinal);
+        }
         catch (Exception ex) { _error = $"Failed to load workspaces: {ex.Message}"; }
         finally { _wsLoading = false; }
     }
@@ -254,6 +378,7 @@
             _newWsName = string.Empty;
             _status = $"Workspace '{name}' created.";
             await LoadWorkspacesAsync();
+            ActiveContext.NotifyDataChanged(); // the top bar's workspace list
         }
         catch (Exception ex) { _error = $"Failed: {ex.Message}"; }
     }
@@ -268,6 +393,7 @@
             await WorkspaceService.DeleteAsync(w.WorkspaceId).ConfigureAwait(false);
             _status = $"'{w.Name}' deleted.";
             await LoadWorkspacesAsync();
+            ActiveContext.NotifyDataChanged(); // the top bar's workspace list
         }
         catch (Exception ex) { _error = $"Cannot delete: {ex.Message}"; }
         StateHasChanged();
@@ -275,6 +401,7 @@
 
     private async Task ToggleConfigureWorkspace(Workspace ws)
     {
+        _defaultSetOpen = false;
         if (_configWorkspace?.WorkspaceId == ws.WorkspaceId) { _configWorkspace = null; return; }
         _configWorkspace = ws;
         var maxRaw = await WsSettings.GetAsync(ws.WorkspaceId, WorkspaceSettingsKeys.GeneralMaxTokens);
@@ -349,6 +476,54 @@
                 Role: m.Role));
         }
         return rows;
+    }
+
+    // ── Phase 145 Part B: the default model set for personal workspaces ───────────────
+    private bool _defaultSetOpen;
+    private HashSet<string> _defaultSetIds = new(StringComparer.Ordinal);
+    private string _defaultSetDefault = string.Empty;
+
+    private async Task ToggleDefaultSetAsync()
+    {
+        _defaultSetOpen = !_defaultSetOpen;
+        if (!_defaultSetOpen) return;
+        _configWorkspace = null;
+        _allProfiles = (await ProfileStore.ListAsync(Session.UserId!)).ToList();
+        var raw = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds);
+        _defaultSetIds = new HashSet<string>((raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
+        _defaultSetDefault = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileId) ?? string.Empty;
+        _allMcpEntries = (await McpServerStore.GetAllEntriesAsync()).OrderBy(e => e.Name, StringComparer.Ordinal).ToList();
+        var mcpRaw = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultMcpServerIds);
+        _defaultMcpIds = new HashSet<string>((mcpRaw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal);
+    }
+
+    private HashSet<string> _defaultMcpIds = new(StringComparer.Ordinal);
+
+    private async Task SaveDefaultMcpsAsync()
+    {
+        await WsSettings.SetAsync(WorkspaceSettingsKeys.GlobalWorkspaceId, WorkspaceSettingsKeys.PersonalDefaultMcpServerIds, string.Join(',', _defaultMcpIds));
+        _status = $"Integrations saved: {_defaultMcpIds.Count} for every personal workspace.";
+    }
+
+    private void ToggleDefaultSet(string profileId, bool enabled)
+    {
+        if (enabled) _defaultSetIds.Add(profileId);
+        else
+        {
+            _defaultSetIds.Remove(profileId);
+            if (_defaultSetDefault == profileId) _defaultSetDefault = string.Empty;
+        }
+    }
+
+    private async Task SaveDefaultSetAsync()
+    {
+        var ws = WorkspaceSettingsKeys.GlobalWorkspaceId;
+        await WsSettings.SetAsync(ws, WorkspaceSettingsKeys.PersonalDefaultProfileIds, string.Join(',', _defaultSetIds));
+        if (string.IsNullOrEmpty(_defaultSetDefault) || !_defaultSetIds.Contains(_defaultSetDefault))
+            await WsSettings.DeleteAsync(ws, WorkspaceSettingsKeys.PersonalDefaultProfileId);
+        else
+            await WsSettings.SetAsync(ws, WorkspaceSettingsKeys.PersonalDefaultProfileId, _defaultSetDefault);
+        _status = $"Default set saved: {_defaultSetIds.Count} {(_defaultSetIds.Count == 1 ? "provider" : "providers")} for every personal workspace.";
     }
 
     private void ToggleProvider(string profileId, bool enabled)

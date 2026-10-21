@@ -1059,7 +1059,7 @@ loginCmd.SetAction(async (ParseResult pr, CancellationToken ct) =>
 
     // Local mode: authenticate via embedded IIdentityService.
     var identity = sp.GetRequiredService<Sovrant.Runtime.Auth.IIdentityService>();
-    var result = await identity.LoginAsync(email, password, ct).ConfigureAwait(false);
+    var result = await identity.LoginAsync(email, password, ct: ct).ConfigureAwait(false);
     if (!result.Success || result.Token is null)
     {
         AnsiConsole.MarkupLine($"[red]Login failed: {Markup.Escape(result.Error ?? "unknown error")}[/]");

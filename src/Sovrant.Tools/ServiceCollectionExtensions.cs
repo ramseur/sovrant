@@ -47,7 +47,10 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         // HTTP clients for web tools
-        services.AddHttpClient("WebFetch");
+        // WebFetch can't reach the server's own network (private, loopback, link-local, metadata):
+        // checked on every connection, including redirects.
+        services.AddHttpClient("WebFetch")
+            .ConfigurePrimaryHttpMessageHandler(Core.OutboundAddressGuard.CreateHandler);
         services.AddHttpClient("WebSearch");
 
         // User input provider (can be replaced by CLI layer)

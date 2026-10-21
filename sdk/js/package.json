@@ -1,6 +1,6 @@
 {
   "name": "@sovrant/sdk",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "TypeScript/JavaScript client SDK for Sovrant — streaming chat, session management, tool events.",
   "type": "module",
   "main": "dist/index.js",
@@ -44,7 +44,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ramseur/sovrant-engine.git",
+    "url": "https://github.com/ramseur/sovrant.git",
     "directory": "sdk/js"
   },
   "keywords": [

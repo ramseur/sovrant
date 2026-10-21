@@ -75,23 +75,27 @@
                 <input type="text" @bind="_newProfileName" placeholder="Display name (or leave blank for auto)" />
             </div>
 
-            @if (_allWorkspaces.Count > 0)
-            {
-                <div class="form-field">
-                    <label>Enable for workspaces</label>
-                    <div class="multi-select-box">
-                        @foreach (var ws in _allWorkspaces)
-                        {
-                            <label>
-                                <input type="checkbox"
-                                       checked="@_selectedWorkspaceIds.Contains(ws.WorkspaceId)"
-                                       @onchange="e => ToggleWorkspace(ws.WorkspaceId, (bool)(e.Value ?? false))" />
-                                @ws.Name
-                            </label>
-                        }
-                    </div>
+            @* Phase 148: team workspaces plus one option for every personal workspace (the default set) —
+               not one checkbox per person. Nothing ticked by default: a new provider can cost money. *@
+            <div class="form-field">
+                <label>Available in</label>
+                <div class="multi-select-box">
+                    @foreach (var ws in _allWorkspaces.Where(w => w.Type != Sovrant.Runtime.Workspaces.WorkspaceType.Personal))
+                    {
+                        <label>
+                            <input type="checkbox"
+                                   checked="@_selectedWorkspaceIds.Contains(ws.WorkspaceId)"
+                                   @onchange="e => ToggleWorkspace(ws.WorkspaceId, (bool)(e.Value ?? false))" />
+                            @ws.Name
+                        </label>
+                    }
+                    <label>
+                        <input type="checkbox" checked="@_addToDefaultSet" @onchange="e => _addToDefaultSet = (bool)(e.Value ?? false)" />
+                        Personal workspaces (default set)
+                    </label>
                 </div>
-            }
+                <span class="text-muted text-sm">The default set is what every personal workspace uses. Leave everything unticked to decide later under Workspaces.</span>
+            </div>
 
             <button class="btn-primary" @onclick="AddProvider">Add Provider</button>
         </div>
@@ -120,6 +124,7 @@
     private string _statusMessage = string.Empty;
     private List<ProviderProfileVm> _savedProfiles = [];
     private List<Workspace> _allWorkspaces = [];
+    private bool _addToDefaultSet;
     private HashSet<string> _selectedWorkspaceIds = [];
 
     public static readonly Dictionary<string, string> ProviderBaseUrls = new(StringComparer.Ordinal)
@@ -164,10 +169,7 @@
         await LoadProfilesAsync();
         _allWorkspaces = (await WorkspaceService.ListAllAsync()).ToList();
 
-        // Pre-select the personal workspace; all others are opt-in.
-        var personal = _allWorkspaces.FirstOrDefault(w => w.Type == Sovrant.Runtime.Workspaces.WorkspaceType.Personal);
-        if (personal is not null)
-            _selectedWorkspaceIds.Add(personal.WorkspaceId);
+        // Phase 148: nothing pre-selected — the admin chooses who gets a new provider.
     }
 
     private void OnProviderChanged()
@@ -230,7 +232,17 @@
             Config.Model = string.Empty;
             ActiveContext.SetModel(string.Empty, string.Empty);
 
-            // Update enabled_profile_ids for each selected workspace
+            // Every personal workspace, through the default set.
+            if (_addToDefaultSet)
+            {
+                var raw = await WsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultProfileIds);
+                var set = new HashSet<string>(string.IsNullOrEmpty(raw)
+                    ? []
+                    : raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries), StringComparer.Ordinal) { profileId };
+                await WsSettings.SetAsync(WorkspaceSettingsKeys.GlobalWorkspaceId, WorkspaceSettingsKeys.PersonalDefaultProfileIds, string.Join(',', set));
+            }
+
+            // Update enabled_profile_ids for each selected (team) workspace
             foreach (var wsId in _selectedWorkspaceIds)
             {
                 var existing = await WsSettings.GetAsync(wsId, WorkspaceSettingsKeys.EnabledProviderProfileIds);

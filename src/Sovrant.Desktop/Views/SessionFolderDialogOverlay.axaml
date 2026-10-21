@@ -99,7 +99,7 @@
                             <DockPanel IsVisible="{Binding IsCreatingFolder}" Margin="6">
                                 <Button DockPanel.Dock="Right" Content="Create" Margin="6,0,0,0" CornerRadius="8"
                                         Command="{Binding CreateFolderCommand}" Background="{DynamicResource BrandPrimary}" Foreground="White" />
-                                <TextBox Text="{Binding NewFolderName}" Watermark="Folder name" MaxLength="100" />
+                                <TextBox Text="{Binding NewFolderName}" PlaceholderText="Folder name" MaxLength="100" />
                             </DockPanel>
                         </StackPanel>
                     </ScrollViewer>
@@ -116,7 +116,7 @@
             <StackPanel Margin="18,16,18,12" Spacing="12">
                 <TextBlock Text="{Binding Heading}" FontSize="15" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" TextTrimming="CharacterEllipsis" />
-                <TextBox x:Name="NameInput" Text="{Binding NameValue}" Watermark="Name" MaxLength="100" />
+                <TextBox x:Name="NameInput" Text="{Binding NameValue}" PlaceholderText="Name" MaxLength="100" />
                 <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}"
                            Foreground="{DynamicResource StatusFail}" FontSize="12" TextWrapping="Wrap" />
                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">

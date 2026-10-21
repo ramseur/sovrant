@@ -47,17 +47,26 @@
 
         <h2>Account</h2>
         <div class="settings-section-row">
-            <button class="btn btn-secondary" @onclick="LogoutAsync">Log out</button>
+            @if (!Sovrant.Web.Program.IsRemoteMode)
+            {
+                <form class="signout-form" method="post" action="/auth/logout">
+                    <AntiforgeryToken />
+                    <button class="btn btn-secondary" type="submit">Sign out</button>
+                    <button class="btn btn-secondary" type="submit" name="scope" value="all">Sign out of all browsers</button>
+                </form>
+            }
+            else
+            {
+                <button class="btn btn-secondary" @onclick="LogoutAsync">Sign out</button>
+            }
         </div>
     </div>
 </div>
 
 @code {
     [Inject] private SovrantConfig Config { get; set; } = default!;
-    [Inject] private IPermissionModeAccessor PermissionModeAccessor { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private IUserPreferenceStore Prefs { get; set; } = default!;
-    [Inject] private ICredentialStore Credentials { get; set; } = default!;
     [Inject] private WebSessionService Session { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
 
@@ -69,8 +78,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _permissionMode = PermissionModeAccessor.Mode.ToString();
-        await Task.CompletedTask;
+        // Phase 145: your own saved mode (it applies to your conversations only), else the install default.
+        var mine = string.IsNullOrEmpty(Session.UserId) ? null : await Prefs.GetAsync(Session.UserId, UserPreferenceKeys.PermissionMode);
+        _permissionMode = Enum.TryParse<PermissionMode>(mine, out var saved) ? saved.ToString() : Config.PermissionMode.ToString();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -85,8 +95,7 @@
 
     private void OnPermissionModeChanged()
     {
-        if (Enum.TryParse<PermissionMode>(_permissionMode, out var mode))
-            PermissionModeAccessor.Mode = mode;
+        // Saved as your preference (SaveAsync); each of your chat turns applies it to that conversation.
         ScheduleAutoSave();
     }
 
@@ -116,20 +125,15 @@
             var userId = Session.UserId!;
             await Prefs.SetAsync(userId, UserPreferenceKeys.PermissionMode, _permissionMode);
 
-            if (Enum.TryParse<PermissionMode>(_permissionMode, out var pm))
-                Config.PermissionMode = pm;
-
             _statusMessage = "Settings saved.";
         }
         catch (Exception ex) { _statusMessage = $"Save failed: {ex.Message}"; }
         StateHasChanged();
     }
 
-    private const string StoredWebTokenKey = "sovrant.web.auth_token";
-
-    private async Task LogoutAsync()
+    /// <summary>Remote mode only (process-wide sign-in until Phase 145 Part C).</summary>
+    private void LogoutAsync()
     {
-        await Credentials.DeleteAsync(StoredWebTokenKey).ConfigureAwait(false);
         Session.SignOut();
         Nav.NavigateTo("/login", forceLoad: false);
     }

@@ -25,10 +25,16 @@ public static class McpServerStoreExtensions
 
         var raw = await wsSettings.GetAsync(workspaceId, WorkspaceSettingsKeys.EnabledMcpServerIds, ct)
             .ConfigureAwait(false);
-        var enabledIds = new HashSet<string>(
-            (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            StringComparer.Ordinal);
+        var enabledIds = Ids(raw);
+        // Phase 148: personal workspaces also get the admin's default set (additive — anything enabled
+        // just for this person still applies).
+        if (WorkspaceIdentity.IsPersonal(workspaceId))
+            enabledIds.UnionWith(Ids(await wsSettings.GetGlobalAsync(WorkspaceSettingsKeys.PersonalDefaultMcpServerIds, ct).ConfigureAwait(false)));
 
         return allEntries.Where(e => enabledIds.Contains(e.Id)).ToList();
     }
+
+    private static HashSet<string> Ids(string? raw) => new(
+        (raw ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+        StringComparer.Ordinal);
 }

@@ -90,6 +90,12 @@ public sealed class SovrantWebAppFactory : WebApplicationFactory<Program>
                 return new SqliteStorageProvider(logger, dbPath: testDbName);
             });
 
+            // No background workflow scheduler in the test host: its ticks could pick up a workflow a
+            // test just created and change its status mid-test. Scheduler tests build it directly.
+            foreach (var d in services.Where(d => d.ServiceType == typeof(Microsoft.Extensions.Hosting.IHostedService)
+                         && d.ImplementationType == typeof(Sovrant.Server.WorkflowSchedulerService)).ToList())
+                services.Remove(d);
+
             // Use no-op audit store (avoids needing DB tables for audit in simple tests).
             services.RemoveAll(typeof(IAuditStore));
             services.AddSingleton<IAuditStore>(new FakeAuditStore());

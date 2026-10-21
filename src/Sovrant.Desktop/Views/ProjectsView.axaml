@@ -24,7 +24,7 @@
             </DockPanel>
 
             <TextBox Text="{Binding SearchText}"
-                     Watermark="Search projects..."
+                     PlaceholderText="Search projects..."
                      CornerRadius="8" Padding="12,8" />
 
             <TextBlock Text="{Binding StatusMessage}" FontSize="11"
@@ -43,7 +43,7 @@
                         <TextBlock Text="New Project" FontSize="12" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" />
                         <TextBox Text="{Binding NewProjectName}"
-                                 Watermark="Project name"
+                                 PlaceholderText="Project name"
                                  FontSize="12" Padding="8,6" CornerRadius="6" />
                         <Button Content="Create"
                                 Command="{Binding CreateProjectCommand}"

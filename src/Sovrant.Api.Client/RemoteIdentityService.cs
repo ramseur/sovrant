@@ -19,7 +19,7 @@ public sealed class RemoteIdentityService : IIdentityService
         _options = options;
     }
 
-    public async Task<LoginResult> LoginAsync(string email, string password, CancellationToken ct = default)
+    public async Task<LoginResult> LoginAsync(string email, string password, bool issueToken = true, CancellationToken ct = default)
     {
         var body = JsonSerializer.Serialize(new { email, password });
         using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");
@@ -45,7 +45,7 @@ public sealed class RemoteIdentityService : IIdentityService
         return new LoginResult(true, token, userId, role, null);
     }
 
-    public async Task<RegisterResult> RegisterAsync(string email, string password, CancellationToken ct = default)
+    public async Task<RegisterResult> RegisterAsync(string email, string password, bool issueToken = true, CancellationToken ct = default)
     {
         var body = JsonSerializer.Serialize(new { email, password });
         using var content = new StringContent(body, System.Text.Encoding.UTF8, "application/json");

@@ -254,7 +254,7 @@ framework. TLS is disabled by default; for development use
 All Bucket-C secrets flow through the encrypted `ICredentialStore`. Env variables
 are not read at request time: since Phase 144, `EnvCredentialSeeder` imports them
 into the store at start-up (first boot only, or every start with
-`SOVRANT_ENV_KEYS_OVERRIDE=true`). `sovrant auth set <name>` writes the value through
+`SOVRANT_ENV_OVERRIDE=true`). `sovrant auth set <name>` writes the value through
 `AesGcmCredentialStore`; consumers read it back via the store > snapshot
 chain so a `auth set llm <new-key>` rotation takes effect on the next request
 without restarting the process.

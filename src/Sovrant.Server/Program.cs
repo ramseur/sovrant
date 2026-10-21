@@ -125,6 +125,12 @@ builder.Services.AddSingleton<RequestLoggingMiddleware>();
 
 // IPrincipalAccessor — reads the authenticated caller from HttpContext.Items.
 builder.Services.AddHttpContextAccessor();
+// Phase 145 Part D: Server is hosted and multi-user, so file/shell tools are off for everyone unless an
+// admin allows them (Governance), members also need the member switch, and blocked tools are hidden from
+// the model. The caller comes from the ambient principal set per request / per job.
+Sovrant.Runtime.Tools.HostToolPolicyExtensions.AddHostToolPolicy(builder.Services, sp => new Sovrant.Runtime.Tools.MemberHostToolPolicy(
+    Sovrant.Runtime.Auth.AmbientPrincipal.Accessor,
+    sp.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>()));
 builder.Services.AddScoped<Sovrant.Runtime.Auth.IPrincipalAccessor, Sovrant.Server.Auth.HttpContextPrincipalAccessor>();
 
 // CORS — configurable via SOVRANT_CORS_ORIGINS (comma-separated); falls back to localhost defaults.
@@ -181,8 +187,8 @@ builder.Services.AddRateLimiter(options =>
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
 // Phase 144 (GitHub #33): behind a reverse proxy, trust X-Forwarded-* from known proxies.
-Sovrant.Server.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
-    Environment.GetEnvironmentVariable(Sovrant.Server.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
+Sovrant.Hosting.ForwardedHeadersSetup.Configure(builder.Services,
+    Environment.GetEnvironmentVariable(Sovrant.Hosting.ForwardedHeadersSetup.TrustedProxiesVariable));
 
 var app = builder.Build();
 // First in the pipeline, so HTTPS redirection, rate limiting and logging see the real client.

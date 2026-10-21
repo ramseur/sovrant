@@ -64,6 +64,9 @@
 </div>
 
 @code {
+    /// <summary>The user signed in on this browser tab (Phase 145).</summary>
+    private string Me => Session.UserId ?? string.Empty;
+
     /// <summary>"Show all conversations" — the layout expands the rail.</summary>
     [Parameter] public EventCallback OnExpand { get; set; }
 
@@ -119,7 +122,7 @@
             return;
         try
         {
-            var snapshot = await SessionSidebarService.From(Services).LoadAsync(Sovrant.Web.Program.SovrantUserId);
+            var snapshot = await SessionSidebarService.From(Services).LoadAsync(Me);
             _recent = snapshot.Sessions.OrderByDescending(s => s.UpdatedAt).Take(5).ToList();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

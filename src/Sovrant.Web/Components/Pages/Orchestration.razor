@@ -5,6 +5,7 @@
 @using Sovrant.Agents.Swarm
 @using Sovrant.Agents.Templates
 @using Sovrant.Web.Services
+@inject Sovrant.Web.Services.WebSessionService Session
 
 <div class="master-detail">
     <div class="master-panel">
@@ -355,6 +356,9 @@
 </div>
 
 @code {
+    /// <summary>The user signed in on this browser tab (Phase 145).</summary>
+    private string Me => Session.UserId ?? string.Empty;
+
     [Inject] private ITeamRegistry TeamRegistry { get; set; } = default!;
     [Inject] private ISwarmConfigStore SwarmConfigStore { get; set; } = default!;
     [Inject] private IAgentOrchestrator Orchestrator { get; set; } = default!;
@@ -429,7 +433,7 @@
             Name: name,
             Description: string.IsNullOrEmpty(_createDescription) ? null : _createDescription.Trim(),
             Origin: "ui",
-            CreatedBy: Program.SovrantUserId,
+            CreatedBy: Me,
             CreatedAt: DateTimeOffset.UtcNow)
         {
             RunMode = _createRunMode,
@@ -481,7 +485,7 @@
             TeamId = _selected.TeamId,
             WorkspaceId = ActiveContext.WorkspaceId,
             Template = string.IsNullOrEmpty(_addMemberTemplate) ? null : _addMemberTemplate,
-            CreatedBy = Program.SovrantUserId,
+            CreatedBy = Me,
         };
 
         TeamRegistry.RegisterMember(member);
@@ -508,7 +512,7 @@
                 Goal = _runGoal,
                 TeamId = _selected.TeamId,
                 WorkspaceId = ActiveContext.WorkspaceId,
-                UserId = Program.SovrantUserId,
+                UserId = Me,
                 Permissions = "ask",
             };
 

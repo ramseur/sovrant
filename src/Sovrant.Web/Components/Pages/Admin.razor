@@ -8,6 +8,7 @@
 @inject ITokenService TokenService
 @inject WebSessionService Session
 @inject NavigationManager Nav
+@inject IServiceProvider Services
 
 <div class="settings-page">
     <div class="diag-header">
@@ -17,7 +18,7 @@
 
     <div class="tab-bar">
         <button class="tab-btn @(_tab == 0 ? "active" : "")" @onclick="() => _tab = 0">Users</button>
-        <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Registration</button>
+        <button class="tab-btn @(_tab == 1 ? "active" : "")" @onclick="() => _tab = 1">Registration &amp; sign-in</button>
         <button class="tab-btn @(_tab == 2 ? "active" : "")" @onclick="() => _tab = 2">Password Reset</button>
     </div>
 
@@ -73,9 +74,47 @@
                                 <div class="memory-meta">
                                     <span class="text-muted text-sm">@u.UserId</span>
                                     <span class="text-muted text-sm">joined @u.CreatedAt.LocalDateTime.ToString("d")</span>
+                                    @if (SignInsEnabled)
+                                    {
+                                        <span class="text-muted text-sm">@SignedInText(u)</span>
+                                    }
                                 </div>
+                                @if (_expanded.Contains(u.UserId) && SignInsOf(u).Count > 0)
+                                {
+                                    @* Phase 145 — every browser this person is signed in on, with Revoke. *@
+                                    <div class="signin-table">
+                                        <table>
+                                            <thead><tr><th>Browser</th><th>Last active</th><th>Expires</th><th></th></tr></thead>
+                                            <tbody>
+                                                @foreach (var si in SignInsOf(u))
+                                                {
+                                                    <tr>
+                                                        <td>
+                                                            <div class="signin-dev">
+                                                                @Sovrant.Web.Auth.WebAuth.DescribeBrowser(si.UserAgent)
+                                                                @if (si.SignInId == Session.SignInId)
+                                                                {
+                                                                    <span class="signin-this">This browser</span>
+                                                                }
+                                                            </div>
+                                                            <div class="signin-meta">@SignInMeta(si)</div>
+                                                        </td>
+                                                        <td>@Ago(si.LastActiveAt)</td>
+                                                        <td>@ExpiresText(si)</td>
+                                                        <td style="text-align:right"><button class="btn btn-sm" @onclick="() => RevokeSignInAsync(si)">Revoke</button></td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                }
                             </div>
                             <div class="memory-actions">
+                                @if (SignInsEnabled && SignInsOf(u).Count > 0)
+                                {
+                                    <button class="btn btn-sm" @onclick="() => ToggleSignIns(u.UserId)">@(_expanded.Contains(u.UserId) ? "Hide sign-ins" : "Sign-ins")</button>
+                                    <button class="btn btn-sm" @onclick="() => SignOutEverywhereAsync(u)">Sign out everywhere</button>
+                                }
                                 @if (u.Status == "pending")
                                 {
                                     <button class="btn btn-sm btn-primary" @onclick="() => ApproveAsync(u.UserId)">Approve</button>
@@ -127,6 +166,76 @@
                     <input type="checkbox" checked="@_approvalRequired" @onchange="ToggleApprovalAsync" />
                     <span class="toggle-slider"></span>
                 </label>
+            </div>
+        </div>
+
+        <!-- Phase 145 A7: how long people stay signed in -->
+        <div class="settings-section" style="margin-top:24px">
+            <h2>Sign-in</h2>
+            <p class="text-muted text-sm">How long people stay signed in on Web. Changes reach browsers that are already signed in at their next check (within about a minute); a longer limit never extends a sign-in that already exists.</p>
+
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Allow "Keep me signed in"</div>
+                    <div class="toggle-desc">Shows the checkbox on Sign in. Turn off where people shouldn't stay signed in for days — remembered browsers then follow the limits below.</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberAllowed)" />
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" checked="@_signIn.RememberAllowed" @onchange="ToggleRememberAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberAllowed)" />
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Keep signed in for</div>
+                    <div class="toggle-desc">How long "Keep me signed in" lasts on a browser.</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberDays)" />
+                </div>
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_rememberDays" @bind:after="SaveSignInSettingsAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInRememberDays)">
+                    @foreach (var v in Choices(WebSignInSettings.RememberDayChoices, _rememberDays))
+                    {
+                        <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromDays(v))</option>
+                    }
+                </select>
+            </div>
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Sign out after inactivity</div>
+                    <div class="toggle-desc">Renewed while the person is active.</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInIdleMinutes)" />
+                </div>
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_idleMinutes" @bind:after="SaveSignInSettingsAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInIdleMinutes)">
+                    @foreach (var v in Choices(WebSignInSettings.IdleMinuteChoices, _idleMinutes))
+                    {
+                        <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromMinutes(v))</option>
+                    }
+                </select>
+            </div>
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Sign out after at most</div>
+                    <div class="toggle-desc">However active they are, unless they chose "Keep me signed in".</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInMaxHours)" />
+                </div>
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_maxHours" @bind:after="SaveSignInSettingsAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.WebSignInMaxHours)">
+                    @foreach (var v in Choices(WebSignInSettings.MaxHourChoices, _maxHours))
+                    {
+                        <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromHours(v))</option>
+                    }
+                </select>
+            </div>
+            <div class="toggle-row" style="margin-top:16px">
+                <div>
+                    <div class="toggle-title">Stop runs after</div>
+                    <div class="toggle-desc">A reply, workflow or swarm still running after this long is stopped, keeping what it finished. Signing out doesn't stop your work; Sign out everywhere and Revoke do.</div>
+                    <EnvLockNote Variable="@Lock(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.RunMaxMinutes)" />
+                </div>
+                <select class="login-input" style="flex:0 0 auto;width:auto" @bind="_runMinutes" @bind:after="SaveRunLimitAsync" disabled="@Locked(Sovrant.Runtime.Workspaces.WorkspaceSettingsKeys.RunMaxMinutes)">
+                    @foreach (var v in Choices(Sovrant.Runtime.Conversation.RunLimits.MinuteChoices, _runMinutes))
+                    {
+                        <option value="@v">@WebSignInSettings.Describe(TimeSpan.FromMinutes(v))</option>
+                    }
+                </select>
             </div>
         </div>
     }
@@ -201,12 +310,74 @@
         try
         {
             _users = (await UserService.ListAsync().ConfigureAwait(false)).ToList();
+            await LoadSignInsAsync().ConfigureAwait(false);
             FilterUsers();
             _registrationOpen = await IdentityService.IsRegistrationOpenAsync().ConfigureAwait(false);
             _approvalRequired = await IdentityService.IsApprovalRequiredAsync().ConfigureAwait(false);
+            LoadSignInSettings();
         }
         catch (Exception ex) { _error = $"Load failed: {ex.Message}"; }
         finally { _isLoading = false; }
+    }
+
+    // ── Phase 145: where each person is signed in ─────────────────────────────
+    private Sovrant.Runtime.Auth.IWebSignInService? _signInService;
+    private Sovrant.Runtime.Auth.WebSignInPolicy? _policy;
+    private Dictionary<string, List<Sovrant.Runtime.Auth.WebSignIn>> _signIns = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _expanded = new(StringComparer.Ordinal);
+
+    private bool SignInsEnabled => _signInService is not null && _policy is not null;
+
+    private async Task LoadSignInsAsync()
+    {
+        _signInService ??= Services.GetService<Sovrant.Runtime.Auth.IWebSignInService>();
+        _policy = Services.GetService<Sovrant.Runtime.Auth.WebSignInPolicySource>()?.Current;
+        if (!SignInsEnabled) return;
+        var all = await _signInService!.ListAllActiveAsync(_policy!).ConfigureAwait(false);
+        _signIns = all.GroupBy(s => s.UserId, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+    }
+
+    private List<Sovrant.Runtime.Auth.WebSignIn> SignInsOf(User u) => _signIns.TryGetValue(u.UserId, out var l) ? l : [];
+
+    private string SignedInText(User u) => u.Status == "pending" ? "awaiting approval"
+        : SignInsOf(u).Count switch { 0 => "not signed in", 1 => "signed in on 1 browser", var n => $"signed in on {n} browsers" };
+
+    private string SignInMeta(Sovrant.Runtime.Auth.WebSignIn si) =>
+        $"{si.IpAddress ?? "unknown IP"} · signed in {si.CreatedAt.LocalDateTime:g}"
+        + (_policy!.KeepsSignedIn(si) ? $" · kept {Sovrant.Runtime.Auth.WebSignInSettings.Describe(_policy.RememberLifetime)}" : string.Empty);
+
+    private string ExpiresText(Sovrant.Runtime.Auth.WebSignIn si) =>
+        _policy!.KeepsSignedIn(si) ? _policy.ExpiryOf(si).LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture)
+        : $"{Sovrant.Runtime.Auth.WebSignInSettings.Describe(_policy.IdleTimeout)} idle";
+
+    private void ToggleSignIns(string userId)
+    {
+        if (!_expanded.Remove(userId)) _expanded.Add(userId);
+    }
+
+    private async Task RevokeSignInAsync(Sovrant.Runtime.Auth.WebSignIn si)
+    {
+        if (!SignInsEnabled) return;
+        await _signInService!.RevokeAsync(si.SignInId, Sovrant.Runtime.Auth.WebSignInRevokeReasons.Admin).ConfigureAwait(false);
+        _status = $"Signed {si.UserId} out of {Sovrant.Web.Auth.WebAuth.DescribeBrowser(si.UserAgent)}.";
+        await LoadSignInsAsync().ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SignOutEverywhereAsync(User u)
+    {
+        if (!SignInsEnabled) return;
+        var n = await _signInService!.RevokeAllAsync(u.UserId, Sovrant.Runtime.Auth.WebSignInRevokeReasons.Admin).ConfigureAwait(false);
+        _status = $"Signed {u.Email ?? u.UserId} out of {n} {(n == 1 ? "browser" : "browsers")}.";
+        await LoadSignInsAsync().ConfigureAwait(false);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string Ago(DateTimeOffset t)
+    {
+        var d = DateTimeOffset.UtcNow - t;
+        return d.TotalMinutes < 1 ? "Just now" : d.TotalMinutes < 60 ? $"{(int)d.TotalMinutes} min ago"
+            : d.TotalHours < 24 ? $"{(int)d.TotalHours} h ago" : t.LocalDateTime.ToString("d MMM", System.Globalization.CultureInfo.CurrentCulture);
     }
 
     private void FilterUsers()
@@ -263,6 +434,50 @@
         _registrationOpen = (bool)(e.Value ?? false);
         await IdentityService.SetRegistrationOpenAsync(_registrationOpen).ConfigureAwait(false);
         _status = _registrationOpen ? "Registration opened." : "Registration closed.";
+    }
+
+    // ── Phase 145 A7: sign-in rules ─────────────────────────────────────────
+    private WebSignInSettings _signIn = WebSignInSettings.Load(null);
+    private int _rememberDays, _idleMinutes, _maxHours, _runMinutes;
+
+    // Phase 148: settings the server's environment sets while SOVRANT_ENV_OVERRIDE is on.
+    private static string? Lock(string key) => Sovrant.Runtime.Config.EnvBackedSettings.LockedBy(key);
+    private static bool Locked(string key) => Lock(key) is not null;
+
+    private Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore? SettingsStore =>
+        Services.GetService<Sovrant.Runtime.Workspaces.IWorkspaceSettingsStore>();
+
+    private void LoadSignInSettings()
+    {
+        _signIn = WebSignInSettings.Load(SettingsStore);
+        (_rememberDays, _idleMinutes, _maxHours) = (_signIn.RememberDays, _signIn.IdleMinutes, _signIn.MaxHours);
+        _runMinutes = (int)Sovrant.Runtime.Conversation.RunLimits.Load(SettingsStore).TotalMinutes;
+    }
+
+    /// <summary>The standard choices, plus the current value if it came from an env variable and isn't one of them.</summary>
+    private static IEnumerable<int> Choices(IReadOnlyList<int> standard, int current) =>
+        standard.Contains(current) ? standard : standard.Append(current).Order();
+
+    private async Task SaveRunLimitAsync()
+    {
+        if (SettingsStore is not { } store) return;
+        await Sovrant.Runtime.Conversation.RunLimits.SaveAsync(store, _runMinutes);
+        _status = "Run time limit saved. It applies to runs that start from now on.";
+    }
+
+    private async Task ToggleRememberAsync(ChangeEventArgs e)
+    {
+        _signIn = _signIn with { RememberAllowed = (bool)(e.Value ?? false) };
+        await SaveSignInSettingsAsync();
+    }
+
+    private async Task SaveSignInSettingsAsync()
+    {
+        if (SettingsStore is not { } store) return;
+        _signIn = _signIn with { RememberDays = _rememberDays, IdleMinutes = _idleMinutes, MaxHours = _maxHours };
+        await _signIn.SaveAsync(store);
+        Services.GetService<WebSignInPolicySource>()?.Invalidate();
+        _status = "Sign-in settings saved.";
     }
 
     private async Task ToggleApprovalAsync(ChangeEventArgs e)

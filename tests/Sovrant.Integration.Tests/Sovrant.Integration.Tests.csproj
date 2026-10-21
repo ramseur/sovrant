@@ -21,6 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Sovrant.Cli\Sovrant.Cli.csproj" />
     <ProjectReference Include="..\..\src\Sovrant.Api\Sovrant.Api.csproj" />
+    <ProjectReference Include="..\..\src\Sovrant.Storage.Postgres\Sovrant.Storage.Postgres.csproj" />
   </ItemGroup>
 
 </Project>

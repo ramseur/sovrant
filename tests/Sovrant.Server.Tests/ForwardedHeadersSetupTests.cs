@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Sovrant.Server.Hosting;
+using Sovrant.Hosting;
 
 namespace Sovrant.Server.Tests;
 
