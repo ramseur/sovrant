@@ -7,7 +7,7 @@ Versions correspond to tags on the `main` branch.
 
 ---
 
-## [2.1.0] — Unreleased
+## [2.1.0] — 2026-10-21
 
 > **Multi-user Web (Phase 145, GitHub #32).** Embedded Web now signs in each browser separately, so a team can share one Web server: everyone sees only their own conversations, approvals and permission mode, and picks from the models their admins configured. File and shell tools are off on hosted servers by default. Load-tested with 1,000 people on one 4-core server ([docs/web-sizing.md](docs/web-sizing.md)). Web in front of Sovrant.Server (remote mode) is still single-user — Phase 146.
 
